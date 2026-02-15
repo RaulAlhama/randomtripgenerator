@@ -3,7 +3,7 @@
 // Configuration - Auth0 credentials
 const AUTH0_DOMAIN = 'dev-1ehj4jve7hms4ryl.us.auth0.com';
 const AUTH0_CLIENT_ID = 'l4hQxIsh9HvUTCxbUVILpI5dpb6GutHJ';
-const AUTH0_AUDIENCE = 'https://randomtripgenerator-api';
+const AUTH0_AUDIENCE = '';
 const API_BASE = '';
 
 // State
@@ -33,57 +33,28 @@ const loadingStatus = document.getElementById('loading-status');
 async function initAuth0() {
   console.log('Initializing Auth0...');
 
-  // Check if auth0 SDK is loaded
   if (typeof auth0 === 'undefined') {
     console.error('Auth0 SDK not loaded');
-    loadingStatus.textContent = 'Error: Auth0 SDK not loaded. Please refresh the page.';
+    loadingStatus.textContent = 'Error: Auth0 SDK not loaded. Please refresh.';
     loadingStatus.className = 'status-message error';
     return;
   }
 
   try {
-    console.log('Creating Auth0 client...');
-
     auth0Client = await auth0.createAuth0Client({
       domain: AUTH0_DOMAIN,
-      clientId: AUTH0_CLIENT_ID,
-      authorizationParams: {
-        redirect_uri: window.location.origin,
-        audience: AUTH0_AUDIENCE || undefined,
-        scope: 'openid profile email'
-      }
+      clientId: AUTH0_CLIENT_ID
     });
 
     console.log('Auth0 client created');
-
-    // Check if user is returning from redirect
-    if (window.location.search.includes('code=') || window.location.search.includes('error=')) {
-      console.log('Handling redirect...');
-      loadingStatus.textContent = 'Completing login...';
-      loadingStatus.className = 'status-message info';
-      loadingStatus.classList.remove('hidden');
-
-      try {
-        await auth0Client.handleRedirectCallback();
-        console.log('Redirect handled successfully');
-      } catch (e) {
-        console.error('Error handling redirect:', e);
-      }
-
-      // Clear URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    // Hide loading status
     loadingStatus.classList.add('hidden');
 
-    // Check authentication status
+    // Check if already authenticated (from session)
     isAuthenticated = await auth0Client.isAuthenticated();
     console.log('Is authenticated:', isAuthenticated);
-    updateAuthUI();
 
     if (isAuthenticated) {
-      console.log('User is logged in, loading trip history...');
+      await updateAuthUI();
       loadTripHistory();
     }
   } catch (error) {
@@ -94,19 +65,21 @@ async function initAuth0() {
 }
 
 // Update UI based on auth status
-function updateAuthUI() {
+async function updateAuthUI() {
   if (isAuthenticated) {
     auth0LoginDiv.classList.add('hidden');
     userProfileDiv.classList.remove('hidden');
     generateBtn.disabled = false;
 
-    // Get user info
-    auth0Client.getUser().then(user => {
+    try {
+      const user = await auth0Client.getUser();
       if (user) {
-        userName.textContent = user.name || user.email;
+        userName.textContent = user.name || user.email || 'User';
         userAvatar.src = user.picture || 'https://via.placeholder.com/36';
       }
-    });
+    } catch (e) {
+      console.error('Error getting user:', e);
+    }
   } else {
     auth0LoginDiv.classList.remove('hidden');
     userProfileDiv.classList.add('hidden');
@@ -114,11 +87,56 @@ function updateAuthUI() {
   }
 }
 
+// Login using popup
+async function login() {
+  if (!auth0Client) {
+    showStatus('Authentication not ready. Please wait.', 'error');
+    return;
+  }
+
+  try {
+    showStatus('Opening login...', 'info');
+
+    await auth0Client.loginWithPopup({
+      authorizationParams: {
+        scope: 'openid profile email'
+      }
+    });
+
+    console.log('Login successful');
+    isAuthenticated = true;
+    await updateAuthUI();
+    loadTripHistory();
+    showStatus('Login successful!', 'success');
+  } catch (error) {
+    console.error('Login error:', error);
+    showStatus('Login error: ' + (error.message || 'Unknown'), 'error');
+  }
+}
+
+// Logout
+async function logout() {
+  if (!auth0Client) return;
+
+  try {
+    await auth0Client.logout({
+      logoutParams: {
+        returnTo: window.location.origin
+      }
+    });
+    isAuthenticated = false;
+    updateAuthUI();
+    showStatus('Logged out successfully', 'success');
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
+}
+
 // Get user's location
 function getUserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by your browser'));
+      reject(new Error('Geolocation not supported'));
       return;
     }
 
@@ -133,11 +151,7 @@ function getUserLocation() {
       (error) => {
         reject(error);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   });
 }
@@ -145,25 +159,24 @@ function getUserLocation() {
 // Generate random trip
 async function generateRandomTrip() {
   if (!isAuthenticated) {
-    showStatus('Please log in to generate a trip', 'error');
+    showStatus('Please log in first', 'error');
     return;
   }
 
   try {
-    // Get user location
     showStatus('Getting your location...', 'info');
     await getUserLocation();
 
     if (!userLocation) {
-      showStatus('Could not get your location. Please enable geolocation.', 'error');
+      showStatus('Could not get location', 'error');
       return;
     }
 
-    // Generate random destination
     generateBtn.classList.add('loading');
     generateBtn.disabled = true;
 
-    const token = await auth0Client.getToken();
+    // Get token for API calls
+    const token = await auth0Client.getTokenSilently();
 
     const response = await fetch(
       `${API_BASE}/api/random-destination?lat=${userLocation.lat}&lng=${userLocation.lng}`,
@@ -186,20 +199,14 @@ async function generateRandomTrip() {
       origin_lng: userLocation.lng
     };
 
-    // Display trip
     displayTrip(currentTrip);
-
-    // Save trip to history
     await saveTrip(currentTrip);
-
-    // Reload history
     await loadTripHistory();
-
-    showStatus('Trip generated successfully!', 'success');
+    showStatus('Trip generated!', 'success');
 
   } catch (error) {
     console.error('Error generating trip:', error);
-    showStatus(error.message || 'Failed to generate trip. Please try again.', 'error');
+    showStatus(error.message || 'Failed to generate trip', 'error');
   } finally {
     generateBtn.classList.remove('loading');
     generateBtn.disabled = false;
@@ -217,9 +224,9 @@ function displayTrip(trip) {
 // Save trip to server
 async function saveTrip(trip) {
   try {
-    const token = await auth0Client.getToken();
+    const token = await auth0Client.getTokenSilently();
 
-    const response = await fetch(`${API_BASE}/api/trips`, {
+    await fetch(`${API_BASE}/api/trips`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -227,10 +234,6 @@ async function saveTrip(trip) {
       },
       body: JSON.stringify(trip)
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to save trip');
-    }
   } catch (error) {
     console.error('Error saving trip:', error);
   }
@@ -239,7 +242,7 @@ async function saveTrip(trip) {
 // Load trip history
 async function loadTripHistory() {
   try {
-    const token = await auth0Client.getToken();
+    const token = await auth0Client.getTokenSilently();
 
     const response = await fetch(`${API_BASE}/api/trips`, {
       headers: {
@@ -253,7 +256,6 @@ async function loadTripHistory() {
 
     const trips = await response.json();
     displayTripHistory(trips);
-
   } catch (error) {
     console.error('Error loading trip history:', error);
   }
@@ -282,32 +284,15 @@ function displayTripHistory(trips) {
 function showStatus(message, type) {
   statusMessage.textContent = message;
   statusMessage.className = `status-message ${type}`;
-
-  // Auto-hide after 5 seconds
   setTimeout(() => {
     statusMessage.classList.add('hidden');
   }, 5000);
 }
 
 // Event Listeners
-loginBtn.addEventListener('click', function() {
-  if (!auth0Client) {
-    showStatus('Authentication is still loading. Please wait.', 'error');
-    return;
-  }
-  auth0Client.loginWithRedirect();
-});
-
-logoutBtn.addEventListener('click', function() {
-  if (!auth0Client) return;
-  auth0Client.logout({
-    logoutParams: {
-      returnTo: window.location.origin
-    }
-  });
-});
-
+loginBtn.addEventListener('click', login);
+logoutBtn.addEventListener('click', logout);
 generateBtn.addEventListener('click', generateRandomTrip);
 
-// Initialize on page load
+// Initialize
 window.addEventListener('load', initAuth0);
