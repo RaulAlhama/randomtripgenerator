@@ -1,9 +1,9 @@
 // Random Trip Generator - Frontend Application
 
-// Configuration - these will be replaced with actual values
-const AUTH0_DOMAIN = 'YOUR_AUTH0_DOMAIN';
-const AUTH0_CLIENT_ID = 'YOUR_AUTH0_CLIENT_ID';
-const AUTH0_AUDIENCE = 'YOUR_AUTH0_AUDIENCE';
+// Configuration - Auth0 credentials
+const AUTH0_DOMAIN = 'dev-1ehj4jve7hms4ryl.us.auth0.com';
+const AUTH0_CLIENT_ID = 'l4hQxIsh9HvUTCxbUVILpI5dpb6GutHJ';
+const AUTH0_AUDIENCE = 'https://dev-1ehj4jve7hms4ryl.us.auth0.com/api/v2/';
 const API_BASE = '';
 
 // State
