@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1.0/auth0-spa-js.production.js"></script>
 </head>
 <body>
   <div class="container">
@@ -28,6 +29,10 @@
       <div class="hero">
         <h1>Random Trip Generator</h1>
         <p class="subtitle">Discover your next adventure</p>
+      </div>
+
+      <div id="loading-status" class="status-message info">
+        Loading authentication...
       </div>
 
       <div id="trip-display" class="trip-display hidden">
@@ -64,8 +69,6 @@
     </main>
   </div>
 
-  <!-- Auth0 SDK -->
-  <script src="https://cdn.auth0.com/js/auth0/9.28.0/auth0.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
