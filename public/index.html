@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Trip Generator</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="auth-container">
+        <div id="auth0-login" class="auth0-login">
+          <button id="login-btn" class="btn btn-outline">Log In</button>
+        </div>
+        <div id="user-profile" class="user-profile hidden">
+          <img id="user-avatar" src="" alt="User avatar" class="user-avatar">
+          <span id="user-name"></span>
+          <button id="logout-btn" class="btn btn-outline btn-small">Log Out</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="hero">
+        <h1>Random Trip Generator</h1>
+        <p class="subtitle">Discover your next adventure</p>
+      </div>
+
+      <div id="trip-display" class="trip-display hidden">
+        <div class="destination-card">
+          <div class="destination-icon">✈️</div>
+          <h2 id="destination-name" class="destination-name">-</h2>
+          <div class="destination-details">
+            <p class="distance">
+              <span class="label">Distance from your location:</span>
+              <span id="distance-value" class="value">-</span>
+              <span class="unit">km</span>
+            </p>
+            <p class="coordinates">
+              <span class="label">Coordinates:</span>
+              <span id="coordinates-value" class="value">-</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="generate-btn" class="btn btn-primary btn-large" disabled>
+          <span class="btn-text">Generate Random Trip</span>
+          <span class="btn-loading hidden">Generating...</span>
+        </button>
+      </div>
+
+      <div id="status-message" class="status-message hidden"></div>
+
+      <div id="history-section" class="history-section hidden">
+        <h3>Your Trip History</h3>
+        <div id="trips-list" class="trips-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Auth0 SDK -->
+  <script src="https://cdn.auth0.com/js/auth0/9.28.0/auth0.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
