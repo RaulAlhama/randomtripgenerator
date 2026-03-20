@@ -9,7 +9,6 @@ let db = null;
 async function initDatabase() {
   const SQL = await initSqlJs();
 
-  // Load existing database if it exists
   if (fs.existsSync(dbPath)) {
     const fileBuffer = fs.readFileSync(dbPath);
     db = new SQL.Database(fileBuffer);
@@ -17,20 +16,33 @@ async function initDatabase() {
     db = new SQL.Database();
   }
 
-  // Create trips table if it doesn't exist
+  // Check if we need to migrate from old schema
+  const tableInfo = db.exec("PRAGMA table_info(trips)");
+  const columns = tableInfo.length > 0 ? tableInfo[0].values.map(row => row[1]) : [];
+
+  if (columns.length > 0 && !columns.includes('places')) {
+    // Old schema detected - drop and recreate
+    db.run("DROP TABLE IF EXISTS trips");
+  }
+
   db.run(`
     CREATE TABLE IF NOT EXISTS trips (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
-      destination TEXT NOT NULL,
+      city TEXT,
+      country TEXT DEFAULT '',
+      theme TEXT DEFAULT 'classic',
+      transport_mode TEXT DEFAULT 'driving',
       origin_lat REAL,
       origin_lng REAL,
-      destination_lat REAL,
-      destination_lng REAL,
-      distance REAL,
+      places TEXT,
+      route_distance REAL,
+      route_duration REAL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id)`);
 
   saveDatabase();
   return db;
@@ -70,4 +82,4 @@ function prepare(sql) {
   };
 }
 
-module.exports = { initDatabase, getDatabase, prepare };
+module.exports = { initDatabase, getDatabase, prepare, saveDatabase };

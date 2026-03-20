@@ -1,0 +1,399 @@
+import { createContext, useReducer, useCallback, useContext } from 'react';
+import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather } from '../services/api';
+import { saveTrip } from '../services/trips';
+import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
+import { WEATHER_CODES } from '../constants/weather';
+
+// Action types
+const SET_LOCATION_MODE = 'SET_LOCATION_MODE';
+const SET_SEARCH_LOCATION = 'SET_SEARCH_LOCATION';
+const SET_THEME = 'SET_THEME';
+const SET_TRANSPORT = 'SET_TRANSPORT';
+const SET_RADIUS = 'SET_RADIUS';
+const SET_GENERATING = 'SET_GENERATING';
+const SET_STATUS = 'SET_STATUS';
+const SET_TRIP = 'SET_TRIP';
+const SET_ROUTE = 'SET_ROUTE';
+const SET_WEATHER = 'SET_WEATHER';
+const CLOSE_TRIP = 'CLOSE_TRIP';
+
+const initialState = {
+  locationMode: 'gps',
+  searchLocation: null,
+  selectedTheme: 'monuments',
+  selectedTransport: 'driving',
+  selectedRadius: 5,
+  isGenerating: false,
+  statusMessage: null,
+  currentTrip: null,
+  routeGeometry: null,
+  routeDistance: null,
+  routeDuration: null,
+  weather: null,
+};
+
+function tripReducer(state, action) {
+  switch (action.type) {
+    case SET_LOCATION_MODE:
+      return { ...state, locationMode: action.payload };
+    case SET_SEARCH_LOCATION:
+      return { ...state, searchLocation: action.payload };
+    case SET_THEME:
+      return { ...state, selectedTheme: action.payload };
+    case SET_TRANSPORT:
+      return { ...state, selectedTransport: action.payload };
+    case SET_RADIUS:
+      return { ...state, selectedRadius: action.payload };
+    case SET_GENERATING:
+      return { ...state, isGenerating: action.payload };
+    case SET_STATUS:
+      return { ...state, statusMessage: action.payload };
+    case SET_TRIP:
+      return { ...state, currentTrip: action.payload };
+    case SET_ROUTE:
+      return {
+        ...state,
+        routeGeometry: action.payload.geometry,
+        routeDistance: action.payload.distance,
+        routeDuration: action.payload.duration,
+      };
+    case SET_WEATHER:
+      return { ...state, weather: action.payload };
+    case CLOSE_TRIP:
+      return {
+        ...state,
+        currentTrip: null,
+        routeGeometry: null,
+        routeDistance: null,
+        routeDuration: null,
+        weather: null,
+        statusMessage: null,
+      };
+    default:
+      return state;
+  }
+}
+
+const TripContext = createContext(null);
+
+// Geolocation helper
+function getUserLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Tu navegador no soporta geolocalizacion'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => {
+        reject(
+          new Error('No se pudo obtener tu ubicacion. Permite el acceso o busca una ciudad.')
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+// Duration formatting
+export function formatDuration(seconds) {
+  const min = Math.round(seconds / 60);
+  if (min >= 60) {
+    return `${Math.floor(min / 60)} h ${min % 60} min`;
+  }
+  return `${min} min`;
+}
+
+// Speed constants for non-driving modes (km/h)
+const SPEED_KMH = { walking: 5, cycling: 15 };
+
+// Parse weather response using WEATHER_CODES
+function parseWeather(data) {
+  const current = data.current;
+  const code = current.weather_code;
+  const weather = WEATHER_CODES[code] || { icon: '\u{1F321}\uFE0F', desc: 'Desconocido' };
+
+  return {
+    icon: weather.icon,
+    desc: weather.desc,
+    temp: Math.round(current.temperature_2m),
+    humidity: current.relative_humidity_2m,
+    wind: Math.round(current.wind_speed_10m),
+  };
+}
+
+// Calculate route and return parsed data
+// Server already extracts routes[0] and returns flat { geometry, distance, duration, mode }
+// Server also recalculates duration for walking/cycling, but we do it client-side too
+// as a safety measure in case the server response uses the OSRM driving duration
+async function fetchRouteData(originLat, originLng, places, transport) {
+  const start = `${originLat},${originLng}`;
+  const waypoints = places.map((p) => `${p.lat},${p.lng}`).join(';');
+
+  const data = await getRoute(start, waypoints, transport);
+  const geometry = data.geometry;
+  const distance = data.distance;
+  let duration = data.duration;
+
+  // Recalculate duration for walking/cycling
+  if (SPEED_KMH[transport]) {
+    duration = (distance / 1000 / SPEED_KMH[transport]) * 3600;
+  }
+
+  return { geometry, distance, duration };
+}
+
+export function TripProvider({ children }) {
+  const [state, dispatch] = useReducer(tripReducer, initialState);
+  const { isAuthenticated, getAccessToken } = useAuth();
+  const { showToast } = useToast();
+
+  const setLocationMode = useCallback((mode) => {
+    dispatch({ type: SET_LOCATION_MODE, payload: mode });
+  }, []);
+
+  const setSearchLocation = useCallback((location) => {
+    dispatch({ type: SET_SEARCH_LOCATION, payload: location });
+  }, []);
+
+  const setTheme = useCallback((theme) => {
+    dispatch({ type: SET_THEME, payload: theme });
+  }, []);
+
+  const setTransport = useCallback((transport) => {
+    dispatch({ type: SET_TRANSPORT, payload: transport });
+  }, []);
+
+  const setRadius = useCallback((radius) => {
+    dispatch({ type: SET_RADIUS, payload: radius });
+  }, []);
+
+  const generateTrip = useCallback(async () => {
+    try {
+      dispatch({ type: SET_GENERATING, payload: true });
+
+      // 1. Get location
+      let location;
+      if (state.locationMode === 'search') {
+        if (!state.searchLocation) {
+          throw new Error('Busca y selecciona una ciudad primero');
+        }
+        location = state.searchLocation;
+        dispatch({ type: SET_STATUS, payload: 'La IA esta creando tu ruta...' });
+      } else {
+        dispatch({ type: SET_STATUS, payload: 'Obteniendo tu ubicacion...' });
+        location = await getUserLocation();
+      }
+
+      // 2. Generate trip via LLM
+      dispatch({ type: SET_STATUS, payload: 'La IA esta diseñando tu ruta perfecta...' });
+
+      const radiusMeters = Math.round(state.selectedRadius * 1000);
+      const tripData = await apiGenerateTrip(
+        location.lat,
+        location.lng,
+        state.selectedTheme,
+        state.selectedTransport,
+        radiusMeters
+      );
+
+      if (!tripData.places || tripData.places.length === 0) {
+        throw new Error('No se encontraron lugares para esta ubicacion');
+      }
+
+      const trip = {
+        city: tripData.city,
+        country: tripData.country,
+        places: tripData.places,
+        origin_lat: location.lat,
+        origin_lng: location.lng,
+        poiSource: tripData.poiSource,
+      };
+
+      dispatch({ type: SET_TRIP, payload: trip });
+
+      // 3. Calculate route
+      dispatch({ type: SET_STATUS, payload: 'Trazando tu ruta en el mapa...' });
+
+      const routeData = await fetchRouteData(
+        location.lat,
+        location.lng,
+        tripData.places,
+        state.selectedTransport
+      );
+
+      dispatch({ type: SET_ROUTE, payload: routeData });
+
+      // Update trip with route data
+      trip.route_distance = routeData.distance;
+      trip.route_duration = routeData.duration;
+      dispatch({ type: SET_TRIP, payload: { ...trip } });
+
+      // 4. Fetch weather
+      try {
+        const weatherData = await apiFetchWeather(location.lat, location.lng);
+        const weather = parseWeather(weatherData);
+        dispatch({ type: SET_WEATHER, payload: weather });
+      } catch (e) {
+        console.error('Error fetching weather:', e);
+      }
+
+      // 5. Auto-save if authenticated
+      if (isAuthenticated) {
+        try {
+          const token = await getAccessToken();
+          if (token) {
+            await saveTrip(
+              {
+                city: trip.city,
+                country: trip.country,
+                origin_lat: trip.origin_lat,
+                origin_lng: trip.origin_lng,
+                theme: state.selectedTheme,
+                transport_mode: state.selectedTransport,
+                places: trip.places,
+                route_distance: routeData.distance,
+                route_duration: routeData.duration,
+              },
+              token
+            );
+          }
+        } catch (e) {
+          console.error('Error al auto-guardar:', e);
+        }
+      }
+
+      dispatch({ type: SET_STATUS, payload: null });
+    } catch (error) {
+      console.error('Error al generar ruta:', error);
+      dispatch({ type: SET_STATUS, payload: error.message || 'Error al generar la ruta' });
+      showToast(error.message || 'Error al generar la ruta', 'error');
+    } finally {
+      dispatch({ type: SET_GENERATING, payload: false });
+    }
+  }, [
+    state.locationMode,
+    state.searchLocation,
+    state.selectedTheme,
+    state.selectedTransport,
+    state.selectedRadius,
+    isAuthenticated,
+    getAccessToken,
+    showToast,
+  ]);
+
+  const closeTrip = useCallback(() => {
+    dispatch({ type: CLOSE_TRIP });
+  }, []);
+
+  const shareTrip = useCallback(() => {
+    if (!state.currentTrip || !state.currentTrip.places || state.currentTrip.places.length === 0) return;
+
+    const city = state.currentTrip.city || 'la zona';
+    const placesText = state.currentTrip.places
+      .map((p, i) => `${i + 1}. ${p.name} - ${p.description || ''}`)
+      .join('\n');
+
+    const text = `Mi ruta en ${city}:\n\n${placesText}\n\nGenerado con RandomTrip!`;
+
+    if (navigator.share) {
+      navigator.share({ title: `Ruta en ${city}`, text })
+        .catch(() => {
+          navigator.clipboard.writeText(text).then(() => {
+            showToast('Ruta copiada al portapapeles', 'success');
+          }).catch(() => {
+            showToast('No se pudo copiar al portapapeles', 'error');
+          });
+        });
+    } else {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Ruta copiada al portapapeles', 'success');
+      }).catch(() => {
+        showToast('No se pudo copiar al portapapeles', 'error');
+      });
+    }
+  }, [state.currentTrip, showToast]);
+
+  const viewSavedTrip = useCallback(
+    async (trip) => {
+      try {
+        dispatch({ type: SET_GENERATING, payload: true });
+        dispatch({ type: SET_STATUS, payload: 'Cargando ruta guardada...' });
+
+        const loadedTrip = {
+          city: trip.city,
+          country: trip.country,
+          places: trip.places || [],
+          origin_lat: trip.origin_lat,
+          origin_lng: trip.origin_lng,
+          poiSource: null,
+          route_distance: trip.route_distance,
+          route_duration: trip.route_duration,
+        };
+
+        dispatch({ type: SET_TRIP, payload: loadedTrip });
+
+        // Calculate route
+        const transport = trip.transport_mode || 'driving';
+        const routeData = await fetchRouteData(
+          trip.origin_lat,
+          trip.origin_lng,
+          trip.places || [],
+          transport
+        );
+
+        dispatch({ type: SET_ROUTE, payload: routeData });
+
+        // Fetch weather
+        try {
+          const weatherData = await apiFetchWeather(trip.origin_lat, trip.origin_lng);
+          const weather = parseWeather(weatherData);
+          dispatch({ type: SET_WEATHER, payload: weather });
+        } catch (e) {
+          console.error('Error fetching weather:', e);
+        }
+
+        dispatch({ type: SET_STATUS, payload: null });
+      } catch (error) {
+        console.error('Error loading saved trip:', error);
+        showToast('No se pudo cargar la ruta guardada', 'error');
+      } finally {
+        dispatch({ type: SET_GENERATING, payload: false });
+      }
+    },
+    [showToast]
+  );
+
+  const value = {
+    ...state,
+    setLocationMode,
+    setSearchLocation,
+    setTheme,
+    setTransport,
+    setRadius,
+    generateTrip,
+    closeTrip,
+    shareTrip,
+    viewSavedTrip,
+  };
+
+  return (
+    <TripContext value={value}>
+      {children}
+    </TripContext>
+  );
+}
+
+export function useTrip() {
+  const context = useContext(TripContext);
+  if (!context) {
+    throw new Error('useTrip must be used within a TripProvider');
+  }
+  return context;
+}
