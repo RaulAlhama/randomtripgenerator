@@ -1,73 +1,223 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Trip Generator</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>RandomTrip - Generador de Rutas con IA</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1.0/auth0-spa-js.production.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
 </head>
 <body>
   <div class="container">
-    <header>
-      <div class="auth-container">
-        <div id="auth0-login" class="auth0-login">
-          <button id="login-btn" class="btn btn-outline">Log In</button>
-        </div>
-        <div id="user-profile" class="user-profile hidden">
-          <img id="user-avatar" src="" alt="User avatar" class="user-avatar">
-          <span id="user-name"></span>
-          <button id="logout-btn" class="btn btn-outline btn-small">Log Out</button>
-        </div>
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">✈️</span>
+        <span class="logo-text">RandomTrip</span>
       </div>
+      <div class="auth-section" id="auth-section"></div>
     </header>
 
     <main>
-      <div class="hero">
-        <h1>Random Trip Generator</h1>
-        <p class="subtitle">Discover your next adventure</p>
-      </div>
+      <section class="hero">
+        <h1>Descubre tu Pr&oacute;xima <span class="gradient-text">Aventura</span></h1>
+        <p class="subtitle">Rutas tur&iacute;sticas generadas con IA desde tu ubicaci&oacute;n o cualquier ciudad del mundo</p>
 
-      <div id="loading-status" class="status-message info">
-        Loading authentication...
-      </div>
-
-      <div id="trip-display" class="trip-display hidden">
-        <div class="destination-card">
-          <div class="destination-icon">✈️</div>
-          <h2 id="destination-name" class="destination-name">-</h2>
-          <div class="destination-details">
-            <p class="distance">
-              <span class="label">Distance from your location:</span>
-              <span id="distance-value" class="value">-</span>
-              <span class="unit">km</span>
-            </p>
-            <p class="coordinates">
-              <span class="label">Coordinates:</span>
-              <span id="coordinates-value" class="value">-</span>
-            </p>
+        <!-- Selector de ubicaci&oacute;n -->
+        <div class="location-picker">
+          <div class="location-tabs">
+            <button class="tab active" data-tab="gps" id="tab-gps">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+              Mi Ubicaci&oacute;n
+            </button>
+            <button class="tab" data-tab="search" id="tab-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              Buscar Ciudad
+            </button>
+          </div>
+          <div class="tab-content" id="tab-content-search" style="display:none;">
+            <div class="search-wrapper">
+              <input type="text" id="city-search" placeholder="Escribe el nombre de una ciudad..." autocomplete="off" />
+              <div id="city-results" class="city-results hidden"></div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="actions">
-        <button id="generate-btn" class="btn btn-primary btn-large" disabled>
-          <span class="btn-text">Generate Random Trip</span>
-          <span class="btn-loading hidden">Generating...</span>
+        <!-- Selector de tema -->
+        <div class="theme-selector">
+          <p class="selector-label">Elige tu estilo</p>
+          <div class="theme-grid">
+            <button class="theme-card active" data-theme="classic">
+              <span class="theme-icon">⭐</span>
+              <span class="theme-name">Cl&aacute;sico</span>
+            </button>
+            <button class="theme-card" data-theme="historical">
+              <span class="theme-icon">🏛️</span>
+              <span class="theme-name">Hist&oacute;rico</span>
+            </button>
+            <button class="theme-card" data-theme="gastro">
+              <span class="theme-icon">🍽️</span>
+              <span class="theme-name">Gastro</span>
+            </button>
+            <button class="theme-card" data-theme="cultural">
+              <span class="theme-icon">🎭</span>
+              <span class="theme-name">Cultural</span>
+            </button>
+            <button class="theme-card" data-theme="nature">
+              <span class="theme-icon">🌳</span>
+              <span class="theme-name">Naturaleza</span>
+            </button>
+            <button class="theme-card" data-theme="surprise">
+              <span class="theme-icon">🎲</span>
+              <span class="theme-name">Sorpresa</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modo de transporte -->
+        <div class="transport-selector">
+          <p class="selector-label">&iquest;C&oacute;mo te mueves?</p>
+          <div class="transport-options">
+            <button class="transport-btn active" data-mode="driving">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17h10M5 12l2-6h10l2 6M5 12v5a1 1 0 001 1h1a1 1 0 001-1v-1h8v1a1 1 0 001 1h1a1 1 0 001-1v-5M5 12h14"/><circle cx="7.5" cy="15.5" r="0.5" fill="currentColor"/><circle cx="16.5" cy="15.5" r="0.5" fill="currentColor"/></svg>
+              <span>Coche</span>
+            </button>
+            <button class="transport-btn" data-mode="walking">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13" cy="4.5" r="2"/><path d="M7 21l3-9M17 14l-4-1-1.5-4.5L14 11h3"/><path d="M10 21l1.5-6"/></svg>
+              <span>A pie</span>
+            </button>
+            <button class="transport-btn" data-mode="cycling">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6.5" cy="17.5" r="3.5"/><circle cx="17.5" cy="17.5" r="3.5"/><path d="M6.5 17.5L12 5h2l2.5 6H20"/><path d="M12 5l3 8H6.5"/></svg>
+              <span>Bici</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector de distancia -->
+        <div class="distance-selector">
+          <p class="selector-label">Distancia m&aacute;xima</p>
+          <div class="slider-wrapper">
+            <input type="range" id="distance-slider" min="2" max="20" value="5" step="0.5" />
+            <div class="slider-labels">
+              <span id="slider-min">2 km</span>
+              <span id="distance-value" class="distance-current">5 km</span>
+              <span id="slider-max">20 km</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="generate-btn" class="btn btn-primary btn-glow">
+          <span class="btn-text">Generar Mi Ruta</span>
+          <span class="btn-loading">
+            <span class="spinner"></span>
+            Generando...
+          </span>
         </button>
+      </section>
+
+      <div id="location-status" class="status-card hidden">
+        <div class="status-icon">📍</div>
+        <div class="status-text" id="location-message">Obteniendo tu ubicaci&oacute;n...</div>
       </div>
 
-      <div id="status-message" class="status-message hidden"></div>
+      <section id="trip-result" class="trip-result hidden">
+        <div class="section-header">
+          <h2 id="trip-title">Tu Ruta Personalizada</h2>
+          <div class="section-actions">
+            <button id="share-trip-btn" class="btn btn-sm btn-share" title="Compartir ruta">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+              Compartir
+            </button>
+            <button id="close-trip-btn" class="btn-icon" aria-label="Cerrar ruta">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
 
-      <div id="history-section" class="history-section hidden">
-        <h3>Your Trip History</h3>
-        <div id="trips-list" class="trips-list"></div>
-      </div>
+        <p id="poi-source-warning" class="poi-source-warning hidden">
+          Los lugares de esta ruta fueron generados por IA y podr&iacute;an no ser exactos. Verifica antes de visitarlos.
+        </p>
+
+        <div id="weather-widget" class="weather-widget hidden">
+          <span id="weather-icon" class="weather-icon"></span>
+          <span id="weather-temp" class="weather-temp"></span>
+          <span id="weather-desc" class="weather-desc"></span>
+          <span id="weather-extra" class="weather-extra"></span>
+        </div>
+
+        <div class="trip-grid">
+          <div class="map-wrapper">
+            <div id="map" aria-label="Mapa interactivo de la ruta"></div>
+            <div id="route-overlay" class="route-overlay hidden">
+              <div class="route-stat">
+                <span class="stat-label">Distancia</span>
+                <span class="stat-value" id="route-distance">-</span>
+              </div>
+              <div class="route-stat">
+                <span class="stat-label">Duraci&oacute;n</span>
+                <span class="stat-value" id="route-duration">-</span>
+              </div>
+              <div class="route-stat">
+                <span class="stat-label">Modo</span>
+                <span class="stat-value stat-value-sm" id="route-mode">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="places-panel">
+            <h3 class="places-title">
+              <span class="places-icon">🎯</span>
+              Lugares Sugeridos
+            </h3>
+            <div id="poi-list" class="poi-list"></div>
+
+            <div class="trip-summary">
+              <h4>Resumen del Viaje</h4>
+              <div class="summary-stats">
+                <div class="summary-stat">
+                  <span class="summary-label">Distancia Total</span>
+                  <span class="summary-value" id="trip-distance">-</span>
+                </div>
+                <div class="summary-stat">
+                  <span class="summary-label">Tiempo Est.</span>
+                  <span class="summary-value" id="trip-duration">-</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mis Viajes -->
+      <section id="my-trips" class="my-trips hidden">
+        <div class="section-header">
+          <h2>Mis Viajes Guardados</h2>
+        </div>
+        <div id="trips-grid" class="trips-grid"></div>
+        <p id="no-trips-msg" class="no-trips-msg hidden">A&uacute;n no tienes viajes guardados. &iexcl;Genera y guarda tu primera ruta!</p>
+      </section>
+
+      <section class="inspiration-section">
+        <h2 class="inspiration-title">Insp&iacute;rate</h2>
+        <div class="carousel-wrapper">
+          <div class="carousel-track" id="carousel-track"></div>
+        </div>
+      </section>
     </main>
+
+    <footer class="footer">
+      <p>RandomTrip Generator &copy; 2026</p>
+    </footer>
   </div>
+
+  <!-- Notificaci&oacute;n toast -->
+  <div id="toast" class="toast hidden"></div>
 
   <script src="app.js"></script>
 </body>

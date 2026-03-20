@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(node --check server.js)",
+      "Bash(node -e \"try { new Function\\(require\\(''fs''\\).readFileSync\\(''public/app.js'',''utf8''\\)\\); console.log\\(''app.js OK''\\) } catch\\(e\\) { console.log\\(''app.js ERROR:'', e.message\\) }\")",
+      "Bash(npx vite:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+export const typeIcons = {
+  museum: '\u{1F3DB}\uFE0F',
+  monument: '\u{1F5FF}',
+  park: '\u{1F333}',
+  historic: '\u{1F3F0}',
+  viewpoint: '\u{1F304}',
+  restaurant: '\u{1F37D}\uFE0F',
+  church: '\u26EA',
+  castle: '\u{1F3F0}',
+  plaza: '\u26F2',
+  palace: '\u{1F3DB}\uFE0F',
+  market: '\u{1F3EA}',
+  garden: '\u{1F33A}',
+  theater: '\u{1F3AD}',
+  default: '\u{1F4CD}',
+};
+
+export const typeLabels = {
+  museum: 'Museo',
+  monument: 'Monumento',
+  park: 'Parque',
+  historic: 'Histórico',
+  viewpoint: 'Mirador',
+  restaurant: 'Restaurante',
+  church: 'Iglesia',
+  castle: 'Castillo',
+  plaza: 'Plaza',
+  palace: 'Palacio',
+  market: 'Mercado',
+  garden: 'Jardín',
+  theater: 'Teatro',
+  default: 'Punto de interés',
+};

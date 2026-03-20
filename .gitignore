@@ -1,2 +1,5 @@
-/.env
-/.env.example
+node_modules/
+.env
+trips.db
+client/node_modules/
+client/dist/
