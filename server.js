@@ -712,6 +712,11 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 // ========== PUBLIC ENDPOINTS ==========
 
 // Auth config for frontend
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.get('/api/auth-config', (req, res) => {
   if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_CLIENT_ID) {
     return res.json({ enabled: false });
