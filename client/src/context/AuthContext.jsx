@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
         const client = await createAuth0Client({
           domain: config.domain,
           clientId: config.clientId,
+          cacheLocation: 'localstorage',
           authorizationParams: {
             audience: config.audience,
             redirect_uri: window.location.origin,
