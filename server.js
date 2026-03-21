@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -12,7 +14,28 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+app.use(compression());
 app.use(express.json());
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minuto
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones, espera un momento' }
+});
+
+const generateLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Has generado muchas rutas, espera un momento' }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/generate-trip', generateLimiter);
 
 // Serve React build if available, otherwise fall back to public/
 const clientDist = path.join(__dirname, 'client', 'dist');
@@ -33,6 +56,29 @@ if (process.env.AUTH0_DOMAIN && process.env.AUTH0_AUDIENCE) {
   } catch (e) {
     console.warn('[Auth0] express-oauth2-jwt-bearer not available, auth disabled');
   }
+}
+
+// ========== IN-MEMORY CACHE ==========
+const cache = new Map();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+
+function cacheGet(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.time > CACHE_TTL) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function cacheSet(key, data) {
+  // Limitar tamaño del caché (max 500 entradas)
+  if (cache.size > 500) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+  cache.set(key, { data, time: Date.now() });
 }
 
 // Auth middleware for protected routes
@@ -188,12 +234,22 @@ function followRedirect(url) {
 
 // Get city name from coordinates using Nominatim
 async function getCityFromCoords(lat, lng) {
+  // Redondear a 3 decimales (~111m) para agrupar peticiones cercanas
+  const cacheKey = `geo:${lat.toFixed(3)},${lng.toFixed(3)}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) {
+    console.log('[Cache] Hit for geocoding:', cacheKey);
+    return cached;
+  }
+
   const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=es`;
   try {
     const data = await fetchExternal(url);
     const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || 'this area';
     const country = data.address?.country || '';
-    return { city, country, displayName: data.display_name };
+    const result = { city, country, displayName: data.display_name };
+    cacheSet(cacheKey, result);
+    return result;
   } catch (error) {
     console.error('[Nominatim] Error:', error.message);
     return { city: 'this area', country: '', displayName: 'unknown location' };
@@ -214,6 +270,14 @@ const OVERPASS_TYPE_MAP = {
 
 // Get real POIs from OpenStreetMap via Overpass API
 async function getOverpassPOIs(lat, lng, radiusMeters) {
+  // Caché por zona (~111m) y radio redondeado
+  const cacheKey = `pois:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) {
+    console.log('[Cache] Hit for Overpass POIs:', cacheKey);
+    return cached;
+  }
+
   try {
     // For larger radii, use a simpler query to avoid timeouts
     const isLargeRadius = radiusMeters > 2000;
@@ -282,6 +346,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
     });
 
     console.log(`[Overpass] Found ${unique.length} real POIs within ${radiusMeters}m`);
+    cacheSet(cacheKey, unique);
     return unique;
   } catch (error) {
     console.error('[Overpass] Error:', error.message);
