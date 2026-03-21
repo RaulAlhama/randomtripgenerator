@@ -19,6 +19,7 @@ Production: run `npm run client:build`, then `npm start`. Access via http://loca
 
 Required in `.env`:
 - `NEBIUS_API_KEY` — Nebius AI API key (OpenAI-compatible endpoint, model: `openai/gpt-oss-20b`)
+- `DATABASE_URL` — PostgreSQL connection string (e.g. `postgresql://user:pass@host/dbname`)
 
 Optional:
 - `NEBIUS_API_BASE_URL` — defaults to `https://api.tokenfactory.nebius.com/v1/`
@@ -73,8 +74,8 @@ React 19 + Vite. Component-based with Context API for state management.
 | GET | `/api/trips` | JWT | List user's trips |
 | DELETE | `/api/trips/:id` | JWT | Delete trip (ownership verified) |
 
-### Database schema
-`trips` table: id (PK), user_id (indexed), city, country, theme, transport_mode, origin_lat, origin_lng, places (JSON string), route_distance, route_duration, created_at
+### Database (PostgreSQL via `pg`)
+`trips` table: id (SERIAL PK), user_id (indexed), city, country, theme, transport_mode, origin_lat, origin_lng, places (JSON string), route_distance, route_duration, created_at. Connection via `DATABASE_URL` env var. SSL enabled in production.
 
 ### LLM prompt
 Temperature 0.7 for descriptions, 0.85 for full routes. Random "variety seed" phrase from `VARIETY_SEEDS` array + theme-specific descriptions in `THEME_PROMPTS`. Dynamic radius hint based on user-selected max distance. Themes: classic, historical, gastro, cultural, nature, surprise.

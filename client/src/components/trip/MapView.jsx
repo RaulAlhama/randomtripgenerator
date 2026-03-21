@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useTrip } from '../../context/TripContext';
@@ -11,14 +11,12 @@ const ROUTE_COLORS = {
   cycling: '#f59e0b',
 };
 
-function createUserIcon() {
-  return L.divIcon({
-    className: 'user-marker',
-    html: '<div style="background: #6366f1; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-}
+const USER_ICON = L.divIcon({
+  className: 'user-marker',
+  html: '<div style="background: #6366f1; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
 
 function createPOIIcon(index) {
   return L.divIcon({
@@ -28,6 +26,9 @@ function createPOIIcon(index) {
     iconAnchor: [16, 16],
   });
 }
+
+// Pre-create icons for up to 10 POIs to avoid recreating on every render
+const POI_ICONS = Array.from({ length: 10 }, (_, i) => createPOIIcon(i));
 
 function MapController() {
   const map = useMap();
@@ -55,22 +56,15 @@ function MapController() {
 
 export default function MapView() {
   const { currentTrip, routeGeometry, selectedTransport } = useTrip();
-  const [routeKey, setRouteKey] = useState(0);
 
   const places = currentTrip?.places || [];
   const originLat = currentTrip?.origin_lat ?? 40;
   const originLng = currentTrip?.origin_lng ?? -3;
 
-  // Increment route key whenever geometry changes to force GeoJSON re-render
-  useEffect(() => {
-    if (routeGeometry) {
-      setRouteKey((k) => k + 1);
-    }
-  }, [routeGeometry]);
-
-  const routeGeoJSON = routeGeometry
-    ? { type: 'Feature', geometry: routeGeometry }
-    : null;
+  const routeGeoJSON = useMemo(
+    () => routeGeometry ? { type: 'Feature', geometry: routeGeometry } : null,
+    [routeGeometry]
+  );
 
   const routeStyle = {
     color: ROUTE_COLORS[selectedTransport] || ROUTE_COLORS.driving,
@@ -93,7 +87,7 @@ export default function MapView() {
 
         {/* User location marker */}
         {currentTrip && (
-          <Marker position={[originLat, originLng]} icon={createUserIcon()}>
+          <Marker position={[originLat, originLng]} icon={USER_ICON}>
             <Popup><b>Inicio</b></Popup>
           </Marker>
         )}
@@ -103,7 +97,7 @@ export default function MapView() {
           <Marker
             key={`poi-${index}-${place.lat}-${place.lng}`}
             position={[place.lat, place.lng]}
-            icon={createPOIIcon(index)}
+            icon={POI_ICONS[index] || createPOIIcon(index)}
           >
             <Popup>
               <div className="popup-title"><b>{place.name}</b></div>
@@ -115,7 +109,7 @@ export default function MapView() {
         {/* Route line */}
         {routeGeoJSON && (
           <GeoJSON
-            key={`route-${routeKey}`}
+            key={routeGeometry ? JSON.stringify(routeGeometry).length : 0}
             data={routeGeoJSON}
             style={routeStyle}
           />

@@ -216,33 +216,22 @@ export function TripProvider({ children }) {
         poiSource: tripData.poiSource,
       };
 
+      // 3. Show trip immediately, then fetch route + weather in parallel
       dispatch({ type: SET_TRIP, payload: trip });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
 
-      // 3. Calculate route
-      dispatch({ type: SET_STATUS, payload: 'Trazando tu ruta en el mapa...' });
-
-      const routeData = await fetchRouteData(
-        location.lat,
-        location.lng,
-        tripData.places,
-        state.selectedTransport
-      );
+      const [routeData] = await Promise.all([
+        fetchRouteData(location.lat, location.lng, tripData.places, state.selectedTransport),
+        apiFetchWeather(location.lat, location.lng)
+          .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+          .catch(() => {})
+      ]);
 
       dispatch({ type: SET_ROUTE, payload: routeData });
-
-      // Update trip with route data
       trip.route_distance = routeData.distance;
       trip.route_duration = routeData.duration;
       dispatch({ type: SET_TRIP, payload: { ...trip } });
-
-      // 4. Fetch weather
-      try {
-        const weatherData = await apiFetchWeather(location.lat, location.lng);
-        const weather = parseWeather(weatherData);
-        dispatch({ type: SET_WEATHER, payload: weather });
-      } catch (e) {
-        console.error('Error fetching weather:', e);
-      }
 
       // 5. Auto-save if authenticated
       if (isAuthenticated) {
@@ -268,14 +257,11 @@ export function TripProvider({ children }) {
           console.error('Error al auto-guardar:', e);
         }
       }
-
-      dispatch({ type: SET_STATUS, payload: null });
     } catch (error) {
       console.error('Error al generar ruta:', error);
       dispatch({ type: SET_STATUS, payload: error.message || 'Error al generar la ruta' });
-      showToast(error.message || 'Error al generar la ruta', 'error');
-    } finally {
       dispatch({ type: SET_GENERATING, payload: false });
+      showToast(error.message || 'Error al generar la ruta', 'error');
     }
   }, [
     state.locationMode,

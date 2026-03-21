@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-const { initDatabase, prepare } = require('./database');
+const { initDatabase, query } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -168,6 +168,22 @@ async function fetchAllPOIImages(places, city) {
     ...p,
     imageUrl: images[i] || null
   }));
+}
+
+// Follow a redirect and return the final URL
+function followRedirect(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'RandomTripGenerator/1.0' } }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        resolve(res.headers.location || null);
+      } else {
+        resolve(null);
+      }
+      res.resume();
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 // Get city name from coordinates using Nominatim
@@ -606,28 +622,25 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 
     console.log(`[Route] Using ${sorted.length} verified Overpass POIs (nearest-neighbor sorted)`);
 
-    // Ask LLM for descriptions and fetch images in parallel
-    const [descriptions, sortedWithImages] = await Promise.all([
-      getDescriptionsFromLLM(sorted, city, country, theme),
-      fetchAllPOIImages(sorted, city)
-    ]);
+    // Ask LLM only for descriptions
+    const descriptions = await getDescriptionsFromLLM(sorted, city, country, theme);
 
-    const places = sortedWithImages.map((p, i) => ({
+    const places = sorted.map((p, i) => ({
       name: p.name,
       type: p.type,
       lat: p.lat,
       lng: p.lng,
       description: (descriptions && descriptions[i]) || `Lugar de interés en ${city}.`,
-      imageUrl: p.imageUrl || null
+      wikipedia: p.wikipedia || null,
+      wikidata: p.wikidata || null,
+      imageUrl: p.image && p.image.startsWith('http') ? p.image : null
     }));
     return { places, poiSource: 'overpass' };
   }
 
   // Last resort: no Overpass data at all (very remote area) - use LLM but warn
   console.log('[Route] No Overpass POIs found at any radius, falling back to LLM');
-  let places = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
-  // Fetch images for LLM-generated places too
-  places = await fetchAllPOIImages(places, city);
+  const places = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
   return { places, poiSource: 'llm' };
 }
 
@@ -675,6 +688,33 @@ app.get('/api/search-city', async (req, res) => {
   } catch (error) {
     console.error('[Search] Error:', error.message);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// Get place image via Google Places API
+app.get('/api/place-image', async (req, res) => {
+  const { name, city } = req.query;
+  if (!name) return res.json({ url: null });
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) return res.json({ url: null });
+
+  try {
+    const query = encodeURIComponent(`${name} ${city || ''}`);
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
+    const data = await fetchExternal(searchUrl);
+
+    const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference;
+    if (!photoRef) return res.json({ url: null });
+
+    // Follow redirect to get CDN URL (no API key exposed to frontend)
+    const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
+    const cdnUrl = await followRedirect(photoApiUrl);
+
+    res.json({ url: cdnUrl || null });
+  } catch (e) {
+    console.error('[Places] Error fetching image:', e.message);
+    res.json({ url: null });
   }
 });
 
@@ -787,28 +827,30 @@ app.get('/api/route', async (req, res) => {
 // ========== AUTHENTICATED ENDPOINTS ==========
 
 // Save trip
-app.post('/api/trips', requireAuth, (req, res) => {
+app.post('/api/trips', requireAuth, async (req, res) => {
   try {
     const userId = req.auth.payload.sub;
     const { city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration } = req.body;
 
-    const result = prepare(`
-      INSERT INTO trips (user_id, city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      userId,
-      city || '',
-      country || '',
-      origin_lat,
-      origin_lng,
-      theme || 'monuments',
-      transport_mode || 'driving',
-      JSON.stringify(places || []),
-      route_distance,
-      route_duration
+    const result = await query(
+      `INSERT INTO trips (user_id, city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id`,
+      [
+        userId,
+        city || '',
+        country || '',
+        origin_lat,
+        origin_lng,
+        theme || 'monuments',
+        transport_mode || 'driving',
+        JSON.stringify(places || []),
+        route_distance,
+        route_duration
+      ]
     );
 
-    res.json({ id: result.lastInsertRowid, message: 'Trip saved' });
+    res.json({ id: result.rows[0].id, message: 'Trip saved' });
   } catch (error) {
     console.error('Error saving trip:', error);
     res.status(500).json({ error: 'Failed to save trip' });
@@ -816,12 +858,12 @@ app.post('/api/trips', requireAuth, (req, res) => {
 });
 
 // Get user's trips
-app.get('/api/trips', requireAuth, (req, res) => {
+app.get('/api/trips', requireAuth, async (req, res) => {
   try {
     const userId = req.auth.payload.sub;
-    const trips = prepare('SELECT * FROM trips WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+    const result = await query('SELECT * FROM trips WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
 
-    const parsed = trips.map(t => ({
+    const parsed = result.rows.map(t => ({
       ...t,
       places: t.places ? JSON.parse(t.places) : []
     }));
@@ -834,17 +876,16 @@ app.get('/api/trips', requireAuth, (req, res) => {
 });
 
 // Delete trip
-app.delete('/api/trips/:id', requireAuth, (req, res) => {
+app.delete('/api/trips/:id', requireAuth, async (req, res) => {
   try {
     const userId = req.auth.payload.sub;
     const tripId = req.params.id;
 
-    const trips = prepare('SELECT id FROM trips WHERE id = ? AND user_id = ?').all(tripId, userId);
-    if (trips.length === 0) {
+    const result = await query('DELETE FROM trips WHERE id = $1 AND user_id = $2 RETURNING id', [tripId, userId]);
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Trip not found' });
     }
 
-    prepare('DELETE FROM trips WHERE id = ? AND user_id = ?').run(tripId, userId);
     res.json({ message: 'Trip deleted' });
   } catch (error) {
     console.error('Error deleting trip:', error);
