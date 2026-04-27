@@ -34,7 +34,10 @@ export default function CitySearch() {
 
   const handleSelectCity = (city) => {
     setSearchLocation({ lat: parseFloat(city.lat), lng: parseFloat(city.lng) });
-    setQuery(`${city.name}, ${city.country}`);
+    const label = city.region
+      ? `${city.name}, ${city.region}, ${city.country}`
+      : `${city.name}, ${city.country}`;
+    setQuery(label);
     setShowResults(false);
   };
 
@@ -72,7 +75,9 @@ export default function CitySearch() {
               onClick={() => handleSelectCity(city)}
             >
               <strong>{city.name}</strong>
-              <span className="city-country">{city.country}</span>
+              <span className="city-country">
+                {[city.region, city.country].filter(Boolean).join(', ')}
+              </span>
             </div>
           ))
         )}

@@ -1,9 +1,5 @@
 import { useTrip } from '../../context/TripContext';
-import {
-  INSPIRATION_EXAMPLES,
-  themeLabelsCarousel,
-  transportLabelsCarousel,
-} from '../../constants/inspiration';
+import { INSPIRATION_EXAMPLES } from '../../constants/inspiration';
 import CarouselCard from './CarouselCard';
 
 export default function InspirationCarousel() {
@@ -22,7 +18,15 @@ export default function InspirationCarousel() {
     setTheme(example.theme);
     setTransport(example.transport);
     setRadius(example.radius);
-    generateTrip();
+    // Pass overrides so generateTrip runs with these values immediately,
+    // without waiting for the dispatches above to flush through a re-render.
+    generateTrip({
+      locationMode: 'search',
+      searchLocation: { lat: example.lat, lng: example.lng },
+      theme: example.theme,
+      transport: example.transport,
+      radius: example.radius,
+    });
   };
 
   const cards = INSPIRATION_EXAMPLES.map((example, index) => (
@@ -42,8 +46,12 @@ export default function InspirationCarousel() {
   ));
 
   return (
-    <section className="inspiration-section">
-      <h2 className="inspiration-title">Inspírate</h2>
+    <section className="inspiration-section" id="inspiracion" aria-labelledby="inspiracion-title">
+      <div className="section-intro">
+        <span className="section-eyebrow">Inspiración</span>
+        <h2 id="inspiracion-title">Rutas populares para empezar</h2>
+        <p>Haz clic en cualquier tarjeta para generar esa ruta al instante.</p>
+      </div>
       <div className="carousel-wrapper">
         <div className="carousel-track">
           {cards}

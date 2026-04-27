@@ -158,62 +158,282 @@ function fetchExternal(url, options = {}) {
   });
 }
 
-// Fetch image URL for a POI using Wikipedia/Wikidata
-async function fetchPOIImage(place, city) {
+// ========== IMAGE RESOLUTION ==========
+// Normalize text for fuzzy matching: lowercase, strip accents and non-alphanumeric
+function normalizeText(s) {
+  return (s || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Check whether a Wikipedia page title is a plausible match for the POI.
+// Accepts if: the title contains all significant words of the POI name,
+// OR the title contains the POI name AND mentions the city.
+function titleMatchesPOI(title, poiName, city) {
+  const t = normalizeText(title);
+  const name = normalizeText(poiName);
+  const cityN = normalizeText(city);
+  if (!t || !name) return false;
+
+  // Ignore very common words that cause false positives ("iglesia", "parque", etc.)
+  const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'a', 'san', 'santa']);
+  const nameTokens = name.split(' ').filter(w => w.length >= 3 && !STOPWORDS.has(w));
+  if (nameTokens.length === 0) return false;
+
+  const allNameTokensInTitle = nameTokens.every(tok => t.includes(tok));
+  if (!allNameTokensInTitle) return false;
+
+  // If the POI name collapses to a single significant token, it's ambiguous —
+  // require the city to appear in the title to prevent cross-city matches
+  // ("Iglesia", "Retiro", "Prado" on their own).
+  if (nameTokens.length === 1) {
+    if (!cityN) return false;
+    return t.includes(cityN);
+  }
+  return true;
+}
+
+// In-memory image cache (key -> url) with same TTL as main cache
+const imageCache = new Map();
+const IMAGE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h (images rarely change)
+
+function imageCacheGet(key) {
+  const entry = imageCache.get(key);
+  if (!entry) return undefined; // undefined = miss; null = known no-image
+  if (Date.now() - entry.time > IMAGE_CACHE_TTL) {
+    imageCache.delete(key);
+    return undefined;
+  }
+  return entry.url;
+}
+
+function imageCacheSet(key, url) {
+  if (imageCache.size > 2000) {
+    const oldest = imageCache.keys().next().value;
+    imageCache.delete(oldest);
+  }
+  imageCache.set(key, { url, time: Date.now() });
+}
+
+// Build a stable cache key for a place
+function imageCacheKey(place, city) {
+  if (place.wikidata) return `wd:${place.wikidata}`;
+  if (place.wikipedia) return `wp:${place.wikipedia}`;
+  return `nc:${normalizeText(place.name)}|${normalizeText(city)}`;
+}
+
+// Strategy 1: Wikipedia page summary via explicit title
+async function imageFromWikipediaTitle(title, lang = 'es') {
   try {
-    // 1. If Overpass gave us a direct image URL
-    if (place.image) {
-      if (place.image.startsWith('http')) return place.image;
-      // wikimedia_commons format: "File:Something.jpg"
-      const filename = place.image.replace(/^File:/, '');
-      return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=400`;
-    }
-
-    // 2. If we have a wikipedia tag (e.g., "es:Puerta de Alcalá")
-    if (place.wikipedia) {
-      const parts = place.wikipedia.split(':');
-      const lang = parts.length > 1 ? parts[0] : 'es';
-      const title = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
-      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-      const data = await fetchExternal(url);
-      if (data.thumbnail?.source) return data.thumbnail.source;
-    }
-
-    // 3. If we have a wikidata ID
-    if (place.wikidata) {
-      const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${place.wikidata}&props=claims&format=json`;
-      const data = await fetchExternal(url);
-      const entity = data.entities?.[place.wikidata];
-      const imageClaim = entity?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-      if (imageClaim) {
-        return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(imageClaim)}?width=400`;
-      }
-    }
-
-    // 4. Fallback: search Wikipedia by name + city
-    const searchQuery = `${place.name} ${city}`;
-    const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=1&prop=pageimages&piprop=thumbnail&pithumbsize=400&format=json`;
-    const searchData = await fetchExternal(searchUrl);
-    const pages = searchData.query?.pages;
-    if (pages) {
-      const firstPage = Object.values(pages)[0];
-      if (firstPage?.thumbnail?.source) return firstPage.thumbnail.source;
-    }
-
-    return null;
-  } catch (error) {
+    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const data = await fetchExternal(url);
+    return data?.thumbnail?.source || data?.originalimage?.source || null;
+  } catch (_) {
     return null;
   }
 }
 
-// Fetch images for all places in parallel
+// Strategy 2: Wikidata entity → P18 image claim → Commons FilePath
+async function imageFromWikidata(id) {
+  try {
+    const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(id)}&props=claims&format=json&origin=*`;
+    const data = await fetchExternal(url);
+    const claim = data?.entities?.[id]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+    if (!claim) return null;
+    return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(claim)}?width=600`;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Strategy 3: Wikipedia search by "name + city", pick a page whose title plausibly matches.
+// Tries Spanish first, then English. Requires title to contain all significant tokens of POI name.
+async function imageFromWikipediaSearch(name, city) {
+  const query = city ? `${name} ${city}` : name;
+  for (const lang of ['es', 'en']) {
+    try {
+      const searchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&prop=pageimages|info&piprop=thumbnail&pithumbsize=600&inprop=url&format=json&origin=*`;
+      const data = await fetchExternal(searchUrl);
+      const pages = data?.query?.pages;
+      if (!pages) continue;
+
+      const candidates = Object.values(pages)
+        .sort((a, b) => (a.index ?? 99) - (b.index ?? 99));
+
+      for (const page of candidates) {
+        if (!page?.thumbnail?.source) continue;
+        if (!titleMatchesPOI(page.title, name, city)) continue;
+        return page.thumbnail.source;
+      }
+    } catch (_) { /* try next */ }
+  }
+  return null;
+}
+
+// Strategy 4: Wikimedia Commons search (last resort — no city context, weaker signal)
+async function imageFromCommons(name, city) {
+  if (!city) return null;
+  try {
+    const query = `${name} ${city}`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&gsrlimit=3&prop=imageinfo&iiprop=url&iiurlwidth=600&format=json&origin=*`;
+    const data = await fetchExternal(url);
+    const pages = data?.query?.pages;
+    if (!pages) return null;
+    for (const p of Object.values(pages)) {
+      const info = p?.imageinfo?.[0];
+      if (!info) continue;
+      // Ensure filename references the POI (fuzzy)
+      const fn = normalizeText(p.title || '');
+      if (!fn.includes(normalizeText(name).split(' ')[0])) continue;
+      return info.thumburl || info.url;
+    }
+  } catch (_) { /* ignore */ }
+  return null;
+}
+
+// Main: resolve a single POI image with layered fallbacks and caching.
+async function fetchPOIImage(place, city) {
+  const key = imageCacheKey(place, city);
+  const cached = imageCacheGet(key);
+  if (cached !== undefined) return cached;
+
+  try {
+    // 1. Direct image from Overpass tags (most trustworthy, curated by OSM)
+    if (place.image) {
+      let url;
+      if (place.image.startsWith('http')) {
+        url = place.image;
+      } else {
+        const filename = place.image.replace(/^File:/, '');
+        url = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600`;
+      }
+      imageCacheSet(key, url);
+      return url;
+    }
+
+    // 2. Wikipedia page from explicit tag (curated — high quality match)
+    if (place.wikipedia) {
+      const parts = place.wikipedia.split(':');
+      const lang = parts.length > 1 ? parts[0] : 'es';
+      const title = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+      const url = await imageFromWikipediaTitle(title, lang);
+      if (url) { imageCacheSet(key, url); return url; }
+    }
+
+    // 3. Wikidata entity from explicit tag
+    if (place.wikidata) {
+      const url = await imageFromWikidata(place.wikidata);
+      if (url) { imageCacheSet(key, url); return url; }
+    }
+
+    // 4. Wikipedia search with "name + city" + title validation
+    const searchUrl = await imageFromWikipediaSearch(place.name, city);
+    if (searchUrl) { imageCacheSet(key, searchUrl); return searchUrl; }
+
+    // 5. Wikimedia Commons search (filename must reference POI)
+    const commonsUrl = await imageFromCommons(place.name, city);
+    if (commonsUrl) { imageCacheSet(key, commonsUrl); return commonsUrl; }
+
+    // No match found — cache null to avoid retrying
+    imageCacheSet(key, null);
+    return null;
+  } catch (error) {
+    console.error('[Image] Unexpected error for', place.name, '-', error.message);
+    return null;
+  }
+}
+
+// Fetch images for all places in parallel (with per-image timeout so slow matches don't block)
 async function fetchAllPOIImages(places, city) {
-  const imagePromises = places.map(p => fetchPOIImage(p, city));
-  const images = await Promise.all(imagePromises);
+  const TIMEOUT_MS = 4000;
+  const withTimeout = (p) => Promise.race([
+    p,
+    new Promise(resolve => setTimeout(() => resolve(null), TIMEOUT_MS))
+  ]);
+  const images = await Promise.all(places.map(p => withTimeout(fetchPOIImage(p, city))));
   return places.map((p, i) => ({
     ...p,
     imageUrl: images[i] || null
   }));
+}
+
+// Fetch Google Places data (photo URL + rating + phone + hours + website) for a POI.
+// Uses Text Search to locate the place and Place Details for contact fields.
+// Caches aggressively because place data is stable.
+async function fetchPOIGoogleData(place, city) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey || !place?.name) return null;
+
+  const cacheKey = `gplace:${place.name.toLowerCase()}|${(city || '').toLowerCase()}`;
+  const cached = cacheGet(cacheKey);
+  if (cached !== null) return cached === '__none__' ? null : cached;
+
+  try {
+    const query = encodeURIComponent(`${place.name} ${city || ''}`);
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&language=es&key=${apiKey}`;
+    const search = await fetchExternal(searchUrl);
+    const top = search?.results?.[0];
+    if (!top || !top.place_id) {
+      cacheSet(cacheKey, '__none__');
+      return null;
+    }
+
+    const result = {
+      placeId: top.place_id,
+      rating: typeof top.rating === 'number' ? top.rating : null,
+      userRatingsTotal: typeof top.user_ratings_total === 'number' ? top.user_ratings_total : null,
+      photoUrl: null,
+      phone: null,
+      website: null,
+      openingHours: null,
+      openNow: null,
+    };
+
+    const photoRef = top.photos?.[0]?.photo_reference;
+    const photoPromise = photoRef
+      ? followRedirect(`https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`)
+      : Promise.resolve(null);
+
+    const fields = 'formatted_phone_number,international_phone_number,opening_hours,website';
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${result.placeId}&fields=${fields}&language=es&key=${apiKey}`;
+    const detailsPromise = fetchExternal(detailsUrl).catch(() => null);
+
+    const [photoUrl, det] = await Promise.all([photoPromise, detailsPromise]);
+    result.photoUrl = photoUrl || null;
+
+    const r = det?.result;
+    if (r) {
+      result.phone = r.formatted_phone_number || r.international_phone_number || null;
+      result.website = r.website || null;
+      if (r.opening_hours) {
+        result.openingHours = Array.isArray(r.opening_hours.weekday_text) ? r.opening_hours.weekday_text : null;
+        result.openNow = typeof r.opening_hours.open_now === 'boolean' ? r.opening_hours.open_now : null;
+      }
+    }
+
+    cacheSet(cacheKey, result);
+    return result;
+  } catch (e) {
+    console.error('[Places] Google error for', place.name, '-', e.message);
+    return null;
+  }
+}
+
+// Fetch Google Places data for all POIs in parallel with per-call timeout
+async function fetchAllPOIGoogleData(places, city) {
+  if (!process.env.GOOGLE_PLACES_API_KEY || !places?.length) {
+    return places.map(() => null);
+  }
+  const TIMEOUT_MS = 5000;
+  const withTimeout = (p) => Promise.race([
+    p,
+    new Promise(resolve => setTimeout(() => resolve(null), TIMEOUT_MS))
+  ]);
+  return Promise.all(places.map(p => withTimeout(fetchPOIGoogleData(p, city))));
 }
 
 // Follow a redirect and return the final URL
@@ -687,25 +907,63 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 
     console.log(`[Route] Using ${sorted.length} verified Overpass POIs (nearest-neighbor sorted)`);
 
-    // Ask LLM only for descriptions
-    const descriptions = await getDescriptionsFromLLM(sorted, city, country, theme);
+    // Ask LLM for descriptions AND resolve images AND fetch Google data in parallel
+    const [descriptions, placesWithImages, googleData] = await Promise.all([
+      getDescriptionsFromLLM(sorted, city, country, theme),
+      fetchAllPOIImages(sorted, city),
+      fetchAllPOIGoogleData(sorted, city)
+    ]);
 
-    const places = sorted.map((p, i) => ({
-      name: p.name,
-      type: p.type,
-      lat: p.lat,
-      lng: p.lng,
-      description: (descriptions && descriptions[i]) || `Lugar de interés en ${city}.`,
-      wikipedia: p.wikipedia || null,
-      wikidata: p.wikidata || null,
-      imageUrl: p.image && p.image.startsWith('http') ? p.image : null
-    }));
+    const withImagesCount = placesWithImages.filter(p => p.imageUrl).length;
+    const withGoogleCount = googleData.filter(Boolean).length;
+    console.log(`[Route] Resolved images for ${withImagesCount}/${placesWithImages.length} POIs, Google data for ${withGoogleCount}/${placesWithImages.length}`);
+
+    const places = placesWithImages.map((p, i) => {
+      const g = googleData[i] || {};
+      return {
+        name: p.name,
+        type: p.type,
+        lat: p.lat,
+        lng: p.lng,
+        description: (descriptions && descriptions[i]) || `Lugar de interés en ${city}.`,
+        wikipedia: p.wikipedia || null,
+        wikidata: p.wikidata || null,
+        // Prefer Wikipedia photo (iconic for monuments), fall back to Google (better for restaurants)
+        imageUrl: p.imageUrl || g.photoUrl || null,
+        rating: g.rating ?? null,
+        userRatingsTotal: g.userRatingsTotal ?? null,
+        placeId: g.placeId || null,
+        phone: g.phone || null,
+        website: g.website || null,
+        openingHours: g.openingHours || null,
+        openNow: g.openNow ?? null,
+      };
+    });
     return { places, poiSource: 'overpass' };
   }
 
   // Last resort: no Overpass data at all (very remote area) - use LLM but warn
   console.log('[Route] No Overpass POIs found at any radius, falling back to LLM');
-  const places = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
+  const llmPlaces = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
+  // LLM places have no wikipedia/wikidata tags — attempt Wikipedia + Google in parallel
+  const [withImages, googleData] = await Promise.all([
+    fetchAllPOIImages(llmPlaces, city),
+    fetchAllPOIGoogleData(llmPlaces, city)
+  ]);
+  const places = withImages.map((p, i) => {
+    const g = googleData[i] || {};
+    return {
+      ...p,
+      imageUrl: p.imageUrl || g.photoUrl || null,
+      rating: g.rating ?? null,
+      userRatingsTotal: g.userRatingsTotal ?? null,
+      placeId: g.placeId || null,
+      phone: g.phone || null,
+      website: g.website || null,
+      openingHours: g.openingHours || null,
+      openNow: g.openNow ?? null,
+    };
+  });
   return { places, poiSource: 'llm' };
 }
 
@@ -729,7 +987,65 @@ app.get('/api/auth-config', (req, res) => {
   });
 });
 
-// Search cities via Nominatim
+// ========== CITY SEARCH HELPERS ==========
+
+// OSM place types we consider "settlements" (cities, towns, villages).
+// Excludes hamlet/locality (too small, usually noise) and suburb/neighbourhood
+// (sub-city, would produce duplicates of the parent city).
+const CITYLIKE_PLACE_TYPES = new Set([
+  'city', 'town', 'village', 'municipality', 'borough'
+]);
+
+function isCitylike(r) {
+  if (!r) return false;
+  // Primary signal: OSM class=place + type=(city|town|village|municipality|borough)
+  if (r.class === 'place' && CITYLIKE_PLACE_TYPES.has(r.type)) return true;
+  // Secondary: administrative boundary that actually corresponds to a city
+  if (r.class === 'boundary' && r.type === 'administrative') {
+    const a = r.address || {};
+    if (a.city || a.town || a.village || a.municipality) {
+      // Filter out country/state-level boundaries
+      const adminLevel = r.extratags?.admin_level ? parseInt(r.extratags.admin_level) : null;
+      if (adminLevel && adminLevel < 6) return false;
+      return true;
+    }
+  }
+  return false;
+}
+
+function cityDisplayName(r) {
+  const a = r.address || {};
+  return a.city || a.town || a.village || a.municipality || a.borough
+      || (r.display_name ? r.display_name.split(',')[0].trim() : r.name || '');
+}
+
+function cityRegion(r) {
+  const a = r.address || {};
+  // State/province hint, useful to disambiguate "Mérida" (Spain / México / Venezuela)
+  return a.state || a.province || a.region || a.county || '';
+}
+
+function normalizeForMatch(s) {
+  return (s || '').toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Rank: exact match (0) → starts with query (1) → contains all query tokens (2) → other (3).
+// Break ties by OSM importance (higher = more relevant).
+function cityRank(name, query, importance) {
+  const n = normalizeForMatch(name);
+  const q = normalizeForMatch(query);
+  const impBoost = -(importance || 0); // negative so higher importance ranks earlier
+  if (!q) return [3, impBoost];
+  if (n === q) return [0, impBoost];
+  if (n.startsWith(q)) return [1, impBoost];
+  const qTokens = q.split(' ').filter(Boolean);
+  if (qTokens.every(t => n.includes(t))) return [2, impBoost];
+  return [3, impBoost];
+}
+
+// Search cities via Nominatim, filtering to actual settlements.
 app.get('/api/search-city', async (req, res) => {
   try {
     const { q } = req.query;
@@ -737,53 +1053,92 @@ app.get('/api/search-city', async (req, res) => {
       return res.json([]);
     }
 
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
+    // Ask for more candidates (we filter after), and request Spanish names.
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}` +
+                `&format=json&limit=15&addressdetails=1&extratags=1&accept-language=es`;
     const results = await fetchExternal(url);
 
     if (!Array.isArray(results)) {
       return res.json([]);
     }
 
-    const cities = results
-      .slice(0, 5)
-      .map(r => ({
-        name: r.address?.city || r.address?.town || r.address?.village || r.name,
-        country: r.address?.country || '',
-        displayName: r.display_name,
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon)
-      }));
+    // 1. Keep only city-like results
+    const filtered = results.filter(isCitylike);
 
-    res.json(cities);
+    // 2. Map to our shape (keeping importance for ranking)
+    const mapped = filtered.map(r => ({
+      name: cityDisplayName(r),
+      region: cityRegion(r),
+      country: r.address?.country || '',
+      countryCode: r.address?.country_code || '',
+      displayName: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
+      _importance: r.importance,
+      _rankKey: null
+    }));
+
+    // 3. Deduplicate by normalized name + country (keep the most important)
+    const dedup = new Map();
+    for (const c of mapped) {
+      const key = `${normalizeForMatch(c.name)}|${c.countryCode}|${normalizeForMatch(c.region)}`;
+      const existing = dedup.get(key);
+      if (!existing || (c._importance || 0) > (existing._importance || 0)) {
+        dedup.set(key, c);
+      }
+    }
+
+    // 4. Sort by rank against the query, then by OSM importance
+    const sorted = [...dedup.values()]
+      .map(c => ({ ...c, _rankKey: cityRank(c.name, q, c._importance) }))
+      .sort((a, b) => {
+        if (a._rankKey[0] !== b._rankKey[0]) return a._rankKey[0] - b._rankKey[0];
+        return a._rankKey[1] - b._rankKey[1];
+      })
+      .slice(0, 6)
+      .map(({ _importance, _rankKey, ...c }) => c); // strip internals
+
+    res.json(sorted);
   } catch (error) {
     console.error('[Search] Error:', error.message);
     res.status(500).json({ error: 'Search failed' });
   }
 });
 
-// Get place image via Google Places API
+// Get place image by name + city.
+// Tries Google Places (if key configured) first for food POIs, then falls back to
+// our Wikipedia/Wikidata/Commons resolver. The resolver validates title match so
+// we don't return images from unrelated places with similar names.
 app.get('/api/place-image', async (req, res) => {
-  const { name, city } = req.query;
+  const { name, city, type } = req.query;
   if (!name) return res.json({ url: null });
 
+  const isFoodType = type === 'restaurant' || type === 'market' || type === 'cafe';
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) return res.json({ url: null });
 
+  // 1. Try Google Places first for food/market POIs (Wikipedia rarely covers them)
+  if (isFoodType && apiKey) {
+    try {
+      const query = encodeURIComponent(`${name} ${city || ''}`);
+      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
+      const data = await fetchExternal(searchUrl);
+      const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference;
+      if (photoRef) {
+        const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
+        const cdnUrl = await followRedirect(photoApiUrl);
+        if (cdnUrl) return res.json({ url: cdnUrl, source: 'google' });
+      }
+    } catch (e) {
+      console.error('[Places] Google error:', e.message);
+    }
+  }
+
+  // 2. Fallback: resolve via Wikipedia/Wikidata/Commons (with title validation)
   try {
-    const query = encodeURIComponent(`${name} ${city || ''}`);
-    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
-    const data = await fetchExternal(searchUrl);
-
-    const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference;
-    if (!photoRef) return res.json({ url: null });
-
-    // Follow redirect to get CDN URL (no API key exposed to frontend)
-    const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
-    const cdnUrl = await followRedirect(photoApiUrl);
-
-    res.json({ url: cdnUrl || null });
+    const url = await fetchPOIImage({ name }, city || '');
+    return res.json({ url: url || null, source: url ? 'wikipedia' : null });
   } catch (e) {
-    console.error('[Places] Error fetching image:', e.message);
+    console.error('[Image] Resolver error:', e.message);
     res.json({ url: null });
   }
 });
