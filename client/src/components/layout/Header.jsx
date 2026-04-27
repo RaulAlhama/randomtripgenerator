@@ -1,15 +1,19 @@
 import { useAuth } from '../../context/AuthContext';
+import ThemeToggle from '../ui/ThemeToggle';
+import Logo from './Logo';
 
 export default function Header() {
   const { authEnabled, isAuthenticated, isLoading, user, login, logout } = useAuth();
 
   return (
     <header className="header">
-      <div className="logo">
-        <span className="logo-icon">🌍</span>
-        <span className="logo-text gradient-text">RandomTrip</span>
-      </div>
-      <div className="auth-section">
+      <Logo />
+      <nav className="header-nav" aria-label="Secciones">
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#inspiracion">Inspiración</a>
+      </nav>
+      <div className="header-actions">
+        <ThemeToggle />
         {isLoading ? null : authEnabled && isAuthenticated ? (
           <div className="user-info">
             {user?.picture && (
@@ -26,11 +30,14 @@ export default function Header() {
             </button>
           </div>
         ) : authEnabled && !isAuthenticated ? (
-          <button className="btn btn-sm btn-outline" onClick={login}>
+          <button className="btn btn-sm btn-primary" onClick={login}>
             Iniciar sesión
           </button>
         ) : (
-          <span className="auth-badge">Sin registro necesario</span>
+          <span className="auth-badge">
+            <span className="auth-badge-dot" aria-hidden="true" />
+            Sin registro
+          </span>
         )}
       </div>
     </header>

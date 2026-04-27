@@ -13,6 +13,8 @@ const SET_TRANSPORT = 'SET_TRANSPORT';
 const SET_RADIUS = 'SET_RADIUS';
 const SET_GENERATING = 'SET_GENERATING';
 const SET_STATUS = 'SET_STATUS';
+const SET_PROGRESS = 'SET_PROGRESS';
+const SET_ERROR = 'SET_ERROR';
 const SET_TRIP = 'SET_TRIP';
 const SET_ROUTE = 'SET_ROUTE';
 const SET_WEATHER = 'SET_WEATHER';
@@ -26,12 +28,32 @@ const initialState = {
   selectedRadius: 5,
   isGenerating: false,
   statusMessage: null,
+  progress: 0,
+  generationError: null,
   currentTrip: null,
   routeGeometry: null,
   routeDistance: null,
   routeDuration: null,
   weather: null,
 };
+
+// Progress stages — message shown when progress reaches each threshold.
+// Sorted ascending by pct.
+const PROGRESS_STAGES = [
+  { pct: 0,  msg: 'Preparando tu ruta...' },
+  { pct: 15, msg: 'Buscando lugares interesantes cerca...' },
+  { pct: 40, msg: 'Consultando fotos y detalles de cada sitio...' },
+  { pct: 65, msg: 'Diseñando la mejor ruta para ti...' },
+  { pct: 85, msg: 'Últimos retoques...' },
+];
+
+function messageForProgress(pct) {
+  let msg = PROGRESS_STAGES[0].msg;
+  for (const s of PROGRESS_STAGES) {
+    if (pct >= s.pct) msg = s.msg;
+  }
+  return msg;
+}
 
 function tripReducer(state, action) {
   switch (action.type) {
@@ -49,6 +71,10 @@ function tripReducer(state, action) {
       return { ...state, isGenerating: action.payload };
     case SET_STATUS:
       return { ...state, statusMessage: action.payload };
+    case SET_PROGRESS:
+      return { ...state, progress: action.payload };
+    case SET_ERROR:
+      return { ...state, generationError: action.payload };
     case SET_TRIP:
       return { ...state, currentTrip: action.payload };
     case SET_ROUTE:
@@ -69,6 +95,8 @@ function tripReducer(state, action) {
         routeDuration: null,
         weather: null,
         statusMessage: null,
+        progress: 0,
+        generationError: null,
       };
     default:
       return state;
@@ -116,15 +144,27 @@ const SPEED_KMH = { walking: 5, cycling: 15 };
 // Parse weather response using WEATHER_CODES
 function parseWeather(data) {
   const current = data.current;
+  const daily = data.daily;
   const code = current.weather_code;
   const weather = WEATHER_CODES[code] || { icon: '\u{1F321}\uFE0F', desc: 'Desconocido' };
+
+  // Extract sunrise/sunset times (HH:MM)
+  const sunrise = daily?.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : null;
+  const sunset = daily?.sunset?.[0] ? new Date(daily.sunset[0]).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : null;
 
   return {
     icon: weather.icon,
     desc: weather.desc,
     temp: Math.round(current.temperature_2m),
+    feelsLike: Math.round(current.apparent_temperature),
     humidity: current.relative_humidity_2m,
     wind: Math.round(current.wind_speed_10m),
+    uvIndex: current.uv_index != null ? Math.round(current.uv_index) : null,
+    precipProb: daily?.precipitation_probability_max?.[0] ?? null,
+    tempMax: daily?.temperature_2m_max?.[0] != null ? Math.round(daily.temperature_2m_max[0]) : null,
+    tempMin: daily?.temperature_2m_min?.[0] != null ? Math.round(daily.temperature_2m_min[0]) : null,
+    sunrise,
+    sunset,
   };
 }
 
@@ -174,37 +214,74 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_RADIUS, payload: radius });
   }, []);
 
-  const generateTrip = useCallback(async () => {
+  // Accepts optional overrides so callers (e.g. the inspiration carousel) can
+  // generate a trip with fresh values without waiting for setState+re-render,
+  // which would otherwise leave generateTrip reading stale closure state.
+  const generateTrip = useCallback(async (overrides = {}) => {
+    const effectiveLocationMode = overrides.locationMode ?? state.locationMode;
+    const effectiveSearchLocation = overrides.searchLocation ?? state.searchLocation;
+    const effectiveTheme = overrides.theme ?? state.selectedTheme;
+    const effectiveTransport = overrides.transport ?? state.selectedTransport;
+    const effectiveRadius = overrides.radius ?? state.selectedRadius;
+
+    // Interval that simulates progress toward 90% while the backend call is in flight.
+    // Cleared in both success and error paths. Uses an asymptotic curve so progress
+    // feels fast at the start and smoothly decelerates — avoiding the "stuck at 90%"
+    // feel if the request is slow.
+    let progressTimer = null;
+
+    const startProgressSimulation = () => {
+      const started = Date.now();
+      // Typical request is 6-12s; decay constant 5000ms reaches ~83% at 9s.
+      progressTimer = setInterval(() => {
+        const elapsed = Date.now() - started;
+        const pct = Math.min(90, Math.round(90 * (1 - Math.exp(-elapsed / 5000))));
+        dispatch({ type: SET_PROGRESS, payload: pct });
+        dispatch({ type: SET_STATUS, payload: messageForProgress(pct) });
+      }, 200);
+    };
+
+    const stopProgressSimulation = () => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+    };
+
     try {
+      dispatch({ type: SET_ERROR, payload: null });
+      dispatch({ type: SET_PROGRESS, payload: 0 });
+      dispatch({ type: SET_STATUS, payload: PROGRESS_STAGES[0].msg });
       dispatch({ type: SET_GENERATING, payload: true });
 
-      // 1. Get location
+      // 1. Get location — before starting progress simulation (geo can take several seconds)
       let location;
-      if (state.locationMode === 'search') {
-        if (!state.searchLocation) {
+      if (effectiveLocationMode === 'search') {
+        if (!effectiveSearchLocation) {
           throw new Error('Busca y selecciona una ciudad primero');
         }
-        location = state.searchLocation;
-        dispatch({ type: SET_STATUS, payload: 'La IA esta creando tu ruta...' });
+        location = effectiveSearchLocation;
       } else {
-        dispatch({ type: SET_STATUS, payload: 'Obteniendo tu ubicacion...' });
+        dispatch({ type: SET_STATUS, payload: 'Ubicando tu posición...' });
         location = await getUserLocation();
       }
 
-      // 2. Generate trip via LLM
-      dispatch({ type: SET_STATUS, payload: 'La IA esta diseñando tu ruta perfecta...' });
+      // 2. Generate trip via backend — this is the long-running call
+      startProgressSimulation();
 
-      const radiusMeters = Math.round(state.selectedRadius * 1000);
+      const radiusMeters = Math.round(effectiveRadius * 1000);
       const tripData = await apiGenerateTrip(
         location.lat,
         location.lng,
-        state.selectedTheme,
-        state.selectedTransport,
+        effectiveTheme,
+        effectiveTransport,
         radiusMeters
       );
 
+      stopProgressSimulation();
+
       if (!tripData.places || tripData.places.length === 0) {
-        throw new Error('No se encontraron lugares para esta ubicacion');
+        throw new Error('No se encontraron lugares para esta ubicación');
       }
 
       const trip = {
@@ -214,15 +291,17 @@ export function TripProvider({ children }) {
         origin_lat: location.lat,
         origin_lng: location.lng,
         poiSource: tripData.poiSource,
+        theme: effectiveTheme,
+        transport: effectiveTransport,
       };
 
-      // 3. Show trip immediately, then fetch route + weather in parallel
+      // 3. Show trip immediately with a final progress push, then fetch route + weather
+      dispatch({ type: SET_PROGRESS, payload: 95 });
+      dispatch({ type: SET_STATUS, payload: 'Calculando la ruta en el mapa...' });
       dispatch({ type: SET_TRIP, payload: trip });
-      dispatch({ type: SET_STATUS, payload: null });
-      dispatch({ type: SET_GENERATING, payload: false });
 
       const [routeData] = await Promise.all([
-        fetchRouteData(location.lat, location.lng, tripData.places, state.selectedTransport),
+        fetchRouteData(location.lat, location.lng, tripData.places, effectiveTransport),
         apiFetchWeather(location.lat, location.lng)
           .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
           .catch(() => {})
@@ -232,6 +311,11 @@ export function TripProvider({ children }) {
       trip.route_distance = routeData.distance;
       trip.route_duration = routeData.duration;
       dispatch({ type: SET_TRIP, payload: { ...trip } });
+
+      // Close out the generating state — 100% briefly then fade out
+      dispatch({ type: SET_PROGRESS, payload: 100 });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
 
       // 5. Auto-save if authenticated
       if (isAuthenticated) {
@@ -244,8 +328,8 @@ export function TripProvider({ children }) {
                 country: trip.country,
                 origin_lat: trip.origin_lat,
                 origin_lng: trip.origin_lng,
-                theme: state.selectedTheme,
-                transport_mode: state.selectedTransport,
+                theme: effectiveTheme,
+                transport_mode: effectiveTransport,
                 places: trip.places,
                 route_distance: routeData.distance,
                 route_duration: routeData.duration,
@@ -258,10 +342,14 @@ export function TripProvider({ children }) {
         }
       }
     } catch (error) {
+      stopProgressSimulation();
       console.error('Error al generar ruta:', error);
-      dispatch({ type: SET_STATUS, payload: error.message || 'Error al generar la ruta' });
+      const msg = error.message || 'Error al generar la ruta';
+      dispatch({ type: SET_ERROR, payload: msg });
+      dispatch({ type: SET_STATUS, payload: null });
       dispatch({ type: SET_GENERATING, payload: false });
-      showToast(error.message || 'Error al generar la ruta', 'error');
+      dispatch({ type: SET_PROGRESS, payload: 0 });
+      showToast(msg, 'error');
     }
   }, [
     state.locationMode,
@@ -321,6 +409,8 @@ export function TripProvider({ children }) {
           poiSource: null,
           route_distance: trip.route_distance,
           route_duration: trip.route_duration,
+          theme: trip.theme,
+          transport: trip.transport_mode,
         };
 
         dispatch({ type: SET_TRIP, payload: loadedTrip });
@@ -356,6 +446,10 @@ export function TripProvider({ children }) {
     [showToast]
   );
 
+  const clearError = useCallback(() => {
+    dispatch({ type: SET_ERROR, payload: null });
+  }, []);
+
   const value = {
     ...state,
     setLocationMode,
@@ -367,6 +461,7 @@ export function TripProvider({ children }) {
     closeTrip,
     shareTrip,
     viewSavedTrip,
+    clearError,
   };
 
   return (

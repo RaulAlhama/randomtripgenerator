@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: randomtripgenerator
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: NEBIUS_API_BASE_URL
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false

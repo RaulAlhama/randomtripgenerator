@@ -1,5 +1,6 @@
 import { useTrip } from '../../context/TripContext';
 import { TRANSPORTS, SLIDER_DEFAULTS } from '../../constants/transport';
+import { TRANSPORT_ICONS } from './transportIcons';
 
 export default function TransportSelector() {
   const { selectedTransport, setTransport, setRadius } = useTrip();
@@ -11,18 +12,25 @@ export default function TransportSelector() {
 
   return (
     <div className="transport-selector">
-      <p className="selector-label">¿Cómo te mueves?</p>
-      <div className="transport-options">
-        {TRANSPORTS.map((transport) => (
-          <button
-            key={transport.key}
-            className={`transport-btn${selectedTransport === transport.key ? ' active' : ''}`}
-            onClick={() => handleTransportClick(transport.key)}
-          >
-            <span>{transport.icon}</span>
-            <span>{transport.label}</span>
-          </button>
-        ))}
+      <div className="transport-options" role="radiogroup" aria-label="Medio de transporte">
+        {TRANSPORTS.map((transport) => {
+          const isActive = selectedTransport === transport.key;
+          return (
+            <button
+              key={transport.key}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              className={`transport-btn${isActive ? ' active' : ''}`}
+              onClick={() => handleTransportClick(transport.key)}
+            >
+              <span className="transport-btn-icon" aria-hidden="true">
+                {TRANSPORT_ICONS[transport.key]}
+              </span>
+              <span>{transport.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

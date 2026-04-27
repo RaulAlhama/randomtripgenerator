@@ -1,5 +1,23 @@
 export const THEMES = [
-  { key: 'monuments', icon: '\u{1F3DB}\uFE0F', label: 'Monumentos', bg: '#1b2d4f', bgHover: '#243d6b' },
-  { key: 'nature',    icon: '\u{1F33F}',        label: 'Naturaleza', bg: '#1a3a2a', bgHover: '#224d38' },
-  { key: 'food',      icon: '\u{1F37D}\uFE0F',  label: 'Comida',     bg: '#5c1e0e', bgHover: '#7a2912' },
+  {
+    key: 'monuments',
+    icon: '\u{1F3DB}️',
+    label: 'Monumentos',
+    description: 'Castillos, plazas y arquitectura',
+    accent: '#6366f1',
+  },
+  {
+    key: 'nature',
+    icon: '\u{1F33F}',
+    label: 'Naturaleza',
+    description: 'Parques, miradores y rutas verdes',
+    accent: '#10b981',
+  },
+  {
+    key: 'food',
+    icon: '\u{1F37D}️',
+    label: 'Gastronomía',
+    description: 'Mercados, tapas y sabor local',
+    accent: '#f59e0b',
+  },
 ];

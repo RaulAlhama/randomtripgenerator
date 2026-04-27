@@ -13,9 +13,10 @@ export default function DistanceSlider() {
     setRadius(parseFloat(e.target.value));
   };
 
+  const pct = ((selectedRadius - config.min) / (config.max - config.min)) * 100;
+
   return (
     <div className="distance-selector">
-      <p className="selector-label">Distancia máxima</p>
       <div className="slider-wrapper">
         <input
           type="range"
@@ -24,6 +25,7 @@ export default function DistanceSlider() {
           step={config.step}
           value={selectedRadius}
           onChange={handleChange}
+          style={{ '--pct': `${pct}%` }}
         />
         <div className="slider-labels">
           <span>{formatValue(config.min)}</span>
