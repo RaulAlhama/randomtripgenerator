@@ -1,7 +1,8 @@
-import LocationPicker from './LocationPicker';
-import ThemeSelector from './ThemeSelector';
-import DistanceSlider from './DistanceSlider';
-import GenerateButton from './GenerateButton';
+import { useState } from 'react';
+import Tabs from './Tabs';
+import RouteTab from './RouteTab';
+import RestaurantsTab from './RestaurantsTab';
+import WikilocTab from './WikilocTab';
 
 function HeroDecor() {
   return (
@@ -43,7 +44,7 @@ function TrustRow() {
           <circle cx="12" cy="12" r="9" />
           <path d="M12 7v5l3 2" />
         </svg>
-        Ruta en segundos
+        Resultados en segundos
       </span>
       <span className="hero-trust-dot" aria-hidden="true" />
       <span className="hero-trust-item">
@@ -58,6 +59,8 @@ function TrustRow() {
 }
 
 export default function Hero() {
+  const [activeTab, setActiveTab] = useState('route');
+
   return (
     <section className="hero">
       <HeroDecor />
@@ -65,31 +68,25 @@ export default function Hero() {
         Tu próxima <em>escapada</em>,<br />a un clic de distancia
       </h1>
       <p className="subtitle">
-        Rutas turísticas personalizadas desde tu ubicación o cualquier ciudad del mundo.
-        Elige un tema, ajusta la distancia y obtén un itinerario listo para explorar.
+        Rutas turísticas, restaurantes mejor valorados o senderos en la naturaleza.
+        Tres formas de descubrir cualquier ciudad.
       </p>
 
+      <Tabs activeTab={activeTab} onChange={setActiveTab} />
+
       <div className="search-form">
-        <div className="search-field-group">
-          <span className="search-field-label">¿Desde dónde exploras?</span>
-          <LocationPicker />
+        <div className="tab-panel" hidden={activeTab !== 'route'}>
+          <RouteTab />
         </div>
-
-<div className="search-field-group">
-          <span className="search-field-label">Tipo de ruta</span>
-          <ThemeSelector />
+        <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
+          <RestaurantsTab />
         </div>
-
-<div className="search-field-group">
-          <span className="search-field-label">Radio de exploración</span>
-          <DistanceSlider />
-        </div>
-
-        <div className="search-cta">
-          <GenerateButton />
-          <TrustRow />
+        <div className="tab-panel" hidden={activeTab !== 'wikiloc'}>
+          <WikilocTab />
         </div>
       </div>
+
+      <TrustRow />
     </section>
   );
 }

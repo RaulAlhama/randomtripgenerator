@@ -96,7 +96,11 @@ function requireAuth(req, res, next) {
 const THEME_PROMPTS = {
   monuments: 'monumentos, edificios historicos, estatuas, iglesias, palacios, castillos, ruinas y lugares emblematicos de gran importancia arquitectonica o historica',
   nature: 'parques, jardines botanicos, miradores, paseos junto al rio, senderos, espacios naturales verdes y paisajes destacados',
-  food: 'mercados de comida, restaurantes famosos, barrios gastronomicos, panaderias, bares de tapas y referentes culinarios locales'
+  food: 'mercados de comida, restaurantes famosos, barrios gastronomicos, panaderias, bares de tapas y referentes culinarios locales',
+  historical: 'lugares con peso historico: yacimientos, edificios con historia, barrios antiguos, museos historicos, monumentos conmemorativos y rincones cargados de memoria',
+  cultural: 'museos, teatros, centros culturales, galerias de arte, espacios bohemios, librerias historicas y barrios con vida cultural propia',
+  classic: 'los lugares imprescindibles que cualquier visitante deberia ver al menos una vez: hitos icónicos, plazas centrales, miradores famosos y referentes turisticos consagrados',
+  surprise: 'una mezcla inesperada de rincones poco conocidos, sitios curiosos, lugares con historias interesantes y propuestas fuera de las guias turisticas habituales'
 };
 
 // Transport mode config
@@ -1159,7 +1163,7 @@ app.get('/api/generate-trip', async (req, res) => {
       return res.status(400).json({ error: 'Invalid coordinates' });
     }
 
-    const VALID_THEMES = ['monuments', 'nature', 'food'];
+    const VALID_THEMES = ['monuments', 'nature', 'food', 'historical', 'cultural', 'classic', 'surprise'];
     const VALID_TRANSPORTS = ['driving', 'walking', 'cycling'];
     const safeTheme = VALID_THEMES.includes(theme) ? theme : 'monuments';
     const safeTransport = VALID_TRANSPORTS.includes(transport) ? transport : 'driving';
@@ -1246,6 +1250,96 @@ app.get('/api/route', async (req, res) => {
   } catch (error) {
     console.error('Error fetching route:', error);
     res.status(500).json({ error: 'Failed to fetch route' });
+  }
+});
+
+// Get nearby restaurants ranked by rating (Google Places Nearby Search)
+app.get('/api/restaurants', async (req, res) => {
+  try {
+    const { lat, lng, radius } = req.query;
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+
+    if (!apiKey) {
+      return res.status(503).json({ error: 'Google Places no esta configurado en el servidor' });
+    }
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Coordinates required' });
+    }
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (isNaN(latNum) || isNaN(lngNum) || Math.abs(latNum) > 90 || Math.abs(lngNum) > 180) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+
+    const radiusMeters = Math.min(Math.max(parseInt(radius) || 1500, 200), 5000);
+
+    const cacheKey = `restaurants:${latNum.toFixed(3)},${lngNum.toFixed(3)}:${radiusMeters}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latNum},${lngNum}&radius=${radiusMeters}&type=restaurant&language=es&key=${apiKey}`;
+    const data = await fetchExternal(url);
+
+    if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      console.error('[Places] Nearby status:', data.status, data.error_message);
+      return res.status(502).json({ error: 'Google Places error: ' + data.status });
+    }
+
+    const results = Array.isArray(data.results) ? data.results : [];
+
+    const ranked = results
+      .filter(r => typeof r.rating === 'number' && (r.user_ratings_total || 0) >= 20)
+      .sort((a, b) => {
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
+      })
+      .slice(0, 12);
+
+    const PHOTO_TIMEOUT = 4000;
+    const withTimeout = (p) => Promise.race([
+      p,
+      new Promise(resolve => setTimeout(() => resolve(null), PHOTO_TIMEOUT))
+    ]);
+
+    const enriched = await Promise.all(ranked.map(async (r) => {
+      const photoRef = r.photos?.[0]?.photo_reference;
+      const photoApiUrl = photoRef
+        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`
+        : null;
+      const photoUrl = photoApiUrl ? await withTimeout(followRedirect(photoApiUrl)) : null;
+      return {
+        placeId: r.place_id,
+        name: r.name,
+        rating: r.rating,
+        userRatingsTotal: r.user_ratings_total || 0,
+        address: r.vicinity || '',
+        lat: r.geometry?.location?.lat,
+        lng: r.geometry?.location?.lng,
+        priceLevel: typeof r.price_level === 'number' ? r.price_level : null,
+        openNow: r.opening_hours?.open_now ?? null,
+        photoUrl: photoUrl || null,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}&query_place_id=${r.place_id}`
+      };
+    }));
+
+    const locationInfo = await getCityFromCoords(latNum, lngNum);
+
+    const payload = {
+      city: locationInfo.city,
+      country: locationInfo.country,
+      origin: { lat: latNum, lng: lngNum },
+      radius: radiusMeters,
+      restaurants: enriched
+    };
+
+    cacheSet(cacheKey, payload);
+    res.json(payload);
+  } catch (error) {
+    console.error('Error fetching restaurants:', error);
+    res.status(500).json({ error: 'Failed to fetch restaurants: ' + error.message });
   }
 });
 
