@@ -7,7 +7,6 @@ export default function InspirationCarousel() {
     setLocationMode,
     setSearchLocation,
     setTheme,
-    setTransport,
     setRadius,
     generateTrip,
   } = useTrip();
@@ -16,15 +15,12 @@ export default function InspirationCarousel() {
     setLocationMode('search');
     setSearchLocation({ lat: example.lat, lng: example.lng });
     setTheme(example.theme);
-    setTransport(example.transport);
     setRadius(example.radius);
-    // Pass overrides so generateTrip runs with these values immediately,
-    // without waiting for the dispatches above to flush through a re-render.
     generateTrip({
       locationMode: 'search',
       searchLocation: { lat: example.lat, lng: example.lng },
       theme: example.theme,
-      transport: example.transport,
+      transport: 'walking',
       radius: example.radius,
     });
   };

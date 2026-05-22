@@ -1,9 +1,11 @@
 import { useTrip } from '../../context/TripContext';
 import { SLIDER_DEFAULTS } from '../../constants/transport';
 
+const CONFIG = { ...SLIDER_DEFAULTS.walking, max: 15 };
+
 export default function DistanceSlider() {
-  const { selectedTransport, selectedRadius, setRadius } = useTrip();
-  const config = SLIDER_DEFAULTS[selectedTransport] || SLIDER_DEFAULTS.driving;
+  const { selectedRadius, setRadius } = useTrip();
+  const config = CONFIG;
 
   const formatValue = (value) => {
     return value >= 1 ? `${value} km` : `${(value * 1000).toFixed(0)} m`;

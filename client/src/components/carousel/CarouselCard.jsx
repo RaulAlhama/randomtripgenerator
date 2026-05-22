@@ -1,4 +1,4 @@
-import { themeLabelsCarousel, transportLabelsCarousel } from '../../constants/inspiration';
+import { themeLabelsCarousel } from '../../constants/inspiration';
 
 export default function CarouselCard({ example, onClick }) {
   return (
@@ -8,7 +8,7 @@ export default function CarouselCard({ example, onClick }) {
       <div className="carousel-card-tagline">{example.tagline}</div>
       <div className="carousel-card-badges">
         <span className="carousel-badge">{themeLabelsCarousel[example.theme]}</span>
-        <span className="carousel-badge carousel-badge-soft">{transportLabelsCarousel[example.transport]} · {example.radius} km</span>
+        <span className="carousel-badge carousel-badge-soft">{example.radius} km</span>
       </div>
       <span className="carousel-card-cta">
         Generar
