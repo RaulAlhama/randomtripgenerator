@@ -24,7 +24,7 @@ const initialState = {
   locationMode: 'gps',
   searchLocation: null,
   selectedTheme: 'monuments',
-  selectedTransport: 'driving',
+  selectedTransport: 'walking',
   selectedRadius: 5,
   isGenerating: false,
   statusMessage: null,

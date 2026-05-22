@@ -1,6 +1,5 @@
 import LocationPicker from './LocationPicker';
 import ThemeSelector from './ThemeSelector';
-import TransportSelector from './TransportSelector';
 import DistanceSlider from './DistanceSlider';
 import GenerateButton from './GenerateButton';
 
@@ -71,60 +70,30 @@ export default function Hero() {
       </h1>
       <p className="subtitle">
         Rutas turísticas personalizadas desde tu ubicación o cualquier ciudad del mundo.
-        Elige tema y transporte, y obtén un itinerario listo para explorar.
+        Elige un tema, ajusta la distancia y obtén un itinerario listo para explorar.
       </p>
 
-      <div className="builder-card">
-        <div className="builder-card-shine" aria-hidden="true" />
-
-        <div className="builder-section">
-          <div className="builder-section-head">
-            <span className="builder-section-num">01</span>
-            <div>
-              <p className="selector-label">Punto de partida</p>
-              <p className="selector-hint">Tu ubicación actual o una ciudad concreta</p>
-            </div>
-          </div>
+      <div className="search-form">
+        <div className="search-field-group">
+          <span className="search-field-label">¿Desde dónde exploras?</span>
           <LocationPicker />
         </div>
 
-        <div className="builder-section">
-          <div className="builder-section-head">
-            <span className="builder-section-num">02</span>
-            <div>
-              <p className="selector-label">Elige un tema</p>
-              <p className="selector-hint">Qué tipo de lugares quieres descubrir</p>
-            </div>
-          </div>
+        <div className="search-divider" aria-hidden="true" />
+
+        <div className="search-field-group">
+          <span className="search-field-label">Tipo de ruta</span>
           <ThemeSelector />
         </div>
 
-        <div className="builder-section">
-          <div className="builder-row">
-            <div>
-              <div className="builder-section-head">
-                <span className="builder-section-num">03</span>
-                <div>
-                  <p className="selector-label">Transporte</p>
-                  <p className="selector-hint">Cómo te moverás</p>
-                </div>
-              </div>
-              <TransportSelector />
-            </div>
-            <div>
-              <div className="builder-section-head">
-                <span className="builder-section-num">04</span>
-                <div>
-                  <p className="selector-label">Distancia máxima</p>
-                  <p className="selector-hint">Radio de exploración</p>
-                </div>
-              </div>
-              <DistanceSlider />
-            </div>
-          </div>
+        <div className="search-divider" aria-hidden="true" />
+
+        <div className="search-field-group">
+          <span className="search-field-label">Radio de exploración</span>
+          <DistanceSlider />
         </div>
 
-        <div className="builder-cta">
+        <div className="search-cta">
           <GenerateButton />
           <TrustRow />
         </div>
