@@ -66,7 +66,11 @@ export default function CitySearch() {
       />
       <div className={`city-results${showResults ? '' : ' hidden'}`}>
         {results.length === 0 && showResults ? (
-          <div className="city-result-item no-results">No se encontraron ciudades</div>
+          <div className="city-result-item no-results">
+            {query.trim().length < 5
+              ? 'Sigue escribiendo el nombre…'
+              : 'Sin coincidencias. Prueba con otro nombre.'}
+          </div>
         ) : (
           results.map((city, index) => (
             <div
