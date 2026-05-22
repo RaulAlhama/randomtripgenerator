@@ -61,10 +61,6 @@ export default function Hero() {
   return (
     <section className="hero">
       <HeroDecor />
-      <span className="hero-eyebrow">
-        <span className="hero-eyebrow-dot" />
-        Generado con IA · En tiempo real
-      </span>
       <h1>
         Tu próxima <em>escapada</em>,<br />a un clic de distancia
       </h1>
@@ -79,16 +75,12 @@ export default function Hero() {
           <LocationPicker />
         </div>
 
-        <div className="search-divider" aria-hidden="true" />
-
-        <div className="search-field-group">
+<div className="search-field-group">
           <span className="search-field-label">Tipo de ruta</span>
           <ThemeSelector />
         </div>
 
-        <div className="search-divider" aria-hidden="true" />
-
-        <div className="search-field-group">
+<div className="search-field-group">
           <span className="search-field-label">Radio de exploración</span>
           <DistanceSlider />
         </div>

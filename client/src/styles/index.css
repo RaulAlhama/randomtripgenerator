@@ -71,31 +71,31 @@
 }
 
 [data-theme="dark"] {
-  --bg: #181008;
-  --bg-elevated: #221508;
-  --bg-muted: #2e1c0c;
-  --bg-card: #1c1208;
-  --bg-subtle: rgba(255, 210, 160, 0.04);
-  --bg-glass: rgba(24, 16, 8, 0.70);
-  --bg-glass-strong: rgba(24, 16, 8, 0.90);
+  --bg: #14120f;
+  --bg-elevated: #1d1a16;
+  --bg-muted: #25211c;
+  --bg-card: #1d1a16;
+  --bg-subtle: rgba(245, 230, 210, 0.04);
+  --bg-glass: rgba(20, 18, 15, 0.70);
+  --bg-glass-strong: rgba(20, 18, 15, 0.92);
 
-  --text: #fdf5ec;
-  --text-secondary: #d8c0a8;
-  --text-muted: #907060;
+  --text: #f0eae0;
+  --text-secondary: #c7bdae;
+  --text-muted: #86796a;
   --text-on-primary: #ffffff;
 
-  --border: rgba(255, 220, 170, 0.09);
-  --border-strong: rgba(255, 220, 170, 0.16);
+  --border: rgba(240, 220, 190, 0.08);
+  --border-strong: rgba(240, 220, 190, 0.14);
 
-  --primary: #e86830;
-  --primary-hover: #f07840;
-  --primary-soft: rgba(232, 104, 48, 0.15);
-  --primary-soft-hover: rgba(232, 104, 48, 0.25);
-  --accent: #f5ba60;
+  --primary: #d86838;
+  --primary-hover: #e87a48;
+  --primary-soft: rgba(216, 104, 56, 0.12);
+  --primary-soft-hover: rgba(216, 104, 56, 0.20);
+  --accent: #d9a466;
   --success: #60b070;
-  --warning: #e09840;
-  --danger: #e05858;
-  --ring: rgba(232, 104, 48, 0.35);
+  --warning: #d49050;
+  --danger: #d65858;
+  --ring: rgba(216, 104, 56, 0.18);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -126,8 +126,8 @@ body {
 
 [data-theme="dark"] body {
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, rgba(224, 90, 32, 0.12), transparent 60%),
-    radial-gradient(900px 500px at -10% 20%, rgba(240, 184, 96, 0.08), transparent 60%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(224, 90, 32, 0.04), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(240, 184, 96, 0.03), transparent 60%);
 }
 
 ::selection { background: var(--primary-soft-hover); color: var(--text); }
@@ -191,10 +191,7 @@ main {
   font-weight: 700;
   font-size: 1.3rem;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary);
 }
 
 .logo-sub {
@@ -355,7 +352,7 @@ main {
   pointer-events: none;
   overflow: hidden;
   z-index: -1;
-  opacity: 0.55;
+  opacity: 0.25;
 }
 
 .hero-decor svg {
@@ -368,7 +365,7 @@ main {
   color: var(--primary);
 }
 
-[data-theme="dark"] .hero-decor { opacity: 0.35; }
+[data-theme="dark"] .hero-decor { opacity: 0.15; }
 
 .hero-eyebrow {
   display: inline-flex;
@@ -402,11 +399,12 @@ main {
   font-family: var(--font-display);
   font-size: clamp(2.1rem, 4.6vw, 3.6rem);
   font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.035em;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
   color: var(--text);
   max-width: 820px;
   margin: 0 auto 0.85rem;
+  padding-bottom: 0.12em;
   font-variation-settings: "opsz" 144;
 }
 
@@ -419,10 +417,7 @@ main {
 .hero h1 em {
   font-style: italic;
   font-weight: 500;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 60%, var(--accent) 110%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary);
 }
 
 .gradient-text {
@@ -461,24 +456,24 @@ main {
 }
 
 .search-field-group {
-  padding: 1.1rem 1.5rem 1rem;
+  padding: 1.25rem 1.75rem 0.75rem;
+}
+
+.search-field-group + .search-field-group {
+  padding-top: 0.5rem;
 }
 
 .search-field-label {
   display: block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  margin-bottom: 0.6rem;
 }
 
-.search-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0 1.5rem;
-}
+.search-divider { display: none; }
 
 .search-cta {
   padding: 1rem 1.5rem 1.25rem;
@@ -520,7 +515,6 @@ main {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
-  box-shadow: 0 2px 8px var(--ring);
 }
 
 /* Legacy compat — keep these empty so old selectors don't break layout */
@@ -827,7 +821,7 @@ main {
   border-radius: 50%;
   background: var(--bg-elevated);
   border: 3px solid var(--primary);
-  box-shadow: 0 2px 8px var(--ring);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: transform 180ms var(--ease);
 }
@@ -840,7 +834,7 @@ main {
   border-radius: 50%;
   background: var(--bg-elevated);
   border: 3px solid var(--primary);
-  box-shadow: 0 2px 8px var(--ring);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
 }
 
@@ -936,9 +930,9 @@ main {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  background: var(--primary);
   color: var(--text-on-primary);
-  box-shadow: 0 8px 24px var(--ring);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(30, 18, 8, 0.10);
   position: relative;
   overflow: hidden;
 }
@@ -947,7 +941,7 @@ main {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--primary-hover), var(--primary));
+  background: var(--primary-hover);
   opacity: 0;
   transition: opacity 220ms var(--ease);
 }
@@ -955,8 +949,8 @@ main {
 .btn-primary > * { position: relative; z-index: 1; }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px var(--ring);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(30, 18, 8, 0.14);
 }
 .btn-primary:hover:not(:disabled)::before { opacity: 1; }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -1078,10 +1072,9 @@ main {
 
 .status-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+  background: var(--primary);
   border-radius: var(--radius-pill);
   transition: width 0.25s ease;
-  box-shadow: 0 0 10px var(--ring);
 }
 
 .status-progress-label {
