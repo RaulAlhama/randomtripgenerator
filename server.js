@@ -34,8 +34,53 @@ const generateLimiter = rateLimit({
   message: { error: 'Has generado muchas rutas, espera un momento' }
 });
 
+const restaurantsLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Has hecho muchas busquedas, espera un momento' }
+});
+
 app.use('/api/', apiLimiter);
 app.use('/api/generate-trip', generateLimiter);
+app.use('/api/restaurants', restaurantsLimiter);
+
+// ========== GOOGLE PLACES DAILY BUDGET ==========
+// In-memory cost counter shared by /api/generate-trip and /api/restaurants.
+// Resets at UTC midnight. Estimated costs are conservative (worst-case Google
+// Places API pricing) so we'd rather block early than overshoot.
+const DAILY_BUDGET_USD = parseFloat(process.env.GOOGLE_PLACES_DAILY_BUDGET_USD || '6');
+const COST_PER_TRIP_USD = 0.30;       // ~8 text searches + 8 photos
+const COST_PER_RESTAURANTS_USD = 0.15; // 1 nearby + up to 12 photos
+
+let dailyCostUsd = 0;
+let budgetDayKey = new Date().toISOString().slice(0, 10);
+
+function tryReserveBudget(estimatedUsd) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== budgetDayKey) {
+    console.log(`[Budget] Reset: previous day spent $${dailyCostUsd.toFixed(2)}`);
+    dailyCostUsd = 0;
+    budgetDayKey = today;
+  }
+  if (dailyCostUsd + estimatedUsd > DAILY_BUDGET_USD) {
+    console.warn(`[Budget] EXCEEDED — at $${dailyCostUsd.toFixed(2)}/$${DAILY_BUDGET_USD} for ${budgetDayKey}, rejecting request (+$${estimatedUsd.toFixed(2)})`);
+    return false;
+  }
+  dailyCostUsd += estimatedUsd;
+  const pct = (dailyCostUsd / DAILY_BUDGET_USD) * 100;
+  if (pct >= 80) {
+    console.warn(`[Budget] ${pct.toFixed(0)}% used — $${dailyCostUsd.toFixed(2)}/$${DAILY_BUDGET_USD} on ${budgetDayKey}`);
+  }
+  return true;
+}
+
+function budgetExceededResponse(res) {
+  return res.status(429).json({
+    error: 'Hemos alcanzado el limite diario gratuito. Vuelve a intentarlo manana.'
+  });
+}
 
 // Serve React build if available, otherwise fall back to public/
 const clientDist = path.join(__dirname, 'client', 'dist');
@@ -1166,6 +1211,12 @@ app.get('/api/generate-trip', async (req, res) => {
     const VALID_THEMES = ['monuments', 'nature', 'food', 'historical', 'cultural', 'classic', 'surprise'];
     const VALID_TRANSPORTS = ['driving', 'walking', 'cycling'];
     const safeTheme = VALID_THEMES.includes(theme) ? theme : 'monuments';
+
+    // Reserve daily Google Places budget (only if the API key is configured,
+    // since otherwise generate-trip falls back to Wikipedia which is free).
+    if (process.env.GOOGLE_PLACES_API_KEY && !tryReserveBudget(COST_PER_TRIP_USD)) {
+      return budgetExceededResponse(res);
+    }
     const safeTransport = VALID_TRANSPORTS.includes(transport) ? transport : 'driving';
 
     const transportConf = TRANSPORT_CONFIG[safeTransport] || TRANSPORT_CONFIG.driving;
@@ -1278,6 +1329,10 @@ app.get('/api/restaurants', async (req, res) => {
     const cached = cacheGet(cacheKey);
     if (cached) {
       return res.json(cached);
+    }
+
+    if (!tryReserveBudget(COST_PER_RESTAURANTS_USD)) {
+      return budgetExceededResponse(res);
     }
 
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latNum},${lngNum}&radius=${radiusMeters}&type=restaurant&language=es&key=${apiKey}`;
