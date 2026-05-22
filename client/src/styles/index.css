@@ -2581,6 +2581,303 @@ main {
 .error-boundary button:first-of-type { background: var(--primary); color: var(--text-on-primary); }
 .error-boundary button:last-of-type  { background: var(--bg-muted); color: var(--text); }
 
+/* ========== HERO TABS ========== */
+.hero-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.3rem;
+  margin: 0 auto 1rem;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hero-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.hero-tab:hover { color: var(--text); }
+
+.hero-tab.active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-tab-icon {
+  display: inline-flex;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.tab-panel { display: contents; }
+.tab-panel[hidden] { display: none !important; }
+
+.hero .hero-trust {
+  margin: 0.85rem auto 0;
+  justify-content: center;
+}
+
+/* ========== RADIUS CHIPS (restaurants tab) ========== */
+.radius-chips {
+  display: inline-flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.radius-chip {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.radius-chip:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.radius-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ========== RESTAURANTS RESULT ========== */
+.restaurants-error {
+  margin: 0 1.75rem 1rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.restaurants-result {
+  padding: 0 1.75rem 1.5rem;
+}
+
+.restaurants-result-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.5rem 0 0.85rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.5rem;
+}
+
+.restaurants-result-city {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.restaurants-result-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.restaurants-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+.restaurants-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0;
+  margin: 0;
+}
+
+.restaurant-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 0.95rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  transition: var(--transition);
+}
+
+.restaurant-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.restaurant-photo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+
+.restaurant-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.restaurant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.restaurant-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.restaurant-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restaurant-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.restaurant-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.restaurant-stars {
+  color: #f5b301;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.restaurant-rating-count {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.restaurant-price {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.restaurant-address {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restaurant-link {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 0.15rem;
+  align-self: flex-start;
+}
+
+.restaurant-link:hover { text-decoration: underline; }
+
+.restaurant-open {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-pill);
+  color: #047857;
+  background: color-mix(in srgb, #10b981 14%, transparent);
+  flex-shrink: 0;
+}
+
+.restaurant-closed {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-pill);
+  color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .restaurant-open { color: #6ee7b7; background: color-mix(in srgb, #10b981 22%, transparent); }
+[data-theme="dark"] .restaurant-closed { color: #fca5a5; background: color-mix(in srgb, #ef4444 22%, transparent); }
+
+/* ========== WIKILOC TAB ========== */
+.wikiloc-info {
+  padding: 0 1.75rem;
+}
+
+.wikiloc-info p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .restaurant-card {
+    grid-template-columns: 72px 1fr;
+    gap: 0.7rem;
+    padding: 0.65rem;
+  }
+  .restaurant-photo { width: 72px; height: 72px; }
+  .hero-tab { padding: 0.45rem 0.85rem; font-size: 0.82rem; }
+  .hero-tab-icon { font-size: 0.9rem; }
+}
+
 /* ========== REDUCED MOTION ========== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
