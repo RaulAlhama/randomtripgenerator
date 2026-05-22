@@ -11,7 +11,7 @@ export default function CitySearch() {
   const debounceRef = useRef(null);
 
   const handleSearch = useCallback(async (value) => {
-    if (value.length < 2) {
+    if (value.length < 3) {
       setResults([]);
       setShowResults(false);
       return;

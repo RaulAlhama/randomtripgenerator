@@ -1059,6 +1059,10 @@ function isCitylike(r) {
       return true;
     }
   }
+  // Tertiary: addresstype tells us what Nominatim thinks the result is. Catches
+  // municipalities and villages that come back with quirky class/type combos
+  // (e.g. small Spanish pueblos returned as boundary/administrative + addresstype=village).
+  if (CITYLIKE_PLACE_TYPES.has(r.addresstype)) return true;
   return false;
 }
 
