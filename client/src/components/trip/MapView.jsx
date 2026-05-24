@@ -18,17 +18,23 @@ const USER_ICON = L.divIcon({
   iconAnchor: [10, 10],
 });
 
-function createPOIIcon(index) {
+function createPOIIcon(index, { dim = false, numbered = true } = {}) {
+  const background = dim
+    ? 'linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)'
+    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+  const opacity = dim ? 0.55 : 1;
+  const content = numbered ? String(index + 1) : '';
   return L.divIcon({
     className: 'poi-marker',
-    html: `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">${index + 1}</div>`,
+    html: `<div style="background: ${background}; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); opacity: ${opacity};">${content}</div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
 }
 
-// Pre-create icons for up to 10 POIs to avoid recreating on every render
-const POI_ICONS = Array.from({ length: 10 }, (_, i) => createPOIIcon(i));
+// Pre-create icons for up to 12 POIs to avoid recreating on every render
+const POI_ICONS = Array.from({ length: 12 }, (_, i) => createPOIIcon(i));
+const POI_ICONS_DIM = Array.from({ length: 12 }, (_, i) => createPOIIcon(i, { dim: true, numbered: false }));
 
 function MapController() {
   const map = useMap();
@@ -55,11 +61,12 @@ function MapController() {
 }
 
 export default function MapView() {
-  const { currentTrip, routeGeometry, selectedTransport } = useTrip();
+  const { currentTrip, routeGeometry, selectedTransport, stage, selectedKeys, poiKey } = useTrip();
 
   const places = currentTrip?.places || [];
   const originLat = currentTrip?.origin_lat ?? 40;
   const originLng = currentTrip?.origin_lng ?? -3;
+  const isCandidatesStage = stage === 'candidates';
 
   const routeGeoJSON = useMemo(
     () => routeGeometry ? { type: 'Feature', geometry: routeGeometry } : null,
@@ -92,19 +99,26 @@ export default function MapView() {
           </Marker>
         )}
 
-        {/* POI markers */}
-        {places.map((place, index) => (
-          <Marker
-            key={`poi-${index}-${place.lat}-${place.lng}`}
-            position={[place.lat, place.lng]}
-            icon={POI_ICONS[index] || createPOIIcon(index)}
-          >
-            <Popup>
-              <div className="popup-title"><b>{place.name}</b></div>
-              <div className="popup-type">{typeLabels[place.type] || typeLabels.default}</div>
-            </Popup>
-          </Marker>
-        ))}
+        {/* POI markers — dim deselected ones during curation */}
+        {places.map((place, index) => {
+          const isSelected = !isCandidatesStage || selectedKeys.has(poiKey(place));
+          const icon = isSelected
+            ? (POI_ICONS[index] || createPOIIcon(index))
+            : (POI_ICONS_DIM[index] || createPOIIcon(index, { dim: true, numbered: false }));
+          return (
+            <Marker
+              key={`poi-${index}-${place.lat}-${place.lng}`}
+              position={[place.lat, place.lng]}
+              icon={icon}
+              opacity={isSelected ? 1 : 0.85}
+            >
+              <Popup>
+                <div className="popup-title"><b>{place.name}</b></div>
+                <div className="popup-type">{typeLabels[place.type] || typeLabels.default}</div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         {/* Route line */}
         {routeGeoJSON && (

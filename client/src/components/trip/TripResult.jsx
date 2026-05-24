@@ -5,10 +5,11 @@ import POIWarning from './POIWarning';
 import WeatherWidget from './WeatherWidget';
 import MapView from './MapView';
 import PlacesPanel from './PlacesPanel';
+import CandidateReview from './CandidateReview';
 import TripSkeleton from './TripSkeleton';
 
 export default function TripResult() {
-  const { currentTrip, isGenerating } = useTrip();
+  const { currentTrip, isGenerating, stage } = useTrip();
   const wrapperRef = useRef(null);
   const lastTripKeyRef = useRef(null);
   const scrolledForGenerationRef = useRef(false);
@@ -56,7 +57,7 @@ export default function TripResult() {
       <POIWarning />
       <div className="trip-grid">
         <MapView />
-        <PlacesPanel />
+        {stage === 'candidates' ? <CandidateReview /> : <PlacesPanel />}
       </div>
     </section>
   );

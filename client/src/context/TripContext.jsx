@@ -19,11 +19,23 @@ const SET_TRIP = 'SET_TRIP';
 const SET_ROUTE = 'SET_ROUTE';
 const SET_WEATHER = 'SET_WEATHER';
 const CLOSE_TRIP = 'CLOSE_TRIP';
+const SET_STAGE = 'SET_STAGE';
+const SET_CANDIDATES = 'SET_CANDIDATES';
+const SET_SELECTED_KEYS = 'SET_SELECTED_KEYS';
+const TOGGLE_SELECTION = 'TOGGLE_SELECTION';
+
+const CANDIDATE_COUNT = 10;
+const SURPRISE_COUNT = 6;
+
+// Stable identity for a POI across selection toggles
+function poiKey(p) {
+  return `${p.name}|${p.lat}|${p.lng}`;
+}
 
 const initialState = {
   locationMode: 'gps',
   searchLocation: null,
-  selectedTheme: 'monuments',
+  selectedTheme: 'mixed',
   selectedTransport: 'walking',
   selectedRadius: 5,
   isGenerating: false,
@@ -35,6 +47,9 @@ const initialState = {
   routeDistance: null,
   routeDuration: null,
   weather: null,
+  stage: 'idle',          // 'idle' | 'candidates' | 'route'
+  candidates: null,        // full POI pool returned by /api/generate-trip
+  selectedKeys: new Set(), // subset of candidates the user wants in the route
 };
 
 // Progress stages — message shown when progress reaches each threshold.
@@ -86,6 +101,18 @@ function tripReducer(state, action) {
       };
     case SET_WEATHER:
       return { ...state, weather: action.payload };
+    case SET_STAGE:
+      return { ...state, stage: action.payload };
+    case SET_CANDIDATES:
+      return { ...state, candidates: action.payload };
+    case SET_SELECTED_KEYS:
+      return { ...state, selectedKeys: action.payload };
+    case TOGGLE_SELECTION: {
+      const next = new Set(state.selectedKeys);
+      if (next.has(action.payload)) next.delete(action.payload);
+      else next.add(action.payload);
+      return { ...state, selectedKeys: next };
+    }
     case CLOSE_TRIP:
       return {
         ...state,
@@ -97,6 +124,9 @@ function tripReducer(state, action) {
         statusMessage: null,
         progress: 0,
         generationError: null,
+        stage: 'idle',
+        candidates: null,
+        selectedKeys: new Set(),
       };
     default:
       return state;
@@ -146,7 +176,7 @@ function parseWeather(data) {
   const current = data.current;
   const daily = data.daily;
   const code = current.weather_code;
-  const weather = WEATHER_CODES[code] || { icon: '\u{1F321}\uFE0F', desc: 'Desconocido' };
+  const weather = WEATHER_CODES[code] || { icon: '\u{1F321}️', desc: 'Desconocido' };
 
   // Extract sunrise/sunset times (HH:MM)
   const sunrise = daily?.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : null;
@@ -169,9 +199,6 @@ function parseWeather(data) {
 }
 
 // Calculate route and return parsed data
-// Server already extracts routes[0] and returns flat { geometry, distance, duration, mode }
-// Server also recalculates duration for walking/cycling, but we do it client-side too
-// as a safety measure in case the server response uses the OSRM driving duration
 async function fetchRouteData(originLat, originLng, places, transport) {
   const start = `${originLat},${originLng}`;
   const waypoints = places.map((p) => `${p.lat},${p.lng}`).join(';');
@@ -214,39 +241,69 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_RADIUS, payload: radius });
   }, []);
 
-  // Accepts optional overrides so callers (e.g. the inspiration carousel) can
-  // generate a trip with fresh values without waiting for setState+re-render,
-  // which would otherwise leave generateTrip reading stale closure state.
-  const generateTrip = useCallback(async (overrides = {}) => {
+  const toggleCandidate = useCallback((key) => {
+    dispatch({ type: TOGGLE_SELECTION, payload: key });
+  }, []);
+
+  // Internal: persists auto-save when user finalizes a route.
+  const persistTrip = useCallback(async (trip, theme, transport, routeData) => {
+    if (!isAuthenticated) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await saveTrip(
+        {
+          city: trip.city,
+          country: trip.country,
+          origin_lat: trip.origin_lat,
+          origin_lng: trip.origin_lng,
+          theme,
+          transport_mode: transport,
+          places: trip.places,
+          route_distance: routeData.distance,
+          route_duration: routeData.duration,
+        },
+        token
+      );
+    } catch (e) {
+      console.error('Error al auto-guardar:', e);
+    }
+  }, [isAuthenticated, getAccessToken]);
+
+  // Internal: drives the progress simulator. Returns start/stop fns.
+  const makeProgressSimulator = () => {
+    let progressTimer = null;
+    return {
+      start() {
+        const started = Date.now();
+        progressTimer = setInterval(() => {
+          const elapsed = Date.now() - started;
+          const pct = Math.min(90, Math.round(90 * (1 - Math.exp(-elapsed / 5000))));
+          dispatch({ type: SET_PROGRESS, payload: pct });
+          dispatch({ type: SET_STATUS, payload: messageForProgress(pct) });
+        }, 200);
+      },
+      stop() {
+        if (progressTimer) {
+          clearInterval(progressTimer);
+          progressTimer = null;
+        }
+      }
+    };
+  };
+
+  // Stage 1: fetch the candidate pool. The user then curates and triggers buildRouteFromSelection.
+  // When `autoBuild` is true (Sorpréndeme / inspiration cards), we skip the curation step
+  // and immediately build a route from the first SURPRISE_COUNT candidates.
+  const generateCandidates = useCallback(async (overrides = {}) => {
     const effectiveLocationMode = overrides.locationMode ?? state.locationMode;
     const effectiveSearchLocation = overrides.searchLocation ?? state.searchLocation;
     const effectiveTheme = overrides.theme ?? state.selectedTheme;
     const effectiveTransport = overrides.transport ?? state.selectedTransport;
     const effectiveRadius = overrides.radius ?? state.selectedRadius;
+    const autoBuild = !!overrides.autoBuild;
 
-    // Interval that simulates progress toward 90% while the backend call is in flight.
-    // Cleared in both success and error paths. Uses an asymptotic curve so progress
-    // feels fast at the start and smoothly decelerates — avoiding the "stuck at 90%"
-    // feel if the request is slow.
-    let progressTimer = null;
-
-    const startProgressSimulation = () => {
-      const started = Date.now();
-      // Typical request is 6-12s; decay constant 5000ms reaches ~83% at 9s.
-      progressTimer = setInterval(() => {
-        const elapsed = Date.now() - started;
-        const pct = Math.min(90, Math.round(90 * (1 - Math.exp(-elapsed / 5000))));
-        dispatch({ type: SET_PROGRESS, payload: pct });
-        dispatch({ type: SET_STATUS, payload: messageForProgress(pct) });
-      }, 200);
-    };
-
-    const stopProgressSimulation = () => {
-      if (progressTimer) {
-        clearInterval(progressTimer);
-        progressTimer = null;
-      }
-    };
+    const sim = makeProgressSimulator();
 
     try {
       dispatch({ type: SET_ERROR, payload: null });
@@ -254,7 +311,7 @@ export function TripProvider({ children }) {
       dispatch({ type: SET_STATUS, payload: PROGRESS_STAGES[0].msg });
       dispatch({ type: SET_GENERATING, payload: true });
 
-      // 1. Get location — before starting progress simulation (geo can take several seconds)
+      // 1. Resolve location first (geo can take a few seconds)
       let location;
       if (effectiveLocationMode === 'search') {
         if (!effectiveSearchLocation) {
@@ -266,8 +323,8 @@ export function TripProvider({ children }) {
         location = await getUserLocation();
       }
 
-      // 2. Generate trip via backend — this is the long-running call
-      startProgressSimulation();
+      // 2. Fetch candidates (count=CANDIDATE_COUNT puts the backend in candidate mode)
+      sim.start();
 
       const radiusMeters = Math.round(effectiveRadius * 1000);
       const tripData = await apiGenerateTrip(
@@ -275,19 +332,21 @@ export function TripProvider({ children }) {
         location.lng,
         effectiveTheme,
         effectiveTransport,
-        radiusMeters
+        radiusMeters,
+        CANDIDATE_COUNT
       );
 
-      stopProgressSimulation();
+      sim.stop();
 
       if (!tripData.places || tripData.places.length === 0) {
         throw new Error('No se encontraron lugares para esta ubicación');
       }
 
+      const candidates = tripData.places;
       const trip = {
         city: tripData.city,
         country: tripData.country,
-        places: tripData.places,
+        places: candidates, // map renders the full pool in candidates stage
         origin_lat: location.lat,
         origin_lng: location.lng,
         poiSource: tripData.poiSource,
@@ -295,55 +354,32 @@ export function TripProvider({ children }) {
         transport: effectiveTransport,
       };
 
-      // 3. Show trip immediately with a final progress push, then fetch route + weather
-      dispatch({ type: SET_PROGRESS, payload: 95 });
-      dispatch({ type: SET_STATUS, payload: 'Calculando la ruta en el mapa...' });
+      // Default: all candidates selected. Sorpréndeme overrides this to the first SURPRISE_COUNT.
+      const initialSelection = autoBuild
+        ? new Set(candidates.slice(0, SURPRISE_COUNT).map(poiKey))
+        : new Set(candidates.map(poiKey));
+
+      dispatch({ type: SET_CANDIDATES, payload: candidates });
+      dispatch({ type: SET_SELECTED_KEYS, payload: initialSelection });
       dispatch({ type: SET_TRIP, payload: trip });
 
-      const [routeData] = await Promise.all([
-        fetchRouteData(location.lat, location.lng, tripData.places, effectiveTransport),
+      if (autoBuild) {
+        // Jump straight to route stage using the auto-selected subset.
+        await buildRouteInternal(trip, candidates, initialSelection, effectiveTheme, effectiveTransport, location);
+      } else {
+        dispatch({ type: SET_STAGE, payload: 'candidates' });
+        dispatch({ type: SET_PROGRESS, payload: 100 });
+        dispatch({ type: SET_STATUS, payload: null });
+        dispatch({ type: SET_GENERATING, payload: false });
+
+        // Fetch weather in the background — it's relevant in both stages.
         apiFetchWeather(location.lat, location.lng)
           .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
-          .catch(() => {})
-      ]);
-
-      dispatch({ type: SET_ROUTE, payload: routeData });
-      trip.route_distance = routeData.distance;
-      trip.route_duration = routeData.duration;
-      dispatch({ type: SET_TRIP, payload: { ...trip } });
-
-      // Close out the generating state — 100% briefly then fade out
-      dispatch({ type: SET_PROGRESS, payload: 100 });
-      dispatch({ type: SET_STATUS, payload: null });
-      dispatch({ type: SET_GENERATING, payload: false });
-
-      // 5. Auto-save if authenticated
-      if (isAuthenticated) {
-        try {
-          const token = await getAccessToken();
-          if (token) {
-            await saveTrip(
-              {
-                city: trip.city,
-                country: trip.country,
-                origin_lat: trip.origin_lat,
-                origin_lng: trip.origin_lng,
-                theme: effectiveTheme,
-                transport_mode: effectiveTransport,
-                places: trip.places,
-                route_distance: routeData.distance,
-                route_duration: routeData.duration,
-              },
-              token
-            );
-          }
-        } catch (e) {
-          console.error('Error al auto-guardar:', e);
-        }
+          .catch(() => {});
       }
     } catch (error) {
-      stopProgressSimulation();
-      console.error('Error al generar ruta:', error);
+      sim.stop();
+      console.error('Error al generar candidatos:', error);
       const msg = error.message || 'Error al generar la ruta';
       dispatch({ type: SET_ERROR, payload: msg });
       dispatch({ type: SET_STATUS, payload: null });
@@ -351,16 +387,97 @@ export function TripProvider({ children }) {
       dispatch({ type: SET_PROGRESS, payload: 0 });
       showToast(msg, 'error');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.locationMode,
     state.searchLocation,
     state.selectedTheme,
     state.selectedTransport,
     state.selectedRadius,
-    isAuthenticated,
-    getAccessToken,
-    showToast,
   ]);
+
+  // Internal: shared route-build logic used by buildRouteFromSelection and Sorpréndeme.
+  // Filters candidates by selection, fetches the OSRM route, transitions to 'route' stage.
+  async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin) {
+    const selectedPlaces = candidates.filter(p => selectedKeys.has(poiKey(p)));
+    if (selectedPlaces.length < 2) {
+      throw new Error('Selecciona al menos 2 sitios para crear la ruta');
+    }
+
+    dispatch({ type: SET_STATUS, payload: 'Calculando la ruta en el mapa...' });
+    const routeData = await fetchRouteData(origin.lat, origin.lng, selectedPlaces, transport);
+
+    const updatedTrip = {
+      ...trip,
+      places: selectedPlaces, // route stage: trip.places shrinks to the chosen subset
+      route_distance: routeData.distance,
+      route_duration: routeData.duration,
+    };
+
+    dispatch({ type: SET_TRIP, payload: updatedTrip });
+    dispatch({ type: SET_ROUTE, payload: routeData });
+    dispatch({ type: SET_STAGE, payload: 'route' });
+    dispatch({ type: SET_PROGRESS, payload: 100 });
+    dispatch({ type: SET_STATUS, payload: null });
+    dispatch({ type: SET_GENERATING, payload: false });
+
+    // Weather: only fetch here if Sorpréndeme path bypassed the candidates-stage fetch.
+    apiFetchWeather(origin.lat, origin.lng)
+      .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+      .catch(() => {});
+
+    await persistTrip(updatedTrip, theme, transport, routeData);
+  }
+
+  // Stage 2: user confirmed selection → build the route.
+  const buildRouteFromSelection = useCallback(async () => {
+    if (!state.candidates || !state.currentTrip) return;
+    if (state.selectedKeys.size < 2) {
+      showToast('Selecciona al menos 2 sitios para crear la ruta', 'error');
+      return;
+    }
+    try {
+      dispatch({ type: SET_GENERATING, payload: true });
+      dispatch({ type: SET_PROGRESS, payload: 80 });
+      const origin = { lat: state.currentTrip.origin_lat, lng: state.currentTrip.origin_lng };
+      // Rebuild trip from the original candidate-stage shape (places = full pool)
+      const baseTrip = { ...state.currentTrip, places: state.candidates };
+      await buildRouteInternal(
+        baseTrip,
+        state.candidates,
+        state.selectedKeys,
+        state.currentTrip.theme,
+        state.currentTrip.transport,
+        origin
+      );
+    } catch (error) {
+      console.error('Error al construir la ruta:', error);
+      const msg = error.message || 'No se pudo calcular la ruta';
+      showToast(msg, 'error');
+      dispatch({ type: SET_GENERATING, payload: false });
+      dispatch({ type: SET_PROGRESS, payload: 0 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.candidates, state.currentTrip, state.selectedKeys]);
+
+  // Go back from route view to curation: restore the full pool, drop the route.
+  const backToCandidates = useCallback(() => {
+    if (!state.candidates || !state.currentTrip) return;
+    dispatch({
+      type: SET_TRIP,
+      payload: { ...state.currentTrip, places: state.candidates }
+    });
+    dispatch({ type: SET_ROUTE, payload: { geometry: null, distance: null, duration: null } });
+    dispatch({ type: SET_STAGE, payload: 'candidates' });
+  }, [state.candidates, state.currentTrip]);
+
+  // One-click shortcut: generate + auto-build route from the first SURPRISE_COUNT POIs.
+  const surpriseMe = useCallback(async (overrides = {}) => {
+    return generateCandidates({ ...overrides, autoBuild: true });
+  }, [generateCandidates]);
+
+  // Backward-compat alias for the InspirationCarousel and any external callers.
+  const generateTrip = surpriseMe;
 
   const closeTrip = useCallback(() => {
     dispatch({ type: CLOSE_TRIP });
@@ -414,8 +531,10 @@ export function TripProvider({ children }) {
         };
 
         dispatch({ type: SET_TRIP, payload: loadedTrip });
+        dispatch({ type: SET_STAGE, payload: 'route' });
+        dispatch({ type: SET_CANDIDATES, payload: null });
+        dispatch({ type: SET_SELECTED_KEYS, payload: new Set() });
 
-        // Calculate route
         const transport = trip.transport_mode || 'driving';
         const routeData = await fetchRouteData(
           trip.origin_lat,
@@ -426,7 +545,6 @@ export function TripProvider({ children }) {
 
         dispatch({ type: SET_ROUTE, payload: routeData });
 
-        // Fetch weather
         try {
           const weatherData = await apiFetchWeather(trip.origin_lat, trip.origin_lng);
           const weather = parseWeather(weatherData);
@@ -452,12 +570,18 @@ export function TripProvider({ children }) {
 
   const value = {
     ...state,
+    poiKey,
     setLocationMode,
     setSearchLocation,
     setTheme,
     setTransport,
     setRadius,
-    generateTrip,
+    toggleCandidate,
+    generateCandidates,
+    buildRouteFromSelection,
+    backToCandidates,
+    surpriseMe,
+    generateTrip, // legacy alias = surpriseMe
     closeTrip,
     shareTrip,
     viewSavedTrip,

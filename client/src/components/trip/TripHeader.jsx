@@ -27,22 +27,29 @@ export default function TripHeader() {
     routeDuration,
     selectedTheme,
     selectedTransport,
+    stage,
+    candidates,
+    backToCandidates,
   } = useTrip();
 
   if (!currentTrip) return null;
 
   const city = currentTrip.city || 'la zona';
   const country = currentTrip.country || '';
-  const themeKind = currentTrip.theme || selectedTheme || 'classic';
+  const themeKind = currentTrip.theme || selectedTheme || 'mixed';
   const transportKey = currentTrip.transport || selectedTransport || 'driving';
-  const themeDef = THEMES.find((t) => t.key === themeKind);
+  // 'mixed' is the default catch-all — no need to render a pill for it.
+  const themeDef = themeKind === 'mixed' ? null : THEMES.find((t) => t.key === themeKind);
   const transportDef = TRANSPORTS.find((t) => t.key === transportKey);
+  const canEditSelection = stage === 'route' && Array.isArray(candidates) && candidates.length > 0;
 
   const distanceKm = routeDistance ? (routeDistance / 1000).toFixed(1) : null;
   const durationText = routeDuration ? formatDuration(routeDuration) : null;
 
-  const gmapsUrl = buildGoogleMapsUrl(currentTrip, transportKey);
+  const isRouteStage = stage !== 'candidates';
+  const gmapsUrl = isRouteStage ? buildGoogleMapsUrl(currentTrip, transportKey) : null;
   const placesCount = currentTrip.places?.length || 0;
+  const placesLabel = isRouteStage ? 'paradas' : 'candidatos';
 
   return (
     <div className="trip-cover" data-theme-kind={themeKind}>
@@ -54,7 +61,7 @@ export default function TripHeader() {
         <div className="trip-cover-meta">
           <span className="trip-meta-pill trip-meta-count">
             <span aria-hidden="true">✦</span>
-            {placesCount} paradas
+            {placesCount} {placesLabel}
           </span>
           {themeDef && (
             <span className="trip-meta-pill">
@@ -89,6 +96,14 @@ export default function TripHeader() {
       </div>
 
       <div className="trip-cover-actions">
+        {canEditSelection && (
+          <button className="btn btn-sm" onClick={backToCandidates} title="Volver a la lista de candidatos">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Editar selección
+          </button>
+        )}
         {gmapsUrl && (
           <a href={gmapsUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -98,15 +113,17 @@ export default function TripHeader() {
             Maps
           </a>
         )}
-        <button className="btn btn-sm" onClick={shareTrip}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-          </svg>
-          Compartir
-        </button>
+        {isRouteStage && (
+          <button className="btn btn-sm" onClick={shareTrip}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
+            </svg>
+            Compartir
+          </button>
+        )}
         <button className="btn-icon" aria-label="Cerrar ruta" onClick={closeTrip}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M18 6L6 18M6 6l12 12" />
