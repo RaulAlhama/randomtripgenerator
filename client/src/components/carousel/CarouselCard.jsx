@@ -1,9 +1,22 @@
 import { themeLabelsCarousel } from '../../constants/inspiration';
+import Icon from '../ui/Icon';
+
+const THEME_ICON_NAMES = {
+  monuments: 'monuments',
+  historical: 'historical',
+  cultural: 'cultural',
+  classic: 'classic',
+  surprise: 'surprise',
+  mixed: 'sparkle',
+};
 
 export default function CarouselCard({ example, onClick }) {
+  const iconName = THEME_ICON_NAMES[example.theme] || 'sparkle';
   return (
     <button type="button" className="carousel-card" onClick={onClick}>
-      <div className="carousel-card-emoji" aria-hidden="true">{example.emoji}</div>
+      <div className="carousel-card-emoji" aria-hidden="true">
+        <Icon name={iconName} size={32} strokeWidth={1.6} />
+      </div>
       <div className="carousel-card-city">{example.city}</div>
       <div className="carousel-card-tagline">{example.tagline}</div>
       <div className="carousel-card-badges">

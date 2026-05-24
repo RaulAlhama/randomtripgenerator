@@ -1,7 +1,9 @@
+import Icon from '../ui/Icon';
+
 const TABS = [
-  { key: 'route', label: 'Ruta turística', icon: '\u{1F5FA}️' },
-  { key: 'restaurants', label: 'Mejores restaurantes', icon: '\u{1F37D}️' },
-  { key: 'wikiloc', label: 'Naturaleza', icon: '\u{1F33F}' },
+  { key: 'route', label: 'Ruta turística', iconName: 'map' },
+  { key: 'restaurants', label: 'Mejores restaurantes', iconName: 'fork' },
+  { key: 'wikiloc', label: 'Naturaleza', iconName: 'leaf' },
 ];
 
 export default function Tabs({ activeTab, onChange }) {
@@ -16,7 +18,7 @@ export default function Tabs({ activeTab, onChange }) {
           onClick={() => onChange(tab.key)}
           type="button"
         >
-          <span className="hero-tab-icon" aria-hidden="true">{tab.icon}</span>
+          <span className="hero-tab-icon" aria-hidden="true"><Icon name={tab.iconName} size={18} /></span>
           <span className="hero-tab-label">{tab.label}</span>
         </button>
       ))}

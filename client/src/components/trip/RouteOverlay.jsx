@@ -1,5 +1,6 @@
 import { useTrip, formatDuration } from '../../context/TripContext';
-import { MODE_LABELS } from '../../constants/transport';
+import { TRANSPORTS } from '../../constants/transport';
+import { TRANSPORT_ICONS } from '../hero/transportIcons';
 
 export default function RouteOverlay() {
   const { routeDistance, routeDuration, selectedTransport } = useTrip();
@@ -8,7 +9,8 @@ export default function RouteOverlay() {
 
   const distanceKm = (routeDistance / 1000).toFixed(1);
   const durationText = formatDuration(routeDuration);
-  const modeLabel = MODE_LABELS[selectedTransport] || selectedTransport;
+  const transportDef = TRANSPORTS.find((t) => t.key === selectedTransport);
+  const modeLabel = transportDef?.label || selectedTransport;
 
   return (
     <div className="route-overlay">
@@ -22,7 +24,10 @@ export default function RouteOverlay() {
       </div>
       <div className="route-stat">
         <span className="stat-label">Modo</span>
-        <span className="stat-value stat-value-sm">{modeLabel}</span>
+        <span className="stat-value stat-value-sm stat-value-with-icon">
+          <span className="stat-icon" aria-hidden="true">{TRANSPORT_ICONS[selectedTransport]}</span>
+          {modeLabel}
+        </span>
       </div>
     </div>
   );

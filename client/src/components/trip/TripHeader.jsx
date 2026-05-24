@@ -1,6 +1,8 @@
 import { useTrip, formatDuration } from '../../context/TripContext';
 import { THEMES } from '../../constants/themes';
 import { TRANSPORTS } from '../../constants/transport';
+import { TRANSPORT_ICONS } from '../hero/transportIcons';
+import Icon from '../ui/Icon';
 
 function buildGoogleMapsUrl(trip, transportKey) {
   const places = trip?.places || [];
@@ -60,18 +62,18 @@ export default function TripHeader() {
         </h2>
         <div className="trip-cover-meta">
           <span className="trip-meta-pill trip-meta-count">
-            <span aria-hidden="true">✦</span>
+            <Icon name="sparkle" size={12} strokeWidth={2.2} />
             {placesCount} {placesLabel}
           </span>
           {themeDef && (
             <span className="trip-meta-pill">
-              <span aria-hidden="true">{themeDef.icon}</span>
+              <Icon name={themeDef.iconName} size={13} strokeWidth={2} />
               {themeDef.label}
             </span>
           )}
           {transportDef && (
             <span className="trip-meta-pill">
-              <span aria-hidden="true">{transportDef.icon}</span>
+              <span className="trip-meta-pill-icon" aria-hidden="true">{TRANSPORT_ICONS[transportKey]}</span>
               {transportDef.label}
             </span>
           )}
