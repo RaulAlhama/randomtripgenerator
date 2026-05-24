@@ -3,6 +3,7 @@ import LocationPicker from './LocationPicker';
 import { useTrip } from '../../context/TripContext';
 import { useToast } from '../../context/ToastContext';
 import { getUserLocation } from '../../services/location';
+import Icon from '../ui/Icon';
 
 function buildWikilocUrl({ lat, lng, query }) {
   if (lat != null && lng != null) {
@@ -67,7 +68,7 @@ export default function WikilocTab() {
               Abriendo...
             </>
           ) : (
-            <>🌿 Ver rutas en Wikiloc →</>
+            <><Icon name="leaf" size={16} /> Ver rutas en Wikiloc <Icon name="arrowRight" size={14} /></>
           )}
         </button>
       </div>

@@ -1,15 +1,18 @@
-import { MODE_LABELS } from '../../constants/transport';
+import { TRANSPORTS } from '../../constants/transport';
 import { formatDuration } from '../../context/TripContext';
+import { TRANSPORT_ICONS } from '../hero/transportIcons';
+import Icon from '../ui/Icon';
 
-const THEME_ICONS = {
-  monuments: '\u{1F3DB}️',
-  nature: '\u{1F333}',
-  food: '\u{1F37D}️',
-  historical: '\u{1F4DC}',
-  cultural: '\u{1F3AD}',
-  gastro: '\u{1F37D}️',
-  classic: '\u{1F3DB}️',
-  surprise: '\u{2728}',
+const THEME_ICON_NAMES = {
+  monuments: 'monuments',
+  nature: 'leaf',
+  food: 'fork',
+  historical: 'historical',
+  cultural: 'cultural',
+  gastro: 'fork',
+  classic: 'classic',
+  surprise: 'surprise',
+  mixed: 'sparkle',
 };
 
 export default function TripCard({ trip, onDelete, onView }) {
@@ -21,8 +24,10 @@ export default function TripCard({ trip, onDelete, onView }) {
     month: 'short',
     year: 'numeric',
   });
-  const themeIcon = THEME_ICONS[trip.theme] || THEME_ICONS.monuments;
-  const modeLabel = MODE_LABELS[trip.transport_mode] || MODE_LABELS.driving;
+  const themeIconName = THEME_ICON_NAMES[trip.theme] || 'sparkle';
+  const transportKey = trip.transport_mode || 'driving';
+  const transportDef = TRANSPORTS.find((t) => t.key === transportKey);
+  const modeLabel = transportDef?.label || transportKey;
 
   const handleCardClick = () => {
     onView(trip);
@@ -40,7 +45,9 @@ export default function TripCard({ trip, onDelete, onView }) {
       onClick={handleCardClick}
     >
       <div className="saved-trip-cover">
-        <span className="saved-trip-theme-large" aria-hidden="true">{themeIcon}</span>
+        <span className="saved-trip-theme-large" aria-hidden="true">
+          <Icon name={themeIconName} size={42} strokeWidth={1.5} />
+        </span>
       </div>
       <div className="saved-trip-body">
         <div className="saved-trip-header">
@@ -60,7 +67,10 @@ export default function TripCard({ trip, onDelete, onView }) {
           </button>
         </div>
         <div className="saved-trip-meta">
-          <span className="saved-meta-pill">{modeLabel}</span>
+          <span className="saved-meta-pill saved-meta-pill-icon">
+            <span aria-hidden="true">{TRANSPORT_ICONS[transportKey]}</span>
+            {modeLabel}
+          </span>
           <span className="saved-meta-pill">{distKm} km</span>
           <span className="saved-meta-pill">{durText}</span>
         </div>

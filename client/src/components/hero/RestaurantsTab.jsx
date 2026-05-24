@@ -4,6 +4,7 @@ import { useTrip } from '../../context/TripContext';
 import { useToast } from '../../context/ToastContext';
 import { fetchRestaurants } from '../../services/api';
 import { getUserLocation } from '../../services/location';
+import Icon from '../ui/Icon';
 
 const RADIUS_OPTIONS = [0.5, 1, 2, 3];
 
@@ -97,7 +98,7 @@ export default function RestaurantsTab() {
               Buscando...
             </>
           ) : (
-            <>🍽️ Ver mejores restaurantes</>
+            <><Icon name="fork" size={16} /> Ver mejores restaurantes</>
           )}
         </button>
       </div>
@@ -121,7 +122,7 @@ export default function RestaurantsTab() {
                   {r.photoUrl ? (
                     <img className="restaurant-photo" src={r.photoUrl} alt={r.name} loading="lazy" />
                   ) : (
-                    <div className="restaurant-photo restaurant-photo-empty" aria-hidden="true">🍽️</div>
+                    <div className="restaurant-photo restaurant-photo-empty" aria-hidden="true"><Icon name="fork" size={32} strokeWidth={1.6} /></div>
                   )}
                   <div className="restaurant-info">
                     <div className="restaurant-top">

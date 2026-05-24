@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useTrip } from '../../context/TripContext';
+import Icon from './Icon';
 
 export default function StatusCard() {
   const {
@@ -25,7 +26,7 @@ export default function StatusCard() {
   if (generationError) {
     return (
       <div className="status-card status-card-error" ref={wrapperRef} role="alert">
-        <div className="status-icon status-icon-error">⚠️</div>
+        <div className="status-icon status-icon-error"><Icon name="warning" size={22} strokeWidth={2} /></div>
         <div className="status-text">{generationError}</div>
         <div className="status-actions">
           <button
@@ -54,7 +55,7 @@ export default function StatusCard() {
 
   return (
     <div className="status-card" ref={wrapperRef} role="status" aria-live="polite">
-      <div className="status-icon">🗺️</div>
+      <div className="status-icon"><Icon name="map" size={22} strokeWidth={1.8} /></div>
       <div className="status-text">{statusMessage}</div>
       <div className="status-progress" aria-hidden="true">
         <div className="status-progress-bar" style={{ width: `${pct}%` }} />

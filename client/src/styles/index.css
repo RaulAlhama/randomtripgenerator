@@ -3225,3 +3225,43 @@ main {
     scroll-behavior: auto !important;
   }
 }
+
+/* ========== CUSTOM SVG ICONS (Icon component) ========== */
+/* Ensure inline SVG icons inherit colour and align cleanly with adjacent text. */
+.tab svg,
+.btn svg,
+.hero-tab-icon svg,
+.candidate-expand-btn svg { vertical-align: -0.12em; }
+
+.status-icon { display: inline-flex; align-items: center; justify-content: center; }
+.status-icon svg { width: 22px; height: 22px; }
+.status-card-error .status-icon svg { width: 24px; height: 24px; }
+
+.restaurant-photo-empty svg { width: 36px; height: 36px; opacity: 0.6; }
+
+.carousel-card-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.carousel-card-emoji svg { width: 32px; height: 32px; }
+
+.saved-trip-theme-large { color: rgba(255, 255, 255, 0.95); }
+.saved-trip-card[data-theme-kind=cultural] .saved-trip-theme-large { color: #1a1a2e; }
+.saved-trip-theme-large svg { width: 42px; height: 42px; }
+
+.saved-meta-pill-icon { display: inline-flex; align-items: center; gap: 0.3rem; }
+.saved-meta-pill-icon svg { width: 12px; height: 12px; }
+
+.trip-meta-pill-icon { display: inline-flex; align-items: center; }
+.trip-meta-pill-icon svg { width: 13px; height: 13px; }
+
+.stat-value-with-icon { display: inline-flex; align-items: center; gap: 0.3rem; }
+.stat-icon { display: inline-flex; align-items: center; }
+.stat-icon svg { width: 14px; height: 14px; }
+

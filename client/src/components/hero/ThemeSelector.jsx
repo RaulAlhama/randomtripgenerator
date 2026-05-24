@@ -1,5 +1,6 @@
 import { useTrip } from '../../context/TripContext';
 import { THEMES } from '../../constants/themes';
+import Icon from '../ui/Icon';
 
 export default function ThemeSelector() {
   const { selectedTheme, setTheme } = useTrip();
@@ -14,7 +15,7 @@ export default function ThemeSelector() {
           onClick={() => setTheme(theme.key)}
           aria-pressed={selectedTheme === theme.key}
         >
-          <span aria-hidden="true">{theme.icon}</span>
+          <Icon name={theme.iconName} size={15} />
           {theme.label}
         </button>
       ))}
