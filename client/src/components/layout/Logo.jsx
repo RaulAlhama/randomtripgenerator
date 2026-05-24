@@ -26,7 +26,9 @@ export default function Logo() {
         </svg>
       </span>
       <span className="logo-wordmark">
-        <span className="logo-text">RandomTrip</span>
+        <span className="logo-text">
+          RandomTrip<span className="logo-text-accent">Generator</span>
+        </span>
         <span className="logo-sub">Rutas con IA</span>
       </span>
     </a>

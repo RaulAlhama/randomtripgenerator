@@ -193,6 +193,13 @@ main {
   letter-spacing: -0.02em;
   color: var(--primary);
 }
+/* "Generator" rendered lighter so "RandomTrip" stays dominant — same word,
+   visual hierarchy preserved. */
+.logo-text-accent {
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.1em;
+}
 
 .logo-sub {
   font-size: 0.66rem;
