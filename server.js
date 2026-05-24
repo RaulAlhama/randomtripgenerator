@@ -553,16 +553,17 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
     const isLargeRadius = radiusMeters > 2000;
     const timeout = isLargeRadius ? 25 : 15;
 
-    // Sightseeing only: restaurants/cafes are intentionally excluded (the
-    // dedicated Restaurants tab covers those). Markets stay because emblematic
-    // markets (Boquería, San Miguel, etc.) count as attractions.
+    // Sightseeing only: think "I'm here for one day, what should I see?"
+    // Restaurants/cafes go in their own tab. Theaters/cinemas excluded because
+    // they're only worth visiting if there's a show that day, which we can't check.
+    // Markets stay (Boquería, San Miguel, etc. are bona fide attractions).
     let query;
     if (isLargeRadius) {
       // Simplified query for driving/cycling - focus on main attractions
       query = `[out:json][timeout:${timeout}];(
         node["tourism"~"attraction|museum|viewpoint"](around:${radiusMeters},${lat},${lng});
         node["historic"](around:${radiusMeters},${lat},${lng});
-        node["amenity"~"marketplace|place_of_worship|theatre"](around:${radiusMeters},${lat},${lng});
+        node["amenity"~"marketplace|place_of_worship"](around:${radiusMeters},${lat},${lng});
         node["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         way["tourism"~"attraction|museum"](around:${radiusMeters},${lat},${lng});
         way["historic"](around:${radiusMeters},${lat},${lng});
@@ -573,14 +574,14 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
       query = `[out:json][timeout:${timeout}];(
         node["tourism"~"attraction|museum|viewpoint|artwork|gallery|information"](around:${radiusMeters},${lat},${lng});
         node["historic"](around:${radiusMeters},${lat},${lng});
-        node["amenity"~"marketplace|place_of_worship|theatre|fountain"](around:${radiusMeters},${lat},${lng});
+        node["amenity"~"marketplace|place_of_worship|fountain"](around:${radiusMeters},${lat},${lng});
         node["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         node["natural"~"spring|peak|cave_entrance"](around:${radiusMeters},${lat},${lng});
         node["man_made"~"tower|bridge"](around:${radiusMeters},${lat},${lng});
         way["tourism"~"attraction|museum|viewpoint"](around:${radiusMeters},${lat},${lng});
         way["historic"](around:${radiusMeters},${lat},${lng});
         way["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
-        way["amenity"~"marketplace|place_of_worship|theatre"](around:${radiusMeters},${lat},${lng});
+        way["amenity"~"marketplace|place_of_worship"](around:${radiusMeters},${lat},${lng});
         way["building"~"church|chapel|castle|cathedral"](around:${radiusMeters},${lat},${lng});
         relation["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         relation["tourism"~"attraction"](around:${radiusMeters},${lat},${lng});
@@ -592,10 +593,13 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
 
     if (!data.elements) return [];
 
-    // Belt-and-braces: even though the query above doesn't request food
-    // amenities, drop any that slip through tag mixing (e.g. a museum tagged
-    // amenity=restaurant). The Restaurants tab owns that category.
-    const FOOD_TYPES = new Set(['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'biergarten', 'ice_cream']);
+    // Belt-and-braces: even though the queries above don't request these,
+    // drop any that slip through tag mixing. Food types are owned by the
+    // Restaurants tab; theaters/cinemas only matter when there's a show.
+    const SKIP_TYPES = new Set([
+      'restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'biergarten', 'ice_cream',
+      'theatre', 'cinema', 'nightclub'
+    ]);
 
     const pois = data.elements
       .filter(el => el.tags?.name)
@@ -613,7 +617,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
         };
       })
       .filter(p => p.lat && p.lng)
-      .filter(p => !FOOD_TYPES.has(p.rawType));
+      .filter(p => !SKIP_TYPES.has(p.rawType));
 
     // Deduplicate by name
     const seen = new Set();
@@ -748,7 +752,7 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
     console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
 
     const requestBody = JSON.stringify({
-      model: 'openai/gpt-oss-20b',
+      model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: 'Eres un experto en turismo. Responde con JSON valido. Todas las descripciones en español. Cada descripcion debe ser especifica e informativa sobre el lugar.' },
         { role: 'user', content: prompt }
@@ -822,7 +826,7 @@ ${varietySeed}
 
 Para cada lugar incluye:
 - name: Nombre exacto del lugar real (en el idioma local)
-- type: Categoria (monument, museum, park, plaza, church, palace, viewpoint, historic, market, garden, theater)
+- type: Categoria (monument, museum, park, plaza, church, palace, viewpoint, historic, market, garden)
 - lat: Latitud GPS real
 - lng: Longitud GPS real
 - description: Una frase atractiva en ESPAÑOL explicando por que merece la pena visitarlo
@@ -830,12 +834,12 @@ Para cada lugar incluye:
 Devuelve un objeto JSON con una clave "places" que contenga un array:
 {"places": [{"name": "Nombre del Lugar", "type": "monument", "lat": ${lat.toFixed(2)}, "lng": ${lng.toFixed(2)}, "description": "Descripcion en español"}, ...]}
 
-IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}. Si no estas seguro de que un lugar existe, NO lo incluyas. NO incluyas restaurantes, cafes, bares ni locales gastronomicos: esta ruta es para ver lugares de interes (la app tiene una pestaña aparte para restaurantes). Devuelve exactamente ${placeCount} lugares. Ordenalos para una ruta ${modeLabel}.`;
+IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}. Si no estas seguro de que un lugar existe, NO lo incluyas. NO incluyas restaurantes, cafes, bares, locales gastronomicos, teatros ni cines: esta ruta es para VER lugares de interes (cosas que enseñaria una oficina de turismo a alguien que tiene un dia para visitar la ciudad). La app tiene una pestaña aparte para restaurantes y los teatros solo merecen la pena si hay un espectaculo ese dia. Devuelve exactamente ${placeCount} lugares. Ordenalos para una ruta ${modeLabel}.`;
 
   console.log('[Nebius] Fallback: requesting full route for:', city, '| theme:', theme, '| transport:', transport);
 
   const requestBody = JSON.stringify({
-    model: 'openai/gpt-oss-20b',
+    model: 'openai/gpt-oss-120b',
     messages: [
       { role: 'system', content: 'Eres un experto en viajes y turismo. Responde siempre con JSON valido, sin markdown. Todas las descripciones en español.' },
       { role: 'user', content: prompt }
