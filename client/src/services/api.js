@@ -3,7 +3,7 @@ export async function fetchAuthConfig() {
   return response.json();
 }
 
-export async function generateTrip(lat, lng, theme, transport, radiusMeters) {
+export async function generateTrip(lat, lng, theme, transport, radiusMeters, count) {
   const params = new URLSearchParams({
     lat: String(lat),
     lng: String(lng),
@@ -11,6 +11,7 @@ export async function generateTrip(lat, lng, theme, transport, radiusMeters) {
     transport,
     radius: String(radiusMeters),
   });
+  if (count) params.set('count', String(count));
   const response = await fetch(`/api/generate-trip?${params}`);
   if (!response.ok) {
     const errorData = await response.json();

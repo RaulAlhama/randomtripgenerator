@@ -1,5 +1,4 @@
 import LocationPicker from './LocationPicker';
-import ThemeSelector from './ThemeSelector';
 import DistanceSlider from './DistanceSlider';
 import GenerateButton from './GenerateButton';
 
@@ -9,11 +8,6 @@ export default function RouteTab() {
       <div className="search-field-group">
         <span className="search-field-label">¿Desde dónde exploras?</span>
         <LocationPicker />
-      </div>
-
-      <div className="search-field-group">
-        <span className="search-field-label">Tipo de ruta</span>
-        <ThemeSelector />
       </div>
 
       <div className="search-field-group">

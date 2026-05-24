@@ -139,6 +139,7 @@ function requireAuth(req, res, next) {
 
 // Theme definitions (in Spanish for the LLM prompt)
 const THEME_PROMPTS = {
+  mixed: 'una mezcla equilibrada de lo mejor de la zona: monumentos, plazas, parques, museos, miradores y rincones con encanto sin ceñirse a una sola categoria',
   monuments: 'monumentos, edificios historicos, estatuas, iglesias, palacios, castillos, ruinas y lugares emblematicos de gran importancia arquitectonica o historica',
   nature: 'parques, jardines botanicos, miradores, paseos junto al rio, senderos, espacios naturales verdes y paisajes destacados',
   food: 'mercados de comida, restaurantes famosos, barrios gastronomicos, panaderias, bares de tapas y referentes culinarios locales',
@@ -635,8 +636,9 @@ function selectPOIsForTheme(pois, theme, count) {
   const scores = THEME_TYPE_SCORES[theme] || {};
   const hasThemeScores = Object.keys(scores).length > 0;
 
-  if (!hasThemeScores) {
-    // Shuffle randomly
+  // 'mixed' (new default): preserve a balanced variety without biasing toward any
+  // single category. We score equally and shuffle so each call returns a fresh mix.
+  if (theme === 'mixed' || !hasThemeScores) {
     const shuffled = [...pois].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
   }
@@ -910,14 +912,21 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
 }
 
 // Main function: build route from real POIs + LLM descriptions
-async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance) {
-  // Adjust number of stops based on max route distance
-  const maxKm = maxRouteDistance ? maxRouteDistance / 1000 : (transport === 'walking' ? 3 : 10);
+async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount) {
+  // In candidate mode the user curates the final list, so return more POIs and
+  // skip the distance-trim loop below. In legacy mode (no candidateCount),
+  // pick a tight set sized to the radius.
+  const isCandidateMode = !!candidateCount;
   let desiredCount;
-  if (maxKm <= 1.5) desiredCount = 3;
-  else if (maxKm <= 3) desiredCount = 4;
-  else if (maxKm <= 6) desiredCount = 5;
-  else desiredCount = 6;
+  if (isCandidateMode) {
+    desiredCount = candidateCount;
+  } else {
+    const maxKm = maxRouteDistance ? maxRouteDistance / 1000 : (transport === 'walking' ? 3 : 10);
+    if (maxKm <= 1.5) desiredCount = 3;
+    else if (maxKm <= 3) desiredCount = 4;
+    else if (maxKm <= 6) desiredCount = 5;
+    else desiredCount = 6;
+  }
 
   let pois = realPOIs;
 
@@ -943,8 +952,10 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     // Sort in walking order to minimize total route distance
     let sorted = sortByProximity(selected, lat, lng);
 
-    // Estimate route distance and trim POIs if over budget
-    if (maxRouteDistance) {
+    // Estimate route distance and trim POIs if over budget.
+    // Skipped in candidate mode: the user curates by deselecting, so we return
+    // the full pool and let the frontend decide what fits.
+    if (maxRouteDistance && !isCandidateMode) {
       const roadFactor = 1.4; // roads are ~1.4x longer than straight line
       let estimatedDist = estimateRouteDistance(sorted, lat, lng) * roadFactor;
       while (sorted.length > 2 && estimatedDist > maxRouteDistance) {
@@ -1045,37 +1056,28 @@ const CITYLIKE_PLACE_TYPES = new Set([
   'city', 'town', 'village', 'municipality', 'borough'
 ]);
 
-function isCitylike(r) {
-  if (!r) return false;
-  // Primary signal: OSM class=place + type=(city|town|village|municipality|borough)
-  if (r.class === 'place' && CITYLIKE_PLACE_TYPES.has(r.type)) return true;
-  // Secondary: administrative boundary that actually corresponds to a city
-  if (r.class === 'boundary' && r.type === 'administrative') {
-    const a = r.address || {};
-    if (a.city || a.town || a.village || a.municipality) {
-      // Filter out country/state-level boundaries
-      const adminLevel = r.extratags?.admin_level ? parseInt(r.extratags.admin_level) : null;
-      if (adminLevel && adminLevel < 6) return false;
-      return true;
-    }
-  }
-  // Tertiary: addresstype tells us what Nominatim thinks the result is. Catches
-  // municipalities and villages that come back with quirky class/type combos
-  // (e.g. small Spanish pueblos returned as boundary/administrative + addresstype=village).
-  if (CITYLIKE_PLACE_TYPES.has(r.addresstype)) return true;
+// Photon (Komoot's OSM-based autocomplete) returns GeoJSON features whose
+// `properties.osm_key` / `osm_value` are equivalent to Nominatim's class/type.
+function isPhotonCity(feature) {
+  const p = feature?.properties;
+  if (!p) return false;
+  if (p.osm_key === 'place' && CITYLIKE_PLACE_TYPES.has(p.osm_value)) return true;
+  // Some municipalities come back as boundary/administrative — accept them only
+  // if Photon's `type` field still calls them a city/town/village.
+  if (p.osm_key === 'boundary' && p.osm_value === 'administrative'
+      && CITYLIKE_PLACE_TYPES.has(p.type)) return true;
   return false;
 }
 
-function cityDisplayName(r) {
-  const a = r.address || {};
-  return a.city || a.town || a.village || a.municipality || a.borough
-      || (r.display_name ? r.display_name.split(',')[0].trim() : r.name || '');
+function photonName(feature) {
+  const p = feature.properties || {};
+  return p.name || p.city || '';
 }
 
-function cityRegion(r) {
-  const a = r.address || {};
+function photonRegion(feature) {
+  const p = feature.properties || {};
   // State/province hint, useful to disambiguate "Mérida" (Spain / México / Venezuela)
-  return a.state || a.province || a.region || a.county || '';
+  return p.state || p.county || '';
 }
 
 function normalizeForMatch(s) {
@@ -1098,7 +1100,8 @@ function cityRank(name, query, importance) {
   return [3, impBoost];
 }
 
-// Search cities via Nominatim, filtering to actual settlements.
+// Search cities via Photon (Komoot's OSM-based autocomplete). Unlike Nominatim,
+// Photon does real prefix matching so partial input like "Alham" matches "Alhama de Aragón".
 app.get('/api/search-city', async (req, res) => {
   try {
     const { q } = req.query;
@@ -1107,29 +1110,30 @@ app.get('/api/search-city', async (req, res) => {
     }
 
     // Ask for more candidates (we filter after), and request Spanish names.
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}` +
-                `&format=json&limit=15&addressdetails=1&extratags=1&accept-language=es`;
-    const results = await fetchExternal(url);
-
-    if (!Array.isArray(results)) {
-      return res.json([]);
-    }
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}` +
+                `&limit=20&lang=es`;
+    const data = await fetchExternal(url);
+    const features = Array.isArray(data?.features) ? data.features : [];
 
     // 1. Keep only city-like results
-    const filtered = results.filter(isCitylike);
+    const filtered = features.filter(isPhotonCity);
 
-    // 2. Map to our shape (keeping importance for ranking)
-    const mapped = filtered.map(r => ({
-      name: cityDisplayName(r),
-      region: cityRegion(r),
-      country: r.address?.country || '',
-      countryCode: r.address?.country_code || '',
-      displayName: r.display_name,
-      lat: parseFloat(r.lat),
-      lng: parseFloat(r.lon),
-      _importance: r.importance,
-      _rankKey: null
-    }));
+    // 2. Map to our shape (Photon ranks by relevance; we use its order as the importance proxy)
+    const mapped = filtered.map((f, idx) => {
+      const p = f.properties || {};
+      const coords = f.geometry?.coordinates || [];
+      return {
+        name: photonName(f),
+        region: photonRegion(f),
+        country: p.country || '',
+        countryCode: (p.countrycode || '').toLowerCase(),
+        displayName: [photonName(f), photonRegion(f), p.country].filter(Boolean).join(', '),
+        lat: parseFloat(coords[1]),
+        lng: parseFloat(coords[0]),
+        _importance: filtered.length - idx, // higher = earlier in Photon's ranking
+        _rankKey: null
+      };
+    });
 
     // 3. Deduplicate by normalized name + country (keep the most important)
     const dedup = new Map();
@@ -1199,7 +1203,7 @@ app.get('/api/place-image', async (req, res) => {
 // Generate trip
 app.get('/api/generate-trip', async (req, res) => {
   try {
-    const { lat, lng, theme = 'classic', transport = 'driving', radius } = req.query;
+    const { lat, lng, theme = 'mixed', transport = 'driving', radius, count } = req.query;
 
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Coordinates required' });
@@ -1212,9 +1216,11 @@ app.get('/api/generate-trip', async (req, res) => {
       return res.status(400).json({ error: 'Invalid coordinates' });
     }
 
-    const VALID_THEMES = ['monuments', 'nature', 'food', 'historical', 'cultural', 'classic', 'surprise'];
+    // 'mixed' is the new default (no theme bias). Legacy themes still accepted
+    // so saved trips and any external callers keep working.
+    const VALID_THEMES = ['mixed', 'monuments', 'nature', 'food', 'historical', 'cultural', 'classic', 'surprise'];
     const VALID_TRANSPORTS = ['driving', 'walking', 'cycling'];
-    const safeTheme = VALID_THEMES.includes(theme) ? theme : 'monuments';
+    const safeTheme = VALID_THEMES.includes(theme) ? theme : 'mixed';
 
     // Reserve daily Google Places budget (only if the API key is configured,
     // since otherwise generate-trip falls back to Wikipedia which is free).
@@ -1222,6 +1228,11 @@ app.get('/api/generate-trip', async (req, res) => {
       return budgetExceededResponse(res);
     }
     const safeTransport = VALID_TRANSPORTS.includes(transport) ? transport : 'driving';
+
+    // Candidate mode: caller wants a larger pool to curate. Clamped to [4, 12].
+    const candidateCount = count
+      ? Math.min(Math.max(parseInt(count) || 0, 4), 12)
+      : null;
 
     const transportConf = TRANSPORT_CONFIG[safeTransport] || TRANSPORT_CONFIG.driving;
     // radius from frontend = desired max route distance in meters
@@ -1238,7 +1249,7 @@ app.get('/api/generate-trip', async (req, res) => {
     console.log('[API] Location:', locationInfo.city, locationInfo.country, '| Real POIs:', realPOIs.length);
 
     const { places, poiSource } = await buildRoute(
-      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance
+      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance, candidateCount
     );
 
     if (!places || places.length === 0) {

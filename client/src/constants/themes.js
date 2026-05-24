@@ -1,5 +1,12 @@
 export const THEMES = [
   {
+    key: 'mixed',
+    icon: '\u{2728}',
+    label: 'Mezcla',
+    description: 'Una selección variada de lo mejor de la zona',
+    accent: '#0f766e',
+  },
+  {
     key: 'monuments',
     icon: '\u{1F3DB}️',
     label: 'Monumentos',
