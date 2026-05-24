@@ -1109,9 +1109,11 @@ app.get('/api/search-city', async (req, res) => {
       return res.json([]);
     }
 
-    // Ask for more candidates (we filter after), and request Spanish names.
+    // Ask for more candidates (we filter after). Photon only supports
+    // lang=default|de|en|fr; we omit lang so it returns each place's local
+    // name (Spanish cities come back in Spanish, etc).
     const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}` +
-                `&limit=20&lang=es`;
+                `&limit=20`;
     const data = await fetchExternal(url);
     const features = Array.isArray(data?.features) ? data.features : [];
 
