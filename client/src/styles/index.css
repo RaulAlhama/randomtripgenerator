@@ -1379,6 +1379,12 @@ main {
   flex: 1;
   min-height: 0;
 }
+/* Curation needs more room: each candidate card has thumb + body + expander,
+   which gets squeezed at 380px. */
+.trip-grid.is-curating { grid-template-columns: 1fr 460px; }
+@media (min-width: 1400px) {
+  .trip-grid.is-curating { grid-template-columns: 1fr 520px; }
+}
 
 .map-wrapper {
   position: relative;
@@ -2948,7 +2954,7 @@ main {
 .candidate-list {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   overflow-y: auto;
   padding-right: 0.25rem;
   flex: 1;
@@ -2962,6 +2968,8 @@ main {
   border: 1.5px solid var(--border);
   border-radius: 0.85rem;
   overflow: hidden;
+  /* Prevent flex parent from shrinking the cards below their content height */
+  flex-shrink: 0;
   transition: border-color 180ms var(--ease), background-color 180ms var(--ease), opacity 180ms var(--ease), transform 180ms var(--ease);
 }
 .candidate-card:hover { border-color: var(--primary); transform: translateY(-1px); }
@@ -2974,11 +2982,11 @@ main {
 
 .candidate-toggle-row {
   display: grid;
-  grid-template-columns: 72px 1fr auto;
-  gap: 0.85rem;
+  grid-template-columns: 84px 1fr auto;
+  gap: 0.9rem;
   align-items: center;
   width: 100%;
-  padding: 0.7rem;
+  padding: 0.85rem;
   background: transparent;
   border: none;
   text-align: left;
@@ -2992,8 +3000,8 @@ main {
 }
 
 .candidate-thumb {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
   border-radius: 0.6rem;
   overflow: hidden;
   background: var(--bg-muted);

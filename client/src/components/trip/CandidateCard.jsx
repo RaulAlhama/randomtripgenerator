@@ -59,12 +59,8 @@ export default function CandidateCard({ place, typeLabel, distanceKm, selected, 
     ? `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${city}`)}`;
 
-  // Only show the expander if we actually have extra info beyond what's already visible
-  const hasExtraInfo = !!(
-    place.phone || place.website || place.openingHours ||
-    place.placeId || hasRating || place.openNow != null ||
-    (place.description && place.description.length > 90)
-  );
+  // Always show the expander: even with minimal data we can show the full
+  // description and a Maps link, which is more useful than hiding the button.
 
   return (
     <article className={`candidate-card${selected ? ' is-selected' : ' is-deselected'}`}>
@@ -123,23 +119,21 @@ export default function CandidateCard({ place, typeLabel, distanceKm, selected, 
         </div>
       </button>
 
-      {hasExtraInfo && (
-        <button
-          type="button"
-          className={`candidate-expand-btn${expanded ? ' is-open' : ''}`}
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-        >
-          <span>{expanded ? 'Menos info' : 'Más info'}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
-      )}
+      <button
+        type="button"
+        className={`candidate-expand-btn${expanded ? ' is-open' : ''}`}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span>{expanded ? 'Menos info' : 'Más info'}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
 
-      {expanded && hasExtraInfo && (
+      {expanded && (
         <div className="candidate-expanded">
-          {place.description && place.description.length > 90 && (
+          {place.description && (
             <p className="candidate-desc-full">{place.description}</p>
           )}
 
