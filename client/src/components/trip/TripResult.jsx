@@ -55,7 +55,7 @@ export default function TripResult() {
       <TripHeader />
       <WeatherWidget />
       <POIWarning />
-      <div className="trip-grid">
+      <div className={`trip-grid${stage === 'candidates' ? ' is-curating' : ''}`}>
         <MapView />
         {stage === 'candidates' ? <CandidateReview /> : <PlacesPanel />}
       </div>
