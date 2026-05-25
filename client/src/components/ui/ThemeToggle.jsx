@@ -1,34 +1,13 @@
-import { useEffect, useState } from 'react';
-
-const STORAGE_KEY = 'randomtrip:theme';
-
-function getInitialTheme() {
-  if (typeof window === 'undefined') return 'light';
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === 'light' || stored === 'dark') return stored;
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-  return prefersDark ? 'dark' : 'light';
-}
+import { useTheme } from '../../context/ThemeContext';
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState(getInitialTheme);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    } catch (_) { /* ignore */ }
-  }, [theme]);
-
-  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-
-  const isDark = theme === 'dark';
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <button
       type="button"
       className="theme-toggle"
-      onClick={toggle}
+      onClick={toggleTheme}
       aria-label={isDark ? 'Activar modo claro' : 'Activar modo oscuro'}
       title={isDark ? 'Modo claro' : 'Modo oscuro'}
     >

@@ -277,6 +277,74 @@ main {
   transform: translateY(-1px);
 }
 
+/* ---- Header config menu (mobile only; hidden on desktop) ---- */
+.header-menu-wrap { display: none; position: relative; }
+
+.header-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.header-menu-btn:hover { color: var(--primary); border-color: var(--primary-soft-hover); }
+
+.header-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 224px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: menuPop 150ms var(--ease);
+}
+
+@keyframes menuPop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.header-menu a,
+.header-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 150ms var(--ease);
+}
+.header-menu a:hover,
+.header-menu-item:hover { background: var(--bg-subtle); }
+
+.header-menu-divider { height: 1px; background: var(--border); margin: 0.35rem 0.4rem; }
+
+.header-menu-auth { padding: 0.45rem 0.4rem 0.2rem; }
+.header-menu-auth .btn { width: 100%; }
+.header-menu-auth .user-info { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.header-menu-auth .user-name { display: block; text-align: center; }
+
 .auth-badge {
   display: inline-flex;
   align-items: center;
@@ -2466,14 +2534,16 @@ main {
 @media (max-width: 1024px) {
   .container { padding: 1rem; }
   .trip-grid { grid-template-columns: 1fr; gap: 0.75rem; flex: none; min-height: 0; }
+  /* Mobile: itinerary flows with the page instead of being trapped in a short
+     inner scrollbox (which clipped the last stop's text). */
   .places-panel {
     order: -1;
     height: auto;
-    max-height: 360px;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
     flex: none;
   }
-  .poi-list { flex: none; min-height: 0; max-height: 280px; }
+  .poi-list { flex: none; min-height: 0; max-height: none; overflow: visible; }
   .map-wrapper { height: 420px; }
   #map { height: 100%; min-height: 0; }
   /* Mobile: stack naturally, no viewport lock */
@@ -2517,7 +2587,7 @@ main {
     overflow: visible;
     text-overflow: clip;
   }
-  .trip-cover-actions { width: 100%; justify-content: flex-end; }
+  .trip-cover-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
   .skeleton-map { height: 360px; }
   .footer-links { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
   .footer-bottom { flex-direction: column; align-items: flex-start; }
@@ -2528,11 +2598,11 @@ main {
   .container { padding: 0.75rem; }
 
   .header {
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
+    gap: 0.75rem;
+    align-items: center;
   }
-  .header-actions { align-self: flex-end; gap: 0.55rem; }
+  .header-actions { display: none; }
+  .header-menu-wrap { display: block; }
 
   .hero { padding: 1.25rem 0.25rem; }
   .hero h1 { font-size: 2rem; }
@@ -2559,7 +2629,6 @@ main {
   .route-stat { flex: 1; min-width: 0; }
   .stat-value { font-size: 1.05rem; }
 
-  .places-panel { max-height: 260px; }
   .poi-image-wrapper { height: 120px; }
 
   .section-header { flex-direction: column; align-items: flex-start; }
