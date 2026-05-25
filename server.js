@@ -345,6 +345,39 @@ async function imageFromCommons(name, city) {
   return null;
 }
 
+// Resolve a Wikimedia Commons category (e.g. "Category:Foo") to a real file
+// thumbnail. OSM's `wikimedia_commons` tag is frequently a category, which is
+// NOT a valid Special:FilePath target — building a FilePath URL from it 404s.
+async function imageFromCommonsCategory(category) {
+  try {
+    const title = `Category:${category.replace(/^Category:/i, '')}`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=${encodeURIComponent(title)}&gcmtype=file&gcmlimit=10&prop=imageinfo&iiprop=url&iiurlwidth=600&format=json&origin=*`;
+    const data = await fetchExternal(url);
+    const pages = data?.query?.pages;
+    if (!pages) return null;
+    const files = Object.values(pages)
+      .sort((a, b) => (a.index ?? 99) - (b.index ?? 99))
+      .map(p => p?.imageinfo?.[0])
+      .filter(Boolean);
+    // Prefer raster photos; skip SVG/PDF/maps which render poorly as a thumbnail.
+    const pick = files.find(f => /\.(jpe?g|png|webp)$/i.test(f.url)) || files[0];
+    return pick?.thumburl || pick?.url || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Turn an OSM `image` / `wikimedia_commons` tag value into a usable image URL.
+// Handles full URLs, "File:Foo.jpg", bare filenames and "Category:Foo".
+async function resolveTaggedImage(raw) {
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^Category:/i.test(raw)) return imageFromCommonsCategory(raw);
+  const filename = raw.replace(/^File:/i, '');
+  if (!filename) return null;
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600`;
+}
+
 // Main: resolve a single POI image with layered fallbacks and caching.
 async function fetchPOIImage(place, city) {
   const key = imageCacheKey(place, city);
@@ -352,17 +385,12 @@ async function fetchPOIImage(place, city) {
   if (cached !== undefined) return cached;
 
   try {
-    // 1. Direct image from Overpass tags (most trustworthy, curated by OSM)
+    // 1. Direct image from Overpass tags (most trustworthy, curated by OSM).
+    // Note a Category: tag may resolve to nothing — fall through if so rather
+    // than emitting a broken Special:FilePath/Category:... URL.
     if (place.image) {
-      let url;
-      if (place.image.startsWith('http')) {
-        url = place.image;
-      } else {
-        const filename = place.image.replace(/^File:/, '');
-        url = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=600`;
-      }
-      imageCacheSet(key, url);
-      return url;
+      const url = await resolveTaggedImage(place.image);
+      if (url) { imageCacheSet(key, url); return url; }
     }
 
     // 2. Wikipedia page from explicit tag (curated — high quality match)
