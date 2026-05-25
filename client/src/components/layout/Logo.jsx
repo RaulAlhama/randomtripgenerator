@@ -5,8 +5,8 @@ export default function Logo() {
         <img
           src="/icons/logo-mark.png"
           alt=""
-          width="40"
-          height="40"
+          width="44"
+          height="44"
           decoding="async"
         />
       </span>
