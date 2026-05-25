@@ -1029,8 +1029,9 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
         description: (descriptions && descriptions[i]) || `Lugar de interés en ${city}.`,
         wikipedia: p.wikipedia || null,
         wikidata: p.wikidata || null,
-        // Prefer Wikipedia photo (iconic for monuments), fall back to Google (better for restaurants)
-        imageUrl: p.imageUrl || g.photoUrl || null,
+        // Prefer Google Places photo (most precise match for the actual place),
+        // fall back to Wikipedia/Commons when Google has none.
+        imageUrl: g.photoUrl || p.imageUrl || null,
         rating: g.rating ?? null,
         userRatingsTotal: g.userRatingsTotal ?? null,
         placeId: g.placeId || null,
@@ -1055,7 +1056,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     const g = googleData[i] || {};
     return {
       ...p,
-      imageUrl: p.imageUrl || g.photoUrl || null,
+      imageUrl: g.photoUrl || p.imageUrl || null,
       rating: g.rating ?? null,
       userRatingsTotal: g.userRatingsTotal ?? null,
       placeId: g.placeId || null,
@@ -1210,14 +1211,14 @@ app.get('/api/search-city', async (req, res) => {
 // our Wikipedia/Wikidata/Commons resolver. The resolver validates title match so
 // we don't return images from unrelated places with similar names.
 app.get('/api/place-image', async (req, res) => {
-  const { name, city, type } = req.query;
+  const { name, city } = req.query;
   if (!name) return res.json({ url: null });
 
-  const isFoodType = type === 'restaurant' || type === 'market' || type === 'cafe';
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
-  // 1. Try Google Places first for food/market POIs (Wikipedia rarely covers them)
-  if (isFoodType && apiKey) {
+  // 1. Try Google Places first for any POI — its photos match the actual place
+  //    most precisely. Wikipedia/Commons is the fallback below.
+  if (apiKey) {
     try {
       const query = encodeURIComponent(`${name} ${city || ''}`);
       const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
