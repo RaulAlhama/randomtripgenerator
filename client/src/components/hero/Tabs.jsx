@@ -3,7 +3,6 @@ import Icon from '../ui/Icon';
 const TABS = [
   { key: 'route', label: 'Ruta turística', iconName: 'map' },
   { key: 'restaurants', label: 'Mejores restaurantes', iconName: 'fork' },
-  { key: 'wikiloc', label: 'Naturaleza', iconName: 'leaf' },
 ];
 
 export default function Tabs({ activeTab, onChange }) {
