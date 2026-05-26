@@ -26,11 +26,7 @@ export default function Footer() {
         <div className="footer-main">
           <div className="footer-brand">
             <span className="footer-logo">
-              <svg width="26" height="26" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <rect width="44" height="44" rx="11" fill="#d05c28"/>
-                <path d="M22 8C17.582 8 14 11.582 14 16C14 22.4 22 36 22 36C22 36 30 22.4 30 16C30 11.582 26.418 8 22 8Z" fill="white" fillOpacity="0.95"/>
-                <circle cx="22" cy="16" r="4" fill="#d05c28"/>
-              </svg>
+              <img src="/icons/logo-mark.png" alt="" width="26" height="26" decoding="async" />
               RandomTrip
             </span>
             <p>Rutas turísticas generadas con IA. Descubre tu ciudad, o cualquier otra, en segundos.</p>
