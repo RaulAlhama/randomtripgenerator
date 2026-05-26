@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="40" fill="#0f766e"/>
-  <text x="96" y="120" text-anchor="middle" font-size="100" font-family="Arial, sans-serif" fill="white">RT</text>
+  <rect width="192" height="192" rx="40" fill="#d05c28"/>
+  <path d="M96 32C73.9 32 56 49.9 56 72C56 107.2 96 160 96 160C96 160 136 107.2 136 72C136 49.9 118.1 32 96 32Z" fill="white" fill-opacity="0.95"/>
+  <circle cx="96" cy="72" r="20" fill="#d05c28"/>
 </svg>
