@@ -1,9 +1,21 @@
 import { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useTrip } from '../../context/TripContext';
 import { typeLabels } from '../../constants/poi';
 import RouteOverlay from './RouteOverlay';
+
+// Polyline colors by sac_scale difficulty rank — green (easy) → red (extreme).
+// Matches the convention OSM rendering toolchains use.
+const SAC_COLORS = {
+  1: '#16a34a', // T1 easy
+  2: '#65a30d', // T2 moderate
+  3: '#ca8a04', // T3 demanding
+  4: '#ea580c', // T4 alpine
+  5: '#dc2626', // T5 demanding alpine
+  6: '#7f1d1d', // T6 difficult alpine
+};
+const SAC_DEFAULT_COLOR = '#0e6b62';
 
 const ROUTE_COLORS = {
   driving: '#6366f1',
@@ -38,14 +50,30 @@ const POI_ICONS_DIM = Array.from({ length: 12 }, (_, i) => createPOIIcon(i, { di
 
 function MapController() {
   const map = useMap();
-  const { currentTrip } = useTrip();
+  const { currentTrip, hikingTrails, selectedTrailId } = useTrip();
+  const isHiking = currentTrip?.trip_type === 'hiking';
 
   useEffect(() => {
     if (!currentTrip) return;
     map.setView([currentTrip.origin_lat, currentTrip.origin_lng], 14);
   }, [currentTrip, map]);
 
+  // Hiking: fit bounds to selected trail; otherwise fit to all trails.
   useEffect(() => {
+    if (!isHiking || !hikingTrails?.length) return;
+
+    const selected = hikingTrails.find(t => t.id === selectedTrailId);
+    const target = selected ? [selected] : hikingTrails;
+    const bounds = L.latLngBounds([[currentTrip.origin_lat, currentTrip.origin_lng]]);
+    for (const trail of target) {
+      for (const pt of trail.geometry) bounds.extend(pt);
+    }
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }, [isHiking, hikingTrails, selectedTrailId, currentTrip?.origin_lat, currentTrip?.origin_lng, map]);
+
+  // Tourism: fit bounds to POI list.
+  useEffect(() => {
+    if (isHiking) return;
     if (!currentTrip?.places || currentTrip.places.length === 0) return;
 
     const bounds = L.latLngBounds([
@@ -55,18 +83,20 @@ function MapController() {
       bounds.extend([place.lat, place.lng]);
     });
     map.fitBounds(bounds, { padding: [50, 50] });
-  }, [currentTrip?.places, currentTrip?.origin_lat, currentTrip?.origin_lng, map]);
+  }, [isHiking, currentTrip?.places, currentTrip?.origin_lat, currentTrip?.origin_lng, map]);
 
   return null;
 }
 
 export default function MapView() {
-  const { currentTrip, routeGeometry, selectedTransport, stage, selectedKeys, poiKey } = useTrip();
+  const { currentTrip, routeGeometry, selectedTransport, stage, selectedKeys, poiKey, hikingTrails, selectedTrailId, selectTrail } = useTrip();
 
   const places = currentTrip?.places || [];
   const originLat = currentTrip?.origin_lat ?? 40;
   const originLng = currentTrip?.origin_lng ?? -3;
   const isCandidatesStage = stage === 'candidates';
+  const isHiking = currentTrip?.trip_type === 'hiking';
+  const trails = isHiking ? (hikingTrails || []) : [];
 
   const routeGeoJSON = useMemo(
     () => routeGeometry ? { type: 'Feature', geometry: routeGeometry } : null,
@@ -99,8 +129,8 @@ export default function MapView() {
           </Marker>
         )}
 
-        {/* POI markers — dim deselected ones during curation */}
-        {places.map((place, index) => {
+        {/* Tourism POI markers — hidden in hiking mode */}
+        {!isHiking && places.map((place, index) => {
           const isSelected = !isCandidatesStage || selectedKeys.has(poiKey(place));
           const icon = isSelected
             ? (POI_ICONS[index] || createPOIIcon(index))
@@ -120,8 +150,35 @@ export default function MapView() {
           );
         })}
 
-        {/* Route line */}
-        {routeGeoJSON && (
+        {/* Hiking polylines — render unselected first so the selected one
+            paints on top with its bolder stroke. */}
+        {isHiking && trails
+          .slice()
+          .sort((a, b) => (a.id === selectedTrailId ? 1 : 0) - (b.id === selectedTrailId ? 1 : 0))
+          .map((trail) => {
+            const isSelected = trail.id === selectedTrailId;
+            const color = SAC_COLORS[trail.sacRank] || SAC_DEFAULT_COLOR;
+            return (
+              <Polyline
+                key={`trail-${trail.id}`}
+                positions={trail.geometry}
+                pathOptions={{
+                  color,
+                  weight: isSelected ? 6 : 3,
+                  opacity: isSelected ? 0.95 : 0.55,
+                }}
+                eventHandlers={{ click: () => selectTrail(trail.id) }}
+              >
+                <Popup>
+                  <div className="popup-title"><b>{trail.name}</b></div>
+                  {trail.sacScale && <div className="popup-type">{trail.sacScale}</div>}
+                </Popup>
+              </Polyline>
+            );
+          })}
+
+        {/* Route line (tourism mode) */}
+        {!isHiking && routeGeoJSON && (
           <GeoJSON
             key={routeGeometry ? JSON.stringify(routeGeometry).length : 0}
             data={routeGeoJSON}
@@ -129,7 +186,7 @@ export default function MapView() {
           />
         )}
       </MapContainer>
-      <RouteOverlay />
+      {!isHiking && <RouteOverlay />}
     </div>
   );
 }

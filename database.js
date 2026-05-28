@@ -35,6 +35,12 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id)
     `);
 
+    // Hiking trail support — distinguishes saved POI routes ('route') from
+    // saved single trails ('hiking'). Idempotent so existing rows stay valid.
+    await client.query(`
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS trip_type TEXT DEFAULT 'route'
+    `);
+
     console.log('Database connected and initialized');
   } finally {
     client.release();

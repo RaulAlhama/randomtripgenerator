@@ -5,6 +5,7 @@ import POIWarning from './POIWarning';
 import WeatherWidget from './WeatherWidget';
 import MapView from './MapView';
 import PlacesPanel from './PlacesPanel';
+import HikingPanel from './HikingPanel';
 import CandidateReview from './CandidateReview';
 import TripSkeleton from './TripSkeleton';
 
@@ -50,14 +51,20 @@ export default function TripResult() {
 
   if (!currentTrip) return null;
 
+  const isHiking = stage === 'hiking';
+
   return (
-    <section className="trip-result" ref={wrapperRef}>
+    <section className={`trip-result${isHiking ? ' is-hiking' : ''}`} ref={wrapperRef}>
       <TripHeader />
       <WeatherWidget />
-      <POIWarning />
+      {!isHiking && <POIWarning />}
       <div className={`trip-grid${stage === 'candidates' ? ' is-curating' : ''}`}>
         <MapView />
-        {stage === 'candidates' ? <CandidateReview /> : <PlacesPanel />}
+        {isHiking
+          ? <HikingPanel />
+          : stage === 'candidates'
+            ? <CandidateReview />
+            : <PlacesPanel />}
       </div>
     </section>
   );

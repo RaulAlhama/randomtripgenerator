@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Tabs from './Tabs';
 import RouteTab from './RouteTab';
 import RestaurantsTab from './RestaurantsTab';
-import Icon from '../ui/Icon';
+import HikingTab from './HikingTab';
 
 function HeroDecor() {
   return (
@@ -52,7 +52,7 @@ function TrustRow() {
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z" />
           <circle cx="12" cy="10" r="3" />
         </svg>
-        Datos reales de OpenStreetMap
+        Cualquier ciudad del mundo
       </span>
     </div>
   );
@@ -90,28 +90,8 @@ function HeroMockup() {
       </div>
       <div className="hero-mockup-footer">
         <span>Generado en 3 seg</span>
-        <span>OpenStreetMap + IA</span>
+        <span>Lugares reales</span>
       </div>
-    </div>
-  );
-}
-
-function WikilocCta() {
-  return (
-    <div className="wikiloc-cta-section">
-      <span>Buscas rutas de senderismo?</span>
-      <a
-        href="https://es.wikiloc.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="btn btn-ghost btn-sm"
-      >
-        <Icon name="leaf" size={14} />
-        Ver rutas en Wikiloc
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
-        </svg>
-      </a>
     </div>
   );
 }
@@ -126,11 +106,11 @@ export default function Hero() {
       <div className="hero-layout">
         <div className="hero-content">
           <h1>
-            Rutas con <em>IA real</em><br />y datos de OpenStreetMap
+            Tu próxima escapada,<br /><em>en segundos</em>
           </h1>
           <p className="subtitle">
             Genera una ruta turística personalizada en cualquier ciudad del mundo,
-            con POIs reales, meteorología en vivo y sin necesidad de registro.
+            sin necesidad de registro.
           </p>
 
           <Tabs activeTab={activeTab} onChange={setActiveTab} />
@@ -142,10 +122,12 @@ export default function Hero() {
             <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
               <RestaurantsTab />
             </div>
+            <div className="tab-panel" hidden={activeTab !== 'hiking'}>
+              <HikingTab />
+            </div>
           </div>
 
           <TrustRow />
-          <WikilocCta />
         </div>
 
         <div className="hero-preview">

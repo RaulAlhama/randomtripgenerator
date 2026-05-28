@@ -1294,6 +1294,171 @@ app.get('/api/place-image', async (req, res) => {
   }
 });
 
+// ========== HIKING TRAILS ==========
+
+// Haversine distance between two points (meters)
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Decimate a polyline to at most `maxPoints` vertices using regular sampling.
+// Cheap alternative to Douglas-Peucker — good enough for visual rendering at
+// the zoom levels this app uses.
+function decimate(points, maxPoints) {
+  if (points.length <= maxPoints) return points;
+  const step = points.length / maxPoints;
+  const out = [];
+  for (let i = 0; i < maxPoints; i++) out.push(points[Math.floor(i * step)]);
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+// Sum of haversine distances along an ordered list of [lat, lng] points.
+function polylineLength(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += haversineMeters(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+  }
+  return total;
+}
+
+// Stitch a hiking relation's member ways into a single ordered polyline.
+// Overpass returns each member's `geometry` as an array of {lat, lon}; we
+// concatenate them, dropping consecutive duplicates at join points.
+function buildTrailGeometry(relation) {
+  const members = (relation.members || []).filter(m => m.type === 'way' && Array.isArray(m.geometry));
+  if (members.length === 0) return [];
+  const points = [];
+  for (const m of members) {
+    for (const pt of m.geometry) {
+      const last = points[points.length - 1];
+      if (!last || last[0] !== pt.lat || last[1] !== pt.lon) {
+        points.push([pt.lat, pt.lon]);
+      }
+    }
+  }
+  return points;
+}
+
+// Difficulty rank for sac_scale — lower = easier. Used both for filtering and
+// for picking a polyline color in the frontend.
+const SAC_RANK = {
+  hiking: 1,
+  mountain_hiking: 2,
+  demanding_mountain_hiking: 3,
+  alpine_hiking: 4,
+  demanding_alpine_hiking: 5,
+  difficult_alpine_hiking: 6,
+};
+
+// GET /api/hiking-trails — query Overpass for OSM-tagged hiking routes near a
+// point and return a curated list with stitched polylines, length, difficulty
+// and signposting network.
+app.get('/api/hiking-trails', async (req, res) => {
+  try {
+    const { lat, lng, radius } = req.query;
+    if (!lat || !lng) return res.status(400).json({ error: 'Coordinates required' });
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (isNaN(latNum) || isNaN(lngNum) || Math.abs(latNum) > 90 || Math.abs(lngNum) > 180) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+    // Hiking-search radius is much wider than the city-tourism radius — trails
+    // can easily start ~15 km outside town. Clamp to 25 km to keep Overpass
+    // response sizes sane.
+    const radiusMeters = Math.min(Math.max(parseInt(radius) || 15000, 2000), 25000);
+
+    const cacheKey = `hiking:${latNum.toFixed(3)},${lngNum.toFixed(3)},${radiusMeters}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      console.log('[Hiking] Cache hit');
+      return res.json(cached);
+    }
+
+    // `out geom;` returns each relation with full member geometry plus tags —
+    // we need both to render the polyline and label it.
+    const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    const data = await fetchExternal(url);
+
+    if (!data?.elements) {
+      console.warn('[Hiking] No elements in Overpass response');
+      return res.json({ trails: [], origin: { lat: latNum, lng: lngNum } });
+    }
+
+    const trails = [];
+    for (const rel of data.elements) {
+      if (rel.type !== 'relation' || !rel.tags) continue;
+      const tags = rel.tags;
+      const name = tags['name:es'] || tags.name;
+      if (!name) continue;
+
+      const geometry = buildTrailGeometry(rel);
+      if (geometry.length < 2) continue;
+
+      // Trail length: prefer the tag (authoritative, set by the mapper) but
+      // fall back to summing the stitched polyline when missing.
+      let distance = null;
+      if (tags.distance) {
+        const parsed = parseFloat(String(tags.distance).replace(',', '.'));
+        if (!isNaN(parsed) && parsed > 0) distance = parsed * 1000; // km → meters
+      }
+      if (!distance) distance = polylineLength(geometry);
+
+      // Distance from search origin to the nearest point on the trail —
+      // used as the sort key so the closest trails appear first.
+      let nearest = Infinity;
+      for (const [plat, plng] of geometry) {
+        const d = haversineMeters(latNum, lngNum, plat, plng);
+        if (d < nearest) nearest = d;
+        if (nearest < 200) break; // close enough, stop scanning
+      }
+
+      trails.push({
+        id: rel.id,
+        name,
+        distance: Math.round(distance),
+        sacScale: tags.sac_scale || null,
+        sacRank: SAC_RANK[tags.sac_scale] || null,
+        network: tags.network || null,
+        operator: tags.operator || null,
+        website: tags.website || tags['website:en'] || null,
+        description: tags.description || tags['description:es'] || null,
+        symbol: tags.symbol || null,
+        colour: tags.colour || tags.color || null,
+        roundtrip: tags.roundtrip === 'yes',
+        ref: tags.ref || null,
+        // Decimated for transport; client renders polylines, not pixel art.
+        geometry: decimate(geometry, 200),
+        distanceFromOrigin: Math.round(nearest),
+      });
+    }
+
+    trails.sort((a, b) => a.distanceFromOrigin - b.distanceFromOrigin);
+    const top = trails.slice(0, 20);
+
+    const payload = {
+      trails: top,
+      origin: { lat: latNum, lng: lngNum },
+      radius: radiusMeters,
+      total: trails.length,
+    };
+    cacheSet(cacheKey, payload);
+    console.log(`[Hiking] Returned ${top.length}/${trails.length} trails within ${radiusMeters}m of ${latNum},${lngNum}`);
+    res.json(payload);
+  } catch (error) {
+    console.error('[Hiking] Error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch hiking trails' });
+  }
+});
+
 // Generate trip
 app.get('/api/generate-trip', async (req, res) => {
   try {
@@ -1513,11 +1678,12 @@ app.get('/api/restaurants', async (req, res) => {
 app.post('/api/trips', requireAuth, async (req, res) => {
   try {
     const userId = req.auth.payload.sub;
-    const { city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration } = req.body;
+    const { city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration, trip_type } = req.body;
+    const safeType = trip_type === 'hiking' ? 'hiking' : 'route';
 
     const result = await query(
-      `INSERT INTO trips (user_id, city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO trips (user_id, city, country, origin_lat, origin_lng, theme, transport_mode, places, route_distance, route_duration, trip_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         userId,
@@ -1529,7 +1695,8 @@ app.post('/api/trips', requireAuth, async (req, res) => {
         transport_mode || 'driving',
         JSON.stringify(places || []),
         route_distance,
-        route_duration
+        route_duration,
+        safeType
       ]
     );
 
