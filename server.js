@@ -746,6 +746,69 @@ function estimateRouteDistance(pois, originLat, originLng) {
   return total;
 }
 
+// Salvage parser for LLM JSON output. Strips markdown fences and, when the
+// model adds prose around the JSON or truncates mid-object, attempts to
+// extract the first balanced {...} or [...] block. Returns null on failure
+// so callers can decide whether to retry.
+function parseLLMJsonSafe(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+
+  let text = raw.trim();
+  if (text.includes('```json')) {
+    text = text.replace(/```json\n?/, '').replace(/```\s*$/, '').trim();
+  } else if (text.includes('```')) {
+    text = text.replace(/```\n?/, '').replace(/```\s*$/, '').trim();
+  }
+
+  try { return JSON.parse(text); } catch {}
+
+  // Salvage: find first { or [ and walk balanced brackets, ignoring chars
+  // inside string literals. Handles trailing prose / truncated output.
+  const start = text.search(/[{[]/);
+  if (start < 0) return null;
+  const open = text[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+// Call the Nebius chat-completions endpoint once and return the message
+// content string (empty string on error). Centralised so the retry wrapper
+// below doesn't duplicate request plumbing.
+async function callNebiusOnce(body, apiBaseUrl, apiKey) {
+  const baseUrl = apiBaseUrl.replace(/\/+$/, '');
+  const response = await fetchExternal(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (response.error || response.detail) {
+    const msg = response.error?.message || response.detail || JSON.stringify(response.error || response);
+    throw new Error(`Nebius API error: ${msg}`);
+  }
+  return response.choices?.[0]?.message?.content || '';
+}
+
 // Call Nebius API to get descriptions for real POIs
 async function getDescriptionsFromLLM(places, city, country, theme) {
   try {
@@ -811,14 +874,11 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
       return null;
     }
 
-    let cleanContent = content;
-    if (content.includes('```json')) {
-      cleanContent = content.replace(/```json\n?/, '').replace(/```\n?$/, '');
-    } else if (content.includes('```')) {
-      cleanContent = content.replace(/```\n?/, '').replace(/```\n?$/, '');
+    const parsed = parseLLMJsonSafe(content);
+    if (!parsed) {
+      console.error('[Nebius] Failed to parse descriptions JSON:', content.substring(0, 300));
+      return null;
     }
-
-    const parsed = JSON.parse(cleanContent);
     const descriptions = parsed.descriptions || Object.values(parsed).find(v => Array.isArray(v));
     if (Array.isArray(descriptions)) return descriptions;
 
@@ -866,51 +926,41 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
 
   console.log('[Nebius] Fallback: requesting full route for:', city, '| theme:', theme, '| transport:', transport);
 
-  const requestBody = JSON.stringify({
+  // Two attempts: first creative pass, then a stricter retry if the model
+  // returns malformed JSON. Bumped max_tokens to avoid mid-array truncation
+  // on longer routes.
+  const buildBody = (attempt) => ({
     model: 'openai/gpt-oss-120b',
     messages: [
-      { role: 'system', content: 'Eres un experto en viajes y turismo. Responde siempre con JSON valido, sin markdown. Todas las descripciones en español.' },
-      { role: 'user', content: prompt }
+      {
+        role: 'system',
+        content: attempt === 0
+          ? 'Eres un experto en viajes y turismo. Responde siempre con JSON valido, sin markdown. Todas las descripciones en español.'
+          : 'Eres un experto en turismo. Devuelve EXCLUSIVAMENTE un objeto JSON valido y completo. Sin markdown, sin prosa antes ni despues. Descripciones en español.',
+      },
+      { role: 'user', content: prompt },
     ],
-    temperature: 0.85,
-    max_tokens: 2000,
-    response_format: { type: 'json_object' }
+    temperature: attempt === 0 ? 0.85 : 0.3,
+    max_tokens: 3000,
+    response_format: { type: 'json_object' },
   });
 
-  const baseUrl = apiBaseUrl.replace(/\/+$/, '');
-  const response = await fetchExternal(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: requestBody
-  });
-
-  if (response.error || response.detail) {
-    const errMsg = response.error?.message || response.detail || JSON.stringify(response.error || response);
-    throw new Error(`Nebius API error: ${errMsg}`);
+  let parsed = null;
+  let lastContent = '';
+  for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+    const content = await callNebiusOnce(buildBody(attempt), apiBaseUrl, apiKey);
+    lastContent = content;
+    if (!content) {
+      console.error('[Nebius] Empty response on attempt', attempt);
+      continue;
+    }
+    parsed = parseLLMJsonSafe(content);
+    if (!parsed && attempt === 0) {
+      console.warn('[Nebius] Invalid JSON on first attempt, retrying with stricter prompt');
+    }
   }
-
-  const content = response.choices?.[0]?.message?.content || '';
-
-  if (!content) {
-    console.error('[Nebius] Empty response:', JSON.stringify(response).substring(0, 500));
-    throw new Error('Empty response from LLM');
-  }
-
-  let cleanContent = content;
-  if (content.includes('```json')) {
-    cleanContent = content.replace(/```json\n?/, '').replace(/```\n?$/, '');
-  } else if (content.includes('```')) {
-    cleanContent = content.replace(/```\n?/, '').replace(/```\n?$/, '');
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(cleanContent);
-  } catch (e) {
-    console.error('[Nebius] Failed to parse JSON:', cleanContent.substring(0, 300));
+  if (!parsed) {
+    console.error('[Nebius] Failed to parse JSON after retry:', lastContent.substring(0, 300));
     throw new Error('LLM returned invalid JSON');
   }
 
