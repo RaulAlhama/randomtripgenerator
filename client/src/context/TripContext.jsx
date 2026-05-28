@@ -1,5 +1,5 @@
 import { createContext, useReducer, useCallback, useContext } from 'react';
-import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather } from '../services/api';
+import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchHikingTrails as apiFetchHikingTrails } from '../services/api';
 import { saveTrip } from '../services/trips';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -23,6 +23,8 @@ const SET_STAGE = 'SET_STAGE';
 const SET_CANDIDATES = 'SET_CANDIDATES';
 const SET_SELECTED_KEYS = 'SET_SELECTED_KEYS';
 const TOGGLE_SELECTION = 'TOGGLE_SELECTION';
+const SET_HIKING_TRAILS = 'SET_HIKING_TRAILS';
+const SET_SELECTED_TRAIL = 'SET_SELECTED_TRAIL';
 
 const CANDIDATE_COUNT = 10;
 const SURPRISE_COUNT = 6;
@@ -47,9 +49,11 @@ const initialState = {
   routeDistance: null,
   routeDuration: null,
   weather: null,
-  stage: 'idle',          // 'idle' | 'candidates' | 'route'
+  stage: 'idle',          // 'idle' | 'candidates' | 'route' | 'hiking'
   candidates: null,        // full POI pool returned by /api/generate-trip
   selectedKeys: new Set(), // subset of candidates the user wants in the route
+  hikingTrails: null,      // array of trails returned by /api/hiking-trails
+  selectedTrailId: null,   // currently highlighted/zoomed trail
 };
 
 // Progress stages — message shown when progress reaches each threshold.
@@ -113,6 +117,10 @@ function tripReducer(state, action) {
       else next.add(action.payload);
       return { ...state, selectedKeys: next };
     }
+    case SET_HIKING_TRAILS:
+      return { ...state, hikingTrails: action.payload };
+    case SET_SELECTED_TRAIL:
+      return { ...state, selectedTrailId: action.payload };
     case CLOSE_TRIP:
       return {
         ...state,
@@ -127,6 +135,8 @@ function tripReducer(state, action) {
         stage: 'idle',
         candidates: null,
         selectedKeys: new Set(),
+        hikingTrails: null,
+        selectedTrailId: null,
       };
     default:
       return state;
@@ -471,6 +481,77 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_STAGE, payload: 'candidates' });
   }, [state.candidates, state.currentTrip]);
 
+  // Hiking flow — parallel to the tourism flow but with a single Overpass
+  // call and no LLM/Places enrichment. Sets stage='hiking' and stores the
+  // trail list in state for HikingPanel to render.
+  const generateHikingTrails = useCallback(async (overrides = {}) => {
+    const effectiveLocationMode = overrides.locationMode ?? state.locationMode;
+    const effectiveSearchLocation = overrides.searchLocation ?? state.searchLocation;
+    const effectiveRadius = overrides.radius ?? state.selectedRadius;
+
+    try {
+      dispatch({ type: SET_ERROR, payload: null });
+      dispatch({ type: SET_PROGRESS, payload: 30 });
+      dispatch({ type: SET_STATUS, payload: 'Buscando senderos cercanos...' });
+      dispatch({ type: SET_GENERATING, payload: true });
+
+      let location;
+      if (effectiveLocationMode === 'search') {
+        if (!effectiveSearchLocation) {
+          throw new Error('Busca y selecciona una ubicación primero');
+        }
+        location = effectiveSearchLocation;
+      } else {
+        location = await getUserLocation();
+      }
+
+      // Hiking trails are usually outside cities — multiply the slider value
+      // to broaden the catch. A 5 km slider becomes a 15 km hiking search.
+      const radiusMeters = Math.min(Math.round(effectiveRadius * 1000 * 3), 25000);
+      const data = await apiFetchHikingTrails(location.lat, location.lng, radiusMeters);
+
+      if (!data.trails || data.trails.length === 0) {
+        throw new Error('No se encontraron senderos en esa zona. Prueba con un radio mayor.');
+      }
+
+      const trip = {
+        city: '',
+        country: '',
+        places: [],
+        origin_lat: location.lat,
+        origin_lng: location.lng,
+        trip_type: 'hiking',
+        theme: 'hiking',
+        transport: 'walking',
+      };
+
+      dispatch({ type: SET_HIKING_TRAILS, payload: data.trails });
+      dispatch({ type: SET_SELECTED_TRAIL, payload: data.trails[0]?.id ?? null });
+      dispatch({ type: SET_TRIP, payload: trip });
+      dispatch({ type: SET_STAGE, payload: 'hiking' });
+      dispatch({ type: SET_PROGRESS, payload: 100 });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
+
+      apiFetchWeather(location.lat, location.lng)
+        .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+        .catch(() => {});
+    } catch (error) {
+      console.error('Error al buscar senderos:', error);
+      const msg = error.message || 'Error al buscar senderos';
+      dispatch({ type: SET_ERROR, payload: msg });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
+      dispatch({ type: SET_PROGRESS, payload: 0 });
+      showToast(msg, 'error');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.locationMode, state.searchLocation, state.selectedRadius]);
+
+  const selectTrail = useCallback((trailId) => {
+    dispatch({ type: SET_SELECTED_TRAIL, payload: trailId });
+  }, []);
+
   // One-click shortcut: generate + auto-build route from the first SURPRISE_COUNT POIs.
   const surpriseMe = useCallback(async (overrides = {}) => {
     return generateCandidates({ ...overrides, autoBuild: true });
@@ -582,6 +663,8 @@ export function TripProvider({ children }) {
     backToCandidates,
     surpriseMe,
     generateTrip, // legacy alias = surpriseMe
+    generateHikingTrails,
+    selectTrail,
     closeTrip,
     shareTrip,
     viewSavedTrip,

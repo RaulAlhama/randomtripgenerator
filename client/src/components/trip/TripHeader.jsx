@@ -32,9 +32,36 @@ export default function TripHeader() {
     stage,
     candidates,
     backToCandidates,
+    hikingTrails,
   } = useTrip();
 
   if (!currentTrip) return null;
+
+  // Hiking mode gets its own compact header — there's no "city + theme +
+  // transport" trio to summarise, just a count of trails and a close button.
+  if (currentTrip.trip_type === 'hiking') {
+    const trailCount = hikingTrails?.length || 0;
+    return (
+      <div className="trip-cover" data-theme-kind="hiking">
+        <div className="trip-cover-title">
+          <h2>Senderos cercanos</h2>
+          <div className="trip-cover-meta">
+            <span className="trip-meta-pill trip-meta-count">
+              <Icon name="leaf" size={12} strokeWidth={2.2} />
+              {trailCount} {trailCount === 1 ? 'sendero' : 'senderos'}
+            </span>
+          </div>
+        </div>
+        <div className="trip-cover-actions">
+          <button className="btn-icon" aria-label="Cerrar" onClick={closeTrip}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const city = currentTrip.city || 'la zona';
   const country = currentTrip.country || '';
