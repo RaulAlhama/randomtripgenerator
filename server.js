@@ -843,7 +843,7 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
     console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
 
     const requestBody = JSON.stringify({
-      model: 'openai/gpt-oss-120b',
+      model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
       messages: [
         { role: 'system', content: 'Eres un experto en turismo. Responde con JSON valido. Todas las descripciones en español. Cada descripcion debe ser especifica e informativa sobre el lugar.' },
         { role: 'user', content: prompt }
@@ -930,7 +930,7 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
   // returns malformed JSON. Bumped max_tokens to avoid mid-array truncation
   // on longer routes.
   const buildBody = (attempt) => ({
-    model: 'openai/gpt-oss-120b',
+    model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
     messages: [
       {
         role: 'system',
