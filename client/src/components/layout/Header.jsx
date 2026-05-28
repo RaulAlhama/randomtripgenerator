@@ -46,7 +46,7 @@ export default function Header() {
     }
     if (authEnabled && !isAuthenticated) {
       return (
-        <button className={`btn ${sm ? 'btn-sm ' : ''}btn-primary`} onClick={login}>
+        <button className={`btn ${sm ? 'btn-sm ' : ''}btn-outline`} onClick={login}>
           Iniciar sesión
         </button>
       );
