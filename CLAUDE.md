@@ -18,7 +18,7 @@ Production: run `npm run client:build`, then `npm start`. Access via http://loca
 ## Environment Variables
 
 Required in `.env`:
-- `NEBIUS_API_KEY` — Nebius AI API key (OpenAI-compatible endpoint, model: `openai/gpt-oss-20b`)
+- `NEBIUS_API_KEY` — Nebius AI API key (OpenAI-compatible endpoint, model: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`)
 - `DATABASE_URL` — PostgreSQL connection string (e.g. `postgresql://user:pass@host/dbname`)
 
 Optional:
