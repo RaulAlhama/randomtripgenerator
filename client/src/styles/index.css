@@ -14,6 +14,18 @@
   --amber-500: #eaaa50;
   --rose-400: #e07080;
 
+  /* Cool counterpoint — used for muted "active" states and the eyebrow tag
+     so the warm palette has a chromatic partner to breathe against. */
+  --secondary: #0e6b62;
+  --secondary-hover: #0a554e;
+  --secondary-soft: rgba(14, 107, 98, 0.09);
+  --secondary-soft-hover: rgba(14, 107, 98, 0.15);
+
+  /* Neutral warm-gray fills for chips, numerals and badges that don't need
+     to compete with the primary CTA for attention. */
+  --ink-soft: rgba(30, 18, 8, 0.06);
+  --ink-soft-strong: rgba(30, 18, 8, 0.10);
+
   /* Gradients */
   --grad-ocean: linear-gradient(135deg, #ab4618 0%, #d05c28 55%, #eaaa50 100%);
   --grad-sunset: linear-gradient(135deg, #eaaa50 0%, #d05c28 55%, #9b2226 100%);
@@ -92,6 +104,14 @@
   --primary-soft: rgba(216, 104, 56, 0.12);
   --primary-soft-hover: rgba(216, 104, 56, 0.20);
   --accent: #d9a466;
+
+  --secondary: #4ab8a9;
+  --secondary-hover: #5cccbc;
+  --secondary-soft: rgba(74, 184, 169, 0.12);
+  --secondary-soft-hover: rgba(74, 184, 169, 0.20);
+
+  --ink-soft: rgba(240, 220, 190, 0.06);
+  --ink-soft-strong: rgba(240, 220, 190, 0.11);
   --success: #60b070;
   --warning: #d49050;
   --danger: #d65858;
@@ -198,7 +218,7 @@ main {
   font-weight: 700;
   font-size: 1.3rem;
   letter-spacing: -0.02em;
-  color: var(--primary);
+  color: var(--text);
 }
 /* "Generator" rendered lighter so "RandomTrip" stays dominant — same word,
    visual hierarchy preserved. */
@@ -595,8 +615,8 @@ main {
 }
 
 .theme-chip.active {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--secondary);
+  border-color: var(--secondary);
   color: #fff;
 }
 
@@ -891,7 +911,7 @@ main {
   width: 100%;
   height: 6px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(to right, var(--primary) 0%, var(--primary) var(--pct, 0%), var(--bg-subtle) var(--pct, 0%), var(--bg-subtle) 100%);
+  background: linear-gradient(to right, var(--secondary) 0%, var(--secondary) var(--pct, 0%), var(--bg-subtle) var(--pct, 0%), var(--bg-subtle) 100%);
   outline: none;
   cursor: pointer;
 }
@@ -903,7 +923,7 @@ main {
   height: 22px;
   border-radius: 50%;
   background: var(--bg-elevated);
-  border: 3px solid var(--primary);
+  border: 3px solid var(--secondary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: transform 180ms var(--ease);
@@ -916,7 +936,7 @@ main {
   height: 22px;
   border-radius: 50%;
   background: var(--bg-elevated);
-  border: 3px solid var(--primary);
+  border: 3px solid var(--secondary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
 }
@@ -934,9 +954,9 @@ main {
 .distance-current {
   font-weight: 700;
   font-size: 0.95rem;
-  color: var(--primary);
+  color: var(--secondary);
   padding: 0.12rem 0.55rem;
-  background: var(--primary-soft);
+  background: var(--secondary-soft);
   border-radius: var(--radius-pill);
 }
 
@@ -2783,8 +2803,8 @@ main {
 }
 
 .radius-chip.active {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--secondary);
+  border-color: var(--secondary);
   color: #fff;
 }
 
@@ -3558,19 +3578,12 @@ main {
 .hero:hover .hero-mockup { transform: rotate(0deg); }
 
 .hero-mockup-cover {
-  background: var(--grad-ocean);
+  background: var(--bg-elevated);
   padding: 1rem 1.25rem 1.1rem;
-  color: white;
+  color: var(--text);
   position: relative;
   overflow: hidden;
-}
-
-.hero-mockup-cover::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(350px 120px at 110% -30%, rgba(255,255,255,0.18), transparent 60%);
-  pointer-events: none;
+  border-bottom: 1px solid var(--border);
 }
 
 .hero-mockup-eyebrow {
@@ -3578,7 +3591,7 @@ main {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.85;
+  color: var(--secondary);
   margin-bottom: 0.4rem;
 }
 
@@ -3588,6 +3601,7 @@ main {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
+  color: var(--text);
   margin-bottom: 0.65rem;
 }
 
@@ -3601,8 +3615,8 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  background: rgba(255,255,255,0.18);
-  backdrop-filter: blur(6px);
+  background: var(--ink-soft);
+  color: var(--text-secondary);
   padding: 0.18rem 0.55rem;
   border-radius: var(--radius-pill);
   font-size: 0.7rem;
@@ -3631,8 +3645,9 @@ main {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--primary);
-  color: white;
+  background: var(--ink-soft-strong);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3651,7 +3666,7 @@ main {
 
 .hero-mockup-poi-type {
   font-size: 0.68rem;
-  color: var(--primary);
+  color: var(--text-muted);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
