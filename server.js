@@ -544,14 +544,24 @@ async function getCityFromCoords(lat, lng) {
   const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=es`;
   try {
     const data = await fetchExternal(url);
-    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || 'this area';
-    const country = data.address?.country || '';
-    const result = { city, country, displayName: data.display_name };
-    cacheSet(cacheKey, result);
+    // Nominatim throttles shared/server IPs and may return a non-JSON body
+    // (rate-limit notice/HTML). fetchExternal resolves that as a raw string,
+    // so guard against anything that isn't a parsed object.
+    const addr = (data && typeof data === 'object') ? (data.address || {}) : {};
+    const displayName = (data && typeof data === 'object' && data.display_name) || '';
+    const city =
+      addr.city || addr.town || addr.village || addr.municipality ||
+      addr.city_district || addr.county || addr.suburb || addr.hamlet ||
+      (displayName ? displayName.split(',')[0].trim() : '') ||
+      'la zona';
+    const country = addr.country || '';
+    const result = { city, country, displayName: displayName || city };
+    // Don't cache the generic fallback — a later attempt may resolve properly.
+    if (city !== 'la zona') cacheSet(cacheKey, result);
     return result;
   } catch (error) {
     console.error('[Nominatim] Error:', error.message);
-    return { city: 'this area', country: '', displayName: 'unknown location' };
+    return { city: 'la zona', country: '', displayName: 'ubicación desconocida' };
   }
 }
 
@@ -1463,7 +1473,7 @@ app.get('/api/hiking-trails', async (req, res) => {
 // Generate trip
 app.get('/api/generate-trip', async (req, res) => {
   try {
-    const { lat, lng, theme = 'mixed', transport = 'driving', radius, count } = req.query;
+    const { lat, lng, theme = 'mixed', transport = 'driving', radius, count, city: cityParam, country: countryParam } = req.query;
 
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Coordinates required' });
@@ -1501,9 +1511,16 @@ app.get('/api/generate-trip', async (req, res) => {
     const maxRouteDistance = radius ? Math.min(parseInt(radius), 20000) : transportConf.radiusMeters * 2;
     const searchRadius = Math.round(maxRouteDistance / radiusDivisor);
 
-    // Fetch city name and real POIs in parallel
+    // Resolve the city name. Prefer the name the client already knows (it came
+    // from the city search), since reverse-geocoding Nominatim from a shared
+    // server IP gets throttled and silently falls back to a generic label.
+    // Only reverse-geocode when no city was provided (e.g. "use my location").
+    const trimmedCity = (cityParam || '').trim();
+    const locationPromise = trimmedCity
+      ? Promise.resolve({ city: trimmedCity, country: (countryParam || '').trim(), displayName: trimmedCity })
+      : getCityFromCoords(latNum, lngNum);
     const [locationInfo, realPOIs] = await Promise.all([
-      getCityFromCoords(latNum, lngNum),
+      locationPromise,
       getOverpassPOIs(latNum, lngNum, searchRadius)
     ]);
     console.log('[API] Location:', locationInfo.city, locationInfo.country, '| Real POIs:', realPOIs.length);

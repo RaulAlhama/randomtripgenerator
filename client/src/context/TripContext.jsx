@@ -343,7 +343,9 @@ export function TripProvider({ children }) {
         effectiveTheme,
         effectiveTransport,
         radiusMeters,
-        CANDIDATE_COUNT
+        CANDIDATE_COUNT,
+        location.name,
+        location.country
       );
 
       sim.stop();
@@ -354,8 +356,8 @@ export function TripProvider({ children }) {
 
       const candidates = tripData.places;
       const trip = {
-        city: tripData.city,
-        country: tripData.country,
+        city: tripData.city || location.name || 'la zona',
+        country: tripData.country || location.country || '',
         places: candidates, // map renders the full pool in candidates stage
         origin_lat: location.lat,
         origin_lng: location.lng,

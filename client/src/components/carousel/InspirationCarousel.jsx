@@ -13,12 +13,13 @@ export default function InspirationCarousel() {
 
   const handleCardClick = (example) => {
     setLocationMode('search');
-    setSearchLocation({ lat: example.lat, lng: example.lng });
+    const loc = { lat: example.lat, lng: example.lng, name: example.city, country: 'España' };
+    setSearchLocation(loc);
     setTheme(example.theme);
     setRadius(example.radius);
     generateTrip({
       locationMode: 'search',
-      searchLocation: { lat: example.lat, lng: example.lng },
+      searchLocation: loc,
       theme: example.theme,
       transport: 'walking',
       radius: example.radius,
