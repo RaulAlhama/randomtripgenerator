@@ -875,13 +875,17 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
     });
 
     if (response.error || response.detail) {
-      console.error('[Nebius] API error getting descriptions:', response.error?.message || response.detail);
+      const detail = response.error?.message || response.detail || JSON.stringify(response.error);
+      console.error('[Nebius][ALERT] API error getting descriptions:', detail);
+      if (/credit|balance|quota|insufficient|payment|402/i.test(String(detail))) {
+        console.error('[Nebius][ALERT] Parece un problema de CRÉDITO/cuota en Nebius. Recarga saldo para restaurar las descripciones IA.');
+      }
       return null;
     }
 
     const content = response.choices?.[0]?.message?.content || '';
     if (!content) {
-      console.error('[Nebius] Empty descriptions response');
+      console.error('[Nebius][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota en Nebius).');
       return null;
     }
 
@@ -1013,6 +1017,30 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
   return places;
 }
 
+// Per-type fallback descriptions, used when the LLM is unavailable (e.g. Nebius
+// out of credit). Built from data we already have (type + city) at zero API cost,
+// so it still reads naturally instead of the generic "Lugar de interés en ...".
+const FALLBACK_DESC_BY_TYPE = {
+  monument: (c) => `Un monumento emblemático de ${c}; una parada que merece la pena en la ruta.`,
+  museum: (c) => `Un museo de ${c} ideal para descubrir su historia y su cultura.`,
+  viewpoint: (c) => `Un mirador de ${c} con bonitas vistas para detenerse un momento.`,
+  palace: (c) => `Un palacio histórico de ${c} que refleja su patrimonio arquitectónico.`,
+  historic: (c) => `Un rincón histórico de ${c}, con encanto y siglos de historia.`,
+  church: (c) => `Un templo de ${c} que destaca por su arquitectura y su valor histórico.`,
+  market: (c) => `Un mercado de ${c}, perfecto para descubrir el ambiente y los productos locales.`,
+  park: (c) => `Un parque de ${c} ideal para un paseo tranquilo al aire libre.`,
+  garden: (c) => `Un jardín de ${c} donde relajarse rodeado de naturaleza.`,
+  plaza: (c) => `Una plaza con encanto de ${c}, un buen punto para hacer una pausa.`,
+  theater: (c) => `Un teatro de ${c}, parte de su vida cultural.`,
+  restaurant: (c) => `Un local de ${c} bien valorado por los visitantes.`,
+};
+
+function fallbackDescription(place, city) {
+  const c = city && city !== 'la zona' ? city : 'la zona';
+  const builder = FALLBACK_DESC_BY_TYPE[place.type];
+  return builder ? builder(c) : `Un lugar de interés de ${c} que merece una parada en la ruta.`;
+}
+
 // Main function: build route from real POIs + LLM descriptions
 async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount) {
   // In candidate mode the user curates the final list, so return more POIs and
@@ -1080,6 +1108,13 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     const withGoogleCount = googleData.filter(Boolean).length;
     console.log(`[Route] Resolved images for ${withImagesCount}/${placesWithImages.length} POIs, Google data for ${withGoogleCount}/${placesWithImages.length}`);
 
+    // Prominent, greppable alert when the LLM produced no descriptions at all
+    // (most common cause: Nebius out of credit). Lets us spot it fast in logs
+    // instead of finding out from a user screenshot.
+    if (!descriptions) {
+      console.error(`[Nebius][ALERT] Sin descripciones de la IA para "${city}" — usando textos de reserva. Revisa el crédito/estado de Nebius.`);
+    }
+
     const places = placesWithImages.map((p, i) => {
       const g = googleData[i] || {};
       return {
@@ -1087,7 +1122,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
         type: p.type,
         lat: p.lat,
         lng: p.lng,
-        description: (descriptions && descriptions[i]) || `Lugar de interés en ${city}.`,
+        description: (descriptions && descriptions[i]) || fallbackDescription(p, city),
         wikipedia: p.wikipedia || null,
         wikidata: p.wikidata || null,
         // Prefer Google Places photo (most precise match for the actual place),
