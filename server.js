@@ -8,6 +8,7 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const { initDatabase, query } = require('./database');
+const { CITIES, CITY_BY_SLUG } = require('./cityData');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1741,6 +1742,130 @@ app.delete('/api/trips/:id', requireAuth, async (req, res) => {
     console.error('Error deleting trip:', error);
     res.status(500).json({ error: 'Failed to delete trip' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// SEO: per-city landing pages + dynamic sitemap
+// ---------------------------------------------------------------------------
+const SITE_ORIGIN = 'https://randomtripgenerator.com';
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function readIndexHtml() {
+  const indexPath = fs.existsSync(clientDist)
+    ? path.join(clientDist, 'index.html')
+    : path.join(publicDir, 'index.html');
+  return fs.readFileSync(indexPath, 'utf8');
+}
+
+// Build the pre-rendered #seo-prerender block for a city landing page.
+function buildCitySeoBlock(city) {
+  const items = city.highlights
+    .map((h) => `        <li><strong>${escapeHtml(h.name)}:</strong> ${escapeHtml(h.blurb)}</li>`)
+    .join('\n');
+  const otherCities = CITIES.filter((c) => c.slug !== city.slug)
+    .map((c) => `        <li><a href="/ciudad/${c.slug}">Qué visitar en ${escapeHtml(c.name)}</a></li>`)
+    .join('\n');
+
+  return `<div id="seo-prerender">
+      <h1>Qué visitar en ${escapeHtml(city.name)}</h1>
+      <p>${escapeHtml(city.intro)}</p>
+
+      <h2>Lugares imprescindibles en ${escapeHtml(city.name)}</h2>
+      <ul>
+${items}
+      </ul>
+
+      <h2>Genera tu ruta turística por ${escapeHtml(city.name)} con IA</h2>
+      <p>
+        RandomTrip crea un <strong>itinerario personalizado por ${escapeHtml(city.name)}</strong> en
+        segundos: combina lugares reales de OpenStreetMap con descripciones escritas por
+        inteligencia artificial y los ordena para recorrerlos a pie, en bici o en coche.
+        Gratis y sin registro. <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
+      </p>
+
+      <h2>Rutas en otras ciudades</h2>
+      <ul>
+${otherCities}
+      </ul>
+
+      <p><noscript>Necesitas activar JavaScript para usar la aplicación interactiva.</noscript></p>
+    </div>`;
+}
+
+// Render a full city page by injecting city-specific SEO into the built index.html.
+function buildCityHtml(city) {
+  const url = `${SITE_ORIGIN}/ciudad/${city.slug}`;
+  const title = `Qué visitar en ${city.name}: ruta turística con IA — RandomTrip`;
+  const topNames = city.highlights.slice(0, 3).map((h) => h.name).join(', ');
+  const desc = `Descubre qué visitar en ${city.name} y genera una ruta turística personalizada con IA: ${topNames} y más. Gratis y sin registro.`;
+
+  let html = readIndexHtml();
+  html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(title)}</title>`);
+  html = html.replace(/<meta name="description" content="[\s\S]*?"\s*\/>/, `<meta name="description" content="${escapeHtml(desc)}" />`);
+  html = html.replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="${url}" />`);
+  html = html.replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="${url}" />`);
+  html = html.replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`);
+  html = html.replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Inicio', item: `${SITE_ORIGIN}/` },
+      { '@type': 'ListItem', position: 2, name: `Qué visitar en ${city.name}`, item: url },
+    ],
+  };
+  html = html.replace(
+    '</head>',
+    `  <script type="application/ld+json">\n${JSON.stringify(breadcrumb)}\n  </script>\n</head>`
+  );
+
+  html = html.replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, buildCitySeoBlock(city));
+  return html;
+}
+
+app.get('/ciudad/:slug', (req, res, next) => {
+  const city = CITY_BY_SLUG[req.params.slug];
+  if (!city) return next(); // unknown city → fall through to SPA catch-all
+  try {
+    res.type('html').send(buildCityHtml(city));
+  } catch (err) {
+    console.error('[ciudad] render failed:', err.message);
+    next();
+  }
+});
+
+// Dynamic sitemap generated from the city list (single source of truth).
+app.get('/sitemap.xml', (req, res) => {
+  const urls = [
+    { loc: `${SITE_ORIGIN}/`, changefreq: 'weekly', priority: '1.0' },
+    ...CITIES.map((c) => ({
+      loc: `${SITE_ORIGIN}/ciudad/${c.slug}`,
+      changefreq: 'monthly',
+      priority: '0.8',
+    })),
+  ];
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (u) => `  <url>
+    <loc>${u.loc}</loc>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`
+  )
+  .join('\n')}
+</urlset>
+`;
+  res.type('application/xml').send(body);
 });
 
 // Serve SPA
