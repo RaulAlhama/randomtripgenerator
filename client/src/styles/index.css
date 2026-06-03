@@ -3718,12 +3718,31 @@ main {
 .hero:hover .hero-mockup { transform: rotate(0deg); }
 
 .hero-mockup-cover {
-  background: var(--bg-elevated);
   padding: 1rem 1.25rem 1.1rem;
-  color: var(--text);
+  color: #fff;
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--border);
+  background-color: var(--ink-soft-strong);
+  background-size: cover;
+  background-position: center;
+  min-height: 150px;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Dark gradient so the white text stays legible over any photo */
+.hero-mockup-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20, 12, 6, 0.88) 0%, rgba(20, 12, 6, 0.45) 45%, rgba(20, 12, 6, 0.12) 100%);
+}
+
+.hero-mockup-cover-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
 }
 
 .hero-mockup-eyebrow {
@@ -3731,18 +3750,19 @@ main {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--secondary);
+  color: #ffd9c2;
   margin-bottom: 0.4rem;
 }
 
 .hero-mockup-title {
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
-  color: var(--text);
+  color: #fff;
   margin-bottom: 0.65rem;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
 
 .hero-mockup-meta {
@@ -3755,8 +3775,10 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  background: var(--ink-soft);
-  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   padding: 0.18rem 0.55rem;
   border-radius: var(--radius-pill);
   font-size: 0.7rem;
@@ -3772,30 +3794,46 @@ main {
 
 .hero-mockup-poi {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0;
+  padding: 0.55rem 0;
   border-bottom: 1px solid var(--border);
   position: relative;
 }
 
 .hero-mockup-poi:last-child { border-bottom: none; }
 
+.hero-mockup-thumb {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  background-color: var(--ink-soft-strong);
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
 .hero-mockup-num {
-  width: 28px;
-  height: 28px;
+  position: absolute;
+  bottom: -5px;
+  left: -5px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--ink-soft-strong);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
+  background: var(--primary, #d05c28);
+  color: #fff;
+  border: 2px solid var(--bg-elevated);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  flex-shrink: 0;
   font-family: var(--font-display);
 }
+
+.hero-mockup-poi-info { min-width: 0; }
 
 .hero-mockup-poi-name {
   font-size: 0.9rem;
