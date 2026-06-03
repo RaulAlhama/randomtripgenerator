@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import HowItWorks from './components/layout/HowItWorks';
+import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
 import StatusCard from './components/ui/StatusCard';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
@@ -28,6 +29,7 @@ function AppShell() {
         </ErrorBoundary>
         {!hasActiveTrip && (
           <>
+            <TrustBand />
             <HowItWorks />
             <InspirationCarousel />
             <MyTrips />
