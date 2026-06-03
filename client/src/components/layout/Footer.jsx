@@ -53,7 +53,7 @@ export default function Footer() {
           <span>&copy; {year} RandomTrip. Hecho con IA y mucho café.</span>
           <span className="footer-tech">
             Datos de OpenStreetMap · Meteorología de Open-Meteo · Rutas OSRM ·{' '}
-            Fotos de ejemplo por Florian Wehde, lucas ricci, Valeria Volosciuc y Ömer Karakus en{' '}
+            Fotos de ciudades vía{' '}
             <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer">Unsplash</a>
           </span>
         </div>
