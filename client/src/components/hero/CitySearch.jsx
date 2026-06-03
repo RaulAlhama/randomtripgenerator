@@ -33,7 +33,12 @@ export default function CitySearch() {
   };
 
   const handleSelectCity = (city) => {
-    setSearchLocation({ lat: parseFloat(city.lat), lng: parseFloat(city.lng) });
+    setSearchLocation({
+      lat: parseFloat(city.lat),
+      lng: parseFloat(city.lng),
+      name: city.name,
+      country: city.country || '',
+    });
     const label = city.region
       ? `${city.name}, ${city.region}, ${city.country}`
       : `${city.name}, ${city.country}`;
