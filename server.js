@@ -702,8 +702,12 @@ async function getOverpassFoodPOIs(lat, lng, radiusMeters) {
     const data = await fetchExternal(url);
     if (!data.elements) return [];
 
+    // Franchises have no place on a "ruta gastronómica" — a Foster's Hollywood
+    // with a cuisine tag would otherwise outrank the no-tag local taberna.
+    const CHAIN_RE = /foster'?s hollywood|mcdonald|burger king|kfc|domino|telepizza|starbucks|100 montaditos|vips|tgb|the good burger|five guys|taco bell|subway|papa john|rodilla|pans ?& ?company|ginos|tagliatella|llaollao|dunkin|pizza hut|udon|sushisom|carl'?s jr/i;
+
     const pois = data.elements
-      .filter(el => el.tags?.name)
+      .filter(el => el.tags?.name && !CHAIN_RE.test(el.tags.name) && !el.tags.brand)
       .map(el => {
         const rawType = el.tags.amenity || el.tags.shop || 'restaurant';
         return {

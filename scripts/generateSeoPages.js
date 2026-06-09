@@ -24,7 +24,6 @@ const {
   getOverpassPOIs,
   getOverpassFoodPOIs,
   fetchHikingTrails,
-  selectPOIsForTheme,
   sortByProximity,
   estimateRouteDistance,
   getDescriptionsFromLLM,
@@ -111,27 +110,37 @@ Devuelve un JSON: {"intro": "..."}`;
 // Per-type content builders. Each returns { items, llmOk, totalDistanceM }.
 // ---------------------------------------------------------------------------
 
-// Prefer POIs the OSM community linked to Wikipedia/Wikidata — a strong
-// notability signal. These pages are static showcases, so unlike the
-// interactive app we want the famous places, not a fresh random mix.
-function pickNotable(pois, theme, count) {
-  const notable = pois.filter((p) => p.wikipedia || p.wikidata);
-  const rest = pois.filter((p) => !p.wikipedia && !p.wikidata);
-  const pool = notable.length >= count ? notable : [...notable, ...rest];
-  return selectPOIsForTheme(pool, theme, count);
+// Deterministic notability ranking. These pages are static showcases titled
+// "qué ver en X", so they must feature the landmarks, not whatever bust or
+// neighborhood theater a random shuffle surfaces (downtown Madrid has 600+
+// POIs and the app's randomized selectPOIsForTheme buried Plaza Mayor under
+// minor memorials). A Wikipedia article is the strongest free notability
+// signal OSM carries; major building types break the ties.
+function pickNotable(pois, count) {
+  const TYPE_SCORE = {
+    palace: 3, castle: 3, museum: 3, church: 2, historic: 2, market: 2,
+    viewpoint: 2, plaza: 2, park: 2, monument: 1, garden: 1,
+  };
+  return [...pois]
+    .map((p) => ({ p, s: (p.wikipedia ? 4 : p.wikidata ? 1 : 0) + (TYPE_SCORE[p.type] || 1) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, count)
+    .map((x) => x.p);
 }
 
 async function buildWalkContent(city) {
   const pois = await getOverpassPOIs(city.lat, city.lng, 1200);
   await sleep(SLEEP_BETWEEN_CALLS);
 
-  let selected = sortByProximity(pickNotable(pois, 'monuments', 8), city.lat, city.lng);
+  let selected = sortByProximity(pickNotable(pois, 8), city.lat, city.lng);
   // ~2h walking with stops ≈ 6 km of street distance (straight-line × 1.4).
   while (selected.length > 5 && estimateRouteDistance(selected, city.lat, city.lng) * 1.4 > 6000) {
     selected = selected.slice(0, -1);
   }
 
-  const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'monuments');
+  // cautious: even with notability ranking some stops are lesser-known —
+  // better a sober description than an invented fact set in stone.
+  const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'monuments', { cautious: true });
   await sleep(SLEEP_BETWEEN_CALLS);
   const withImages = await fetchAllPOIImages(selected, city.name);
 
