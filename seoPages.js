@@ -88,10 +88,13 @@ function formatKm(meters) {
 // Quality gates — the generator publishes a page only if this passes.
 // ---------------------------------------------------------------------------
 
-// Shapes of fallbackDescription() in server.js. A description matching these
-// means the LLM output was silently replaced by boilerplate — exactly the
-// thin content that got the site de-indexed. Never publish it.
-const GENERIC_DESC_RE = /^(un|una) (lugar de inter[eé]s|rinc[oó]n hist[oó]rico|templo de|mercado de|parque de|jard[ií]n de|plaza con encanto|teatro de|local de)/i;
+// Distinctive tails of the fallbackDescription() templates in server.js.
+// A description containing one means LLM output was silently replaced by
+// boilerplate — exactly the thin content that got the site de-indexed.
+// Matched on the tail (not the "Un mercado de..." opening) because the LLM
+// legitimately writes openings like "Un mercado de San Fernando..." and a
+// prefix match rejected those as false positives.
+const GENERIC_DESC_RE = /(con encanto y siglos de historia|que destaca por su arquitectura y su valor historico|perfecto para descubrir el ambiente y los productos locales|ideal para un paseo tranquilo al aire libre|donde relajarse rodeado de naturaleza|un buen punto para hacer una pausa|parte de su vida cultural|bien valorado por los visitantes|que merece una parada en la ruta)/i;
 
 function normalizeText(str) {
   return String(str || '')
@@ -123,7 +126,7 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
     if (desc.length < 60) return { ok: false, reason: `desc_too_short:${item.name}` };
     if (desc.length > 400) return { ok: false, reason: `desc_too_long:${item.name}` };
     if (normalizeText(desc) === normalizeText(item.name)) return { ok: false, reason: `desc_generic:${item.name}` };
-    if (GENERIC_DESC_RE.test(desc)) return { ok: false, reason: `desc_generic:${item.name}` };
+    if (GENERIC_DESC_RE.test(normalizeText(desc))) return { ok: false, reason: `desc_generic:${item.name}` };
     const start = normalizeText(desc).slice(0, 40);
     if (seenStarts.has(start)) return { ok: false, reason: `desc_duplicate:${item.name}` };
     seenStarts.add(start);
