@@ -8,6 +8,8 @@ const CITIES = [
     slug: 'madrid',
     name: 'Madrid',
     region: 'Comunidad de Madrid',
+    lat: 40.4168,
+    lng: -3.7038, // Puerta del Sol
     intro:
       'La capital combina los grandes museos del Paseo del Arte con el bullicio de sus plazas y el verde del Retiro. Un casco histórico compacto que se recorre perfectamente a pie, de la Puerta del Sol al Palacio Real.',
     highlights: [
@@ -23,6 +25,8 @@ const CITIES = [
     slug: 'barcelona',
     name: 'Barcelona',
     region: 'Cataluña',
+    lat: 41.3851,
+    lng: 2.1734, // Plaça de Catalunya
     intro:
       'Entre el mar y la montaña, Barcelona es modernismo de Gaudí, callejuelas medievales del Gótico y una fachada marítima abierta al Mediterráneo. Una ciudad para perderse a pie y en bici por el Eixample.',
     highlights: [
@@ -38,6 +42,8 @@ const CITIES = [
     slug: 'sevilla',
     name: 'Sevilla',
     region: 'Andalucía',
+    lat: 37.3858,
+    lng: -5.9933, // Catedral / Av. de la Constitución
     intro:
       'Sevilla huele a azahar y suena a flamenco. Su legado andalusí y barroco se concentra en un casco histórico de naranjos, patios y callejones que invitan a caminar sin prisa al caer la tarde.',
     highlights: [
@@ -53,6 +59,8 @@ const CITIES = [
     slug: 'valencia',
     name: 'Valencia',
     region: 'Comunidad Valenciana',
+    lat: 39.4699,
+    lng: -0.3763, // Plaza del Ayuntamiento
     intro:
       'Valencia une el casco histórico medieval con la arquitectura futurista de Calatrava y un antiguo cauce convertido en parque. Ciudad mediterránea, llana y muy ciclable, cuna de la paella.',
     highlights: [
@@ -68,6 +76,8 @@ const CITIES = [
     slug: 'granada',
     name: 'Granada',
     region: 'Andalucía',
+    lat: 37.1765,
+    lng: -3.5979, // Plaza Nueva
     intro:
       'A los pies de Sierra Nevada, Granada guarda el conjunto andalusí más impresionante de España. Sus miradores, su tapeo y el laberinto blanco del Albaicín hacen de cada paseo un descubrimiento.',
     highlights: [
@@ -83,6 +93,8 @@ const CITIES = [
     slug: 'bilbao',
     name: 'Bilbao',
     region: 'País Vasco',
+    lat: 43.2569,
+    lng: -2.9236, // Casco Viejo
     intro:
       'Bilbao pasó de ciudad industrial a icono del diseño gracias al Guggenheim. Hoy mezcla el Casco Viejo de toda la vida, la ría regenerada y una escena gastronómica de pintxos imbatible.',
     highlights: [
@@ -98,6 +110,8 @@ const CITIES = [
     slug: 'malaga',
     name: 'Málaga',
     region: 'Andalucía',
+    lat: 36.7213,
+    lng: -4.4216, // Catedral / calle Larios
     intro:
       'Cuna de Picasso y puerta de la Costa del Sol, Málaga combina herencia romana y andalusí con un centro peatonal vibrante, museos de primer nivel y playas urbanas bañadas de sol todo el año.',
     highlights: [
@@ -113,6 +127,8 @@ const CITIES = [
     slug: 'zaragoza',
     name: 'Zaragoza',
     region: 'Aragón',
+    lat: 41.6561,
+    lng: -0.8773, // Plaza del Pilar
     intro:
       'A orillas del Ebro, Zaragoza acumula dos mil años de historia: romana, musulmana, mudéjar y barroca. Su gran plaza presidida por el Pilar es uno de los espacios monumentales más imponentes de España.',
     highlights: [
@@ -128,6 +144,8 @@ const CITIES = [
     slug: 'san-sebastian',
     name: 'San Sebastián',
     region: 'País Vasco',
+    lat: 43.3224,
+    lng: -1.9839, // Parte Vieja
     intro:
       'Donostia es elegancia de la Belle Époque abrazando una de las bahías más bellas del mundo. Playa urbana de postal, montes a ambos lados y una Parte Vieja con la mayor densidad de pintxos del país.',
     highlights: [
@@ -143,6 +161,8 @@ const CITIES = [
     slug: 'cordoba',
     name: 'Córdoba',
     region: 'Andalucía',
+    lat: 37.8790,
+    lng: -4.7794, // Mezquita-Catedral
     intro:
       'Capital de tres culturas, Córdoba alcanzó su esplendor como centro de Al-Ándalus. Su laberinto de patios floridos en torno a la Mezquita-Catedral es uno de los conjuntos históricos más bellos de Europa.',
     highlights: [
@@ -158,6 +178,8 @@ const CITIES = [
     slug: 'toledo',
     name: 'Toledo',
     region: 'Castilla-La Mancha',
+    lat: 39.8581,
+    lng: -4.0226, // Plaza de Zocodover
     intro:
       'La ciudad de las tres culturas se alza sobre un meandro del Tajo como un museo al aire libre. Cristianos, judíos y musulmanes dejaron un casco histórico de callejones empinados declarado Patrimonio.',
     highlights: [
@@ -173,6 +195,8 @@ const CITIES = [
     slug: 'santiago-de-compostela',
     name: 'Santiago de Compostela',
     region: 'Galicia',
+    lat: 42.8806,
+    lng: -8.5446, // Praza do Obradoiro
     intro:
       'Meta de todos los Caminos, Santiago es piedra, lluvia y peregrinos. Su casco antiguo de soportales y plazas graníticas, presidido por la catedral, es uno de los conjuntos urbanos más emocionantes de España.',
     highlights: [

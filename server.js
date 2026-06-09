@@ -676,6 +676,73 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
   }
 }
 
+// Food venues from OpenStreetMap, for the pre-generated "ruta gastronómica"
+// SEO pages. Separate from getOverpassPOIs, which deliberately skips food
+// types (they belong to the Restaurants tab in the interactive app). OSM data
+// is ODbL so it can be persisted — Google Places data can NOT (ToS forbids
+// caching beyond 30 days), which is why this exists instead of reusing
+// /api/restaurants.
+async function getOverpassFoodPOIs(lat, lng, radiusMeters) {
+  const cacheKey = `foodpois:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) {
+    console.log('[Cache] Hit for Overpass food POIs:', cacheKey);
+    return cached;
+  }
+
+  try {
+    const query = `[out:json][timeout:25];(
+      node["amenity"~"restaurant|cafe|bar|marketplace"]["name"](around:${radiusMeters},${lat},${lng});
+      way["amenity"~"restaurant|cafe|bar|marketplace"]["name"](around:${radiusMeters},${lat},${lng});
+      node["shop"~"bakery|confectionery|deli|cheese|wine"]["name"](around:${radiusMeters},${lat},${lng});
+      way["shop"~"bakery|confectionery|deli|cheese|wine"]["name"](around:${radiusMeters},${lat},${lng});
+    );out center body;`;
+
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    const data = await fetchExternal(url);
+    if (!data.elements) return [];
+
+    const pois = data.elements
+      .filter(el => el.tags?.name)
+      .map(el => {
+        const rawType = el.tags.amenity || el.tags.shop || 'restaurant';
+        return {
+          name: el.tags.name,
+          rawType,
+          type: rawType === 'marketplace' ? 'market' : 'restaurant',
+          lat: el.lat || el.center?.lat,
+          lng: el.lon || el.center?.lon,
+          cuisine: el.tags.cuisine || null,
+          wikipedia: el.tags.wikipedia || null,
+          wikidata: el.tags.wikidata || null
+        };
+      })
+      .filter(p => p.lat && p.lng);
+
+    const seen = new Set();
+    const unique = pois.filter(p => {
+      const key = p.name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Markets first (the editorial anchors of any food route), then venues
+    // whose mapper bothered to tag the cuisine — a decent proxy for notability.
+    unique.sort((a, b) => {
+      const score = (p) => (p.rawType === 'marketplace' ? 2 : 0) + (p.cuisine ? 1 : 0);
+      return score(b) - score(a);
+    });
+
+    console.log(`[Overpass] Found ${unique.length} food POIs within ${radiusMeters}m`);
+    cacheSet(cacheKey, unique);
+    return unique;
+  } catch (error) {
+    console.error('[Overpass][food] Error:', error.message);
+    return [];
+  }
+}
+
 // Theme-based relevance scoring for POI filtering
 const THEME_TYPE_SCORES = {
   monuments: { monument: 3, historic: 3, castle: 3, ruins: 3, archaeological_site: 3, memorial: 3, church: 3, palace: 3, museum: 2, artwork: 2, attraction: 2, tower: 2 },
@@ -820,8 +887,12 @@ async function callNebiusOnce(body, apiBaseUrl, apiKey) {
   return response.choices?.[0]?.message?.content || '';
 }
 
-// Call Nebius API to get descriptions for real POIs
-async function getDescriptionsFromLLM(places, city, country, theme) {
+// Call Nebius API to get descriptions for real POIs.
+// options.cautious: for places the model probably doesn't know (local bars,
+// obscure trails) — tells it to describe type/context instead of inventing
+// specifics. Used by the SEO page generator, where hallucinated "facts"
+// would be published permanently.
+async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
   try {
     const apiKey = process.env.NEBIUS_API_KEY;
     const apiBaseUrl = process.env.NEBIUS_API_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/';
@@ -849,7 +920,7 @@ ${placeList}
 Devuelve un JSON con una clave "descriptions" que sea un array de strings, una descripcion por lugar, en el MISMO ORDEN que la lista anterior.
 Ejemplo: {"descriptions": ["Estatua del siglo XIX dedicada al poeta, ubicada en un rincón tranquilo del Retiro.", "Mercado historico con los mejores productos frescos de la ciudad.", ...]}
 
-IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas.`;
+IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo, su zona y por que puede interesar, SIN inventar detalles especificos (fechas, premios, platos estrella, hitos del recorrido o lugares por los que pasa).' : ''}`;
 
     console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
 
@@ -860,7 +931,9 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 1500,
+      // Nemotron spends completion tokens on hidden reasoning before the
+      // JSON; 1500 caused mid-array truncation with 8 long descriptions.
+      max_tokens: 3000,
       response_format: { type: 'json_object' }
     });
 
@@ -1403,9 +1476,83 @@ const SAC_RANK = {
   difficult_alpine_hiking: 6,
 };
 
-// GET /api/hiking-trails — query Overpass for OSM-tagged hiking routes near a
-// point and return a curated list with stitched polylines, length, difficulty
-// and signposting network.
+// Query Overpass for OSM-tagged hiking routes near a point and return a
+// curated list with stitched polylines, length, difficulty and signposting
+// network. Shared by the /api/hiking-trails endpoint and the SEO page
+// generator (scripts/generateSeoPages.js).
+async function fetchHikingTrails(latNum, lngNum, radiusMeters) {
+  // `out geom;` returns each relation with full member geometry plus tags —
+  // we need both to render the polyline and label it.
+  const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
+  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+  const data = await fetchExternal(url);
+
+  if (!data?.elements) {
+    console.warn('[Hiking] No elements in Overpass response');
+    return { trails: [], origin: { lat: latNum, lng: lngNum } };
+  }
+
+  const trails = [];
+  for (const rel of data.elements) {
+    if (rel.type !== 'relation' || !rel.tags) continue;
+    const tags = rel.tags;
+    const name = tags['name:es'] || tags.name;
+    if (!name) continue;
+
+    const geometry = buildTrailGeometry(rel);
+    if (geometry.length < 2) continue;
+
+    // Trail length: prefer the tag (authoritative, set by the mapper) but
+    // fall back to summing the stitched polyline when missing.
+    let distance = null;
+    if (tags.distance) {
+      const parsed = parseFloat(String(tags.distance).replace(',', '.'));
+      if (!isNaN(parsed) && parsed > 0) distance = parsed * 1000; // km → meters
+    }
+    if (!distance) distance = polylineLength(geometry);
+
+    // Distance from search origin to the nearest point on the trail —
+    // used as the sort key so the closest trails appear first.
+    let nearest = Infinity;
+    for (const [plat, plng] of geometry) {
+      const d = haversineMeters(latNum, lngNum, plat, plng);
+      if (d < nearest) nearest = d;
+      if (nearest < 200) break; // close enough, stop scanning
+    }
+
+    trails.push({
+      id: rel.id,
+      name,
+      distance: Math.round(distance),
+      sacScale: tags.sac_scale || null,
+      sacRank: SAC_RANK[tags.sac_scale] || null,
+      network: tags.network || null,
+      operator: tags.operator || null,
+      website: tags.website || tags['website:en'] || null,
+      description: tags.description || tags['description:es'] || null,
+      symbol: tags.symbol || null,
+      colour: tags.colour || tags.color || null,
+      roundtrip: tags.roundtrip === 'yes',
+      ref: tags.ref || null,
+      // Decimated for transport; client renders polylines, not pixel art.
+      geometry: decimate(geometry, 200),
+      distanceFromOrigin: Math.round(nearest),
+    });
+  }
+
+  trails.sort((a, b) => a.distanceFromOrigin - b.distanceFromOrigin);
+  const top = trails.slice(0, 20);
+
+  console.log(`[Hiking] Returned ${top.length}/${trails.length} trails within ${radiusMeters}m of ${latNum},${lngNum}`);
+  return {
+    trails: top,
+    origin: { lat: latNum, lng: lngNum },
+    radius: radiusMeters,
+    total: trails.length,
+  };
+}
+
+// GET /api/hiking-trails — validation + caching around fetchHikingTrails.
 app.get('/api/hiking-trails', async (req, res) => {
   try {
     const { lat, lng, radius } = req.query;
@@ -1428,76 +1575,8 @@ app.get('/api/hiking-trails', async (req, res) => {
       return res.json(cached);
     }
 
-    // `out geom;` returns each relation with full member geometry plus tags —
-    // we need both to render the polyline and label it.
-    const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const data = await fetchExternal(url);
-
-    if (!data?.elements) {
-      console.warn('[Hiking] No elements in Overpass response');
-      return res.json({ trails: [], origin: { lat: latNum, lng: lngNum } });
-    }
-
-    const trails = [];
-    for (const rel of data.elements) {
-      if (rel.type !== 'relation' || !rel.tags) continue;
-      const tags = rel.tags;
-      const name = tags['name:es'] || tags.name;
-      if (!name) continue;
-
-      const geometry = buildTrailGeometry(rel);
-      if (geometry.length < 2) continue;
-
-      // Trail length: prefer the tag (authoritative, set by the mapper) but
-      // fall back to summing the stitched polyline when missing.
-      let distance = null;
-      if (tags.distance) {
-        const parsed = parseFloat(String(tags.distance).replace(',', '.'));
-        if (!isNaN(parsed) && parsed > 0) distance = parsed * 1000; // km → meters
-      }
-      if (!distance) distance = polylineLength(geometry);
-
-      // Distance from search origin to the nearest point on the trail —
-      // used as the sort key so the closest trails appear first.
-      let nearest = Infinity;
-      for (const [plat, plng] of geometry) {
-        const d = haversineMeters(latNum, lngNum, plat, plng);
-        if (d < nearest) nearest = d;
-        if (nearest < 200) break; // close enough, stop scanning
-      }
-
-      trails.push({
-        id: rel.id,
-        name,
-        distance: Math.round(distance),
-        sacScale: tags.sac_scale || null,
-        sacRank: SAC_RANK[tags.sac_scale] || null,
-        network: tags.network || null,
-        operator: tags.operator || null,
-        website: tags.website || tags['website:en'] || null,
-        description: tags.description || tags['description:es'] || null,
-        symbol: tags.symbol || null,
-        colour: tags.colour || tags.color || null,
-        roundtrip: tags.roundtrip === 'yes',
-        ref: tags.ref || null,
-        // Decimated for transport; client renders polylines, not pixel art.
-        geometry: decimate(geometry, 200),
-        distanceFromOrigin: Math.round(nearest),
-      });
-    }
-
-    trails.sort((a, b) => a.distanceFromOrigin - b.distanceFromOrigin);
-    const top = trails.slice(0, 20);
-
-    const payload = {
-      trails: top,
-      origin: { lat: latNum, lng: lngNum },
-      radius: radiusMeters,
-      total: trails.length,
-    };
+    const payload = await fetchHikingTrails(latNum, lngNum, radiusMeters);
     cacheSet(cacheKey, payload);
-    console.log(`[Hiking] Returned ${top.length}/${trails.length} trails within ${radiusMeters}m of ${latNum},${lngNum}`);
     res.json(payload);
   } catch (error) {
     console.error('[Hiking] Error:', error.message);
@@ -1797,16 +1876,33 @@ app.delete('/api/trips/:id', requireAuth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// SEO: per-city landing pages + dynamic sitemap
+// SEO: per-city landing pages, pre-generated variant pages + dynamic sitemap
 // ---------------------------------------------------------------------------
-const SITE_ORIGIN = 'https://randomtripgenerator.com';
+const {
+  SITE_ORIGIN,
+  escapeHtml,
+  PAGE_TYPES,
+  PAGE_TYPE_BY_URL_SLUG,
+  buildVariantHtml,
+  assertIndexPatterns,
+  getPublishedPage,
+  listPublishedPages,
+  buildSiblingLinks,
+} = require('./seoPages');
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// Published variant pages (slug+type+date), cached 10 min like everything else.
+// Returns [] on DB hiccups so the hand-written city pages keep working.
+async function getPublishedListCached() {
+  const cached = cacheGet('seopages:published');
+  if (cached) return cached;
+  try {
+    const list = await listPublishedPages();
+    cacheSet('seopages:published', list);
+    return list;
+  } catch (err) {
+    console.error('[SEO] Could not list published pages:', err.message);
+    return [];
+  }
 }
 
 function readIndexHtml() {
@@ -1817,13 +1913,30 @@ function readIndexHtml() {
 }
 
 // Build the pre-rendered #seo-prerender block for a city landing page.
-function buildCitySeoBlock(city) {
+// publishedList feeds the "Más rutas" section linking this city's
+// pre-generated variant pages (only the ones that passed the quality gates).
+function buildCitySeoBlock(city, publishedList = []) {
   const items = city.highlights
     .map((h) => `        <li><strong>${escapeHtml(h.name)}:</strong> ${escapeHtml(h.blurb)}</li>`)
     .join('\n');
   const otherCities = CITIES.filter((c) => c.slug !== city.slug)
     .map((c) => `        <li><a href="/ciudad/${c.slug}">Qué visitar en ${escapeHtml(c.name)}</a></li>`)
     .join('\n');
+
+  const variantLinks = publishedList
+    .filter((p) => p.city_slug === city.slug && PAGE_TYPES[p.page_type])
+    .map((p) => {
+      const def = PAGE_TYPES[p.page_type];
+      return `        <li><a href="/ciudad/${city.slug}/${def.urlSlug}">${escapeHtml(def.linkLabel(city))}</a></li>`;
+    });
+  const variantSection = variantLinks.length
+    ? `
+      <h2>Más rutas por ${escapeHtml(city.name)}</h2>
+      <ul>
+${variantLinks.join('\n')}
+      </ul>
+`
+    : '';
 
   return `<div id="seo-prerender">
       <h1>Qué visitar en ${escapeHtml(city.name)}</h1>
@@ -1833,7 +1946,7 @@ function buildCitySeoBlock(city) {
       <ul>
 ${items}
       </ul>
-
+${variantSection}
       <h2>Genera tu ruta turística por ${escapeHtml(city.name)} con IA</h2>
       <p>
         RandomTrip crea un <strong>itinerario personalizado por ${escapeHtml(city.name)}</strong> en
@@ -1852,7 +1965,7 @@ ${otherCities}
 }
 
 // Render a full city page by injecting city-specific SEO into the built index.html.
-function buildCityHtml(city) {
+function buildCityHtml(city, publishedList = []) {
   const url = `${SITE_ORIGIN}/ciudad/${city.slug}`;
   const title = `Qué visitar en ${city.name}: ruta turística con IA — RandomTrip`;
   const topNames = city.highlights.slice(0, 3).map((h) => h.name).join(', ');
@@ -1879,23 +1992,56 @@ function buildCityHtml(city) {
     `  <script type="application/ld+json">\n${JSON.stringify(breadcrumb)}\n  </script>\n</head>`
   );
 
-  html = html.replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, buildCitySeoBlock(city));
+  html = html.replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, buildCitySeoBlock(city, publishedList));
   return html;
 }
 
-app.get('/ciudad/:slug', (req, res, next) => {
+app.get('/ciudad/:slug', async (req, res, next) => {
   const city = CITY_BY_SLUG[req.params.slug];
   if (!city) return next(); // unknown city → fall through to SPA catch-all
   try {
-    res.type('html').send(buildCityHtml(city));
+    const publishedList = await getPublishedListCached();
+    res.type('html').send(buildCityHtml(city, publishedList));
   } catch (err) {
     console.error('[ciudad] render failed:', err.message);
     next();
   }
 });
 
-// Dynamic sitemap generated from the city list (single source of truth).
-app.get('/sitemap.xml', (req, res) => {
+// Pre-generated variant pages (e.g. /ciudad/toledo/senderos), served from the
+// seo_pages table. Unknown variant slugs fall through to the SPA; a known
+// variant without a published row returns an explicit 404 (never a soft-404)
+// so Google doesn't index half-empty pages.
+app.get('/ciudad/:slug/:variant', async (req, res, next) => {
+  const city = CITY_BY_SLUG[req.params.slug];
+  const pageType = PAGE_TYPE_BY_URL_SLUG[req.params.variant];
+  if (!city || !pageType) return next();
+  try {
+    const cacheKey = `seopage:${city.slug}:${pageType}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return res.type('html').send(cached);
+
+    const page = await getPublishedPage(city.slug, pageType);
+    if (!page) return res.status(404).type('html').send(readIndexHtml());
+
+    const publishedList = await getPublishedListCached();
+    const links = buildSiblingLinks(city, pageType, publishedList);
+    const html = buildVariantHtml(readIndexHtml(), city, page, links);
+    cacheSet(cacheKey, html);
+    res.type('html').send(html);
+  } catch (err) {
+    console.error('[ciudad/variant] render failed:', err.message);
+    next();
+  }
+});
+
+// Dynamic sitemap: hand-written city pages (cityData.js) + published
+// pre-generated variant pages (seo_pages). Rejected variants never appear.
+app.get('/sitemap.xml', async (req, res) => {
+  const cachedXml = cacheGet('sitemap:xml');
+  if (cachedXml) return res.type('application/xml').send(cachedXml);
+
+  const publishedList = await getPublishedListCached();
   const urls = [
     { loc: `${SITE_ORIGIN}/`, changefreq: 'weekly', priority: '1.0' },
     ...CITIES.map((c) => ({
@@ -1903,13 +2049,21 @@ app.get('/sitemap.xml', (req, res) => {
       changefreq: 'monthly',
       priority: '0.8',
     })),
+    ...publishedList
+      .filter((p) => PAGE_TYPES[p.page_type] && CITY_BY_SLUG[p.city_slug])
+      .map((p) => ({
+        loc: `${SITE_ORIGIN}/ciudad/${p.city_slug}/${PAGE_TYPES[p.page_type].urlSlug}`,
+        changefreq: 'monthly',
+        priority: '0.7',
+        lastmod: p.updated_at ? new Date(p.updated_at).toISOString().slice(0, 10) : null,
+      })),
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
   .map(
     (u) => `  <url>
-    <loc>${u.loc}</loc>
+    <loc>${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${u.lastmod}</lastmod>` : ''}
     <changefreq>${u.changefreq}</changefreq>
     <priority>${u.priority}</priority>
   </url>`
@@ -1917,6 +2071,7 @@ ${urls
   .join('\n')}
 </urlset>
 `;
+  cacheSet('sitemap:xml', body);
   res.type('application/xml').send(body);
 });
 
@@ -1932,6 +2087,20 @@ app.get('*', (req, res) => {
 // Start server
 async function startServer() {
   await initDatabase();
+
+  // The SEO page builders inject metadata into index.html via regex
+  // replacement. If the head markup changes shape, replacements silently
+  // no-op and every /ciudad page ships with the homepage's title/canonical —
+  // catch that here instead of in Search Console weeks later.
+  try {
+    const missing = assertIndexPatterns(readIndexHtml());
+    if (missing.length) {
+      console.error(`[SEO][ALERT] index.html ya no casa con los patrones: ${missing.join(', ')}. Las páginas /ciudad/* saldrán con metadatos del home hasta arreglarlo.`);
+    }
+  } catch (e) {
+    console.warn('[SEO] No se pudo verificar index.html:', e.message);
+  }
+
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
@@ -1946,4 +2115,21 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only listen when run directly (`node server.js`); requiring this module is
+// side-effect-free so scripts/generateSeoPages.js can reuse the data pipeline.
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  getOverpassPOIs,
+  getOverpassFoodPOIs,
+  fetchHikingTrails,
+  selectPOIsForTheme,
+  sortByProximity,
+  estimateRouteDistance,
+  getDescriptionsFromLLM,
+  fetchAllPOIImages,
+  fetchExternal,
+  parseLLMJsonSafe,
+};

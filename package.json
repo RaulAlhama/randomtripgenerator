@@ -8,7 +8,9 @@
     "dev": "node server.js",
     "client:dev": "cd client && npm run dev",
     "client:build": "cd client && npm run build",
-    "build": "cd client && npm install && npm run build"
+    "build": "cd client && npm install && npm run build",
+    "seo:generate": "node scripts/generateSeoPages.js",
+    "seo:status": "node scripts/generateSeoPages.js --status"
   },
   "engines": {
     "node": ">=20"
