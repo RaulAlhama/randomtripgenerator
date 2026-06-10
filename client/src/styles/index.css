@@ -2175,6 +2175,37 @@ main {
 }
 
 /* ========== HOW IT WORKS ========== */
+/* ========== LANDING ENTRANCE ANIMATION ========== */
+/* Subtle fade-up on the landing blocks. Uses fill-mode `backwards` so the
+   element reverts to its normal styles after playing — this keeps card
+   hover transforms working and never leaves content stuck invisible.
+   Fully disabled for users who prefer reduced motion. */
+@keyframes rt-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-content { animation: rt-fade-up 600ms var(--ease) backwards; }
+.hero-preview { animation: rt-fade-up 600ms var(--ease) 140ms backwards; }
+.how-it-works { animation: rt-fade-up 600ms var(--ease) backwards; }
+.inspiration-section { animation: rt-fade-up 600ms var(--ease) backwards; }
+
+.trust-band-item { animation: rt-fade-up 520ms var(--ease) backwards; }
+.trust-band-item:nth-child(1) { animation-delay: 60ms; }
+.trust-band-item:nth-child(2) { animation-delay: 130ms; }
+.trust-band-item:nth-child(3) { animation-delay: 200ms; }
+.trust-band-item:nth-child(4) { animation-delay: 270ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-content,
+  .hero-preview,
+  .how-it-works,
+  .inspiration-section,
+  .trust-band-item {
+    animation: none;
+  }
+}
+
 /* ========== TRUST / CREDIBILITY BAND ========== */
 .trust-band {
   width: 100%;
