@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { TripProvider, useTrip } from './context/TripContext';
@@ -13,21 +14,30 @@ import InspirationCarousel from './components/carousel/InspirationCarousel';
 import TripResult from './components/trip/TripResult';
 import MyTrips from './components/trips/MyTrips';
 import Toast from './components/ui/Toast';
+import ExploreMode from './components/explore/ExploreMode';
+import './styles/explore.css';
 
 function AppShell() {
   const { currentTrip, isGenerating } = useTrip();
+  const [exploreOpen, setExploreOpen] = useState(false);
   const hasActiveTrip = Boolean(currentTrip || isGenerating);
 
   return (
-    <div className={`container${hasActiveTrip ? ' has-trip' : ''}`}>
+    <div className={`container${hasActiveTrip && !exploreOpen ? ' has-trip' : ''}`}>
       <Header />
       <main>
-        <Hero />
-        <StatusCard />
-        <ErrorBoundary>
-          <TripResult />
-        </ErrorBoundary>
-        {!hasActiveTrip && (
+        <Hero onExplore={() => setExploreOpen(true)} />
+        {/* While explore mode is open it owns the trip state — keep the
+            page-level trip UI unmounted so two Leaflet maps never coexist. */}
+        {!exploreOpen && (
+          <>
+            <StatusCard />
+            <ErrorBoundary>
+              <TripResult />
+            </ErrorBoundary>
+          </>
+        )}
+        {(!hasActiveTrip || exploreOpen) && (
           <>
             <TrustBand />
             <HowItWorks />
@@ -37,6 +47,11 @@ function AppShell() {
         )}
       </main>
       <Footer />
+      {exploreOpen && (
+        <ErrorBoundary>
+          <ExploreMode onClose={() => setExploreOpen(false)} />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }
