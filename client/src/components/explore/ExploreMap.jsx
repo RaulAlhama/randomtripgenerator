@@ -116,7 +116,7 @@ export default function ExploreMap({
           <GeoJSON
             key={JSON.stringify(routeGeometry).length}
             data={routeGeoJSON}
-            style={{ color: '#0e6b62', weight: 5, opacity: 0.85 }}
+            style={{ color: '#3f6a64', weight: 5, opacity: 0.85 }}
           />
         )}
       </MapContainer>

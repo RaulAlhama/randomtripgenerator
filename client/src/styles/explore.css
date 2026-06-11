@@ -125,7 +125,7 @@
   background: var(--primary);
   border-color: var(--primary);
   color: var(--text-on-primary);
-  box-shadow: 0 6px 18px rgba(14, 107, 98, 0.35);
+  box-shadow: 0 4px 14px rgba(20, 35, 33, 0.20);
 }
 
 /* ---------- Map markers ---------- */
@@ -134,7 +134,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--secondary, #0e6b62);
+  background: var(--secondary, #3f6a64);
   border: 3px solid #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
@@ -143,7 +143,7 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  border: 2px solid var(--secondary, #0e6b62);
+  border: 2px solid var(--secondary, #3f6a64);
   animation: xp-pulse 2.2s ease-out infinite;
 }
 
@@ -170,12 +170,12 @@
 
 .xp-pin.is-on {
   opacity: 1;
-  border-color: var(--primary, #0e6b62);
-  box-shadow: 0 5px 16px rgba(14, 107, 98, 0.4);
+  border-color: var(--primary, #3f6a64);
+  box-shadow: 0 4px 12px rgba(20, 35, 33, 0.30);
 }
 
 .xp-pin.is-num {
-  background: linear-gradient(135deg, #0a4f48 0%, #0e6b62 60%, #23a08e 130%);
+  background: linear-gradient(135deg, #35584f 0%, #466f68 100%);
   border-color: #fff;
   color: #fff;
   font-weight: 800;
@@ -274,7 +274,7 @@
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--grad-ocean);
-  box-shadow: 0 0 0 5px var(--primary-soft), 0 4px 14px rgba(14, 107, 98, 0.45);
+  box-shadow: 0 0 0 5px var(--primary-soft), 0 4px 14px rgba(63, 106, 100,0.45);
 }
 
 /* ---------- Bottom sheet ---------- */
@@ -401,7 +401,7 @@
   letter-spacing: 0.01em;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 10px 26px rgba(14, 107, 98, 0.35);
+  box-shadow: 0 8px 22px rgba(20, 35, 33, 0.20);
   transition: var(--transition);
 }
 
@@ -466,8 +466,8 @@
 }
 
 .xp-card.is-on {
-  border-color: rgba(14, 107, 98, 0.45);
-  box-shadow: 0 4px 16px rgba(14, 107, 98, 0.10);
+  border-color: rgba(63, 106, 100,0.45);
+  box-shadow: 0 4px 16px rgba(63, 106, 100,0.10);
 }
 
 .xp-card.is-flash {
@@ -475,7 +475,7 @@
 }
 
 @keyframes xp-flash {
-  0%, 60% { box-shadow: 0 0 0 3px var(--ring), 0 8px 24px rgba(14, 107, 98, 0.25); }
+  0%, 60% { box-shadow: 0 0 0 3px var(--ring), 0 8px 24px rgba(63, 106, 100,0.25); }
   100% { box-shadow: none; }
 }
 
@@ -658,7 +658,7 @@
   left: 8px;
   padding: 3px 9px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #f0b95c, #d98a24);
+  background: linear-gradient(135deg, #ddae66, #c98c3f);
   color: #fff;
   font-size: 0.64rem;
   font-weight: 800;
@@ -730,7 +730,7 @@
   bottom: -6px;
   width: 2px;
   border-radius: 2px;
-  background: linear-gradient(to bottom, rgba(14, 107, 98, 0.4), rgba(14, 107, 98, 0.08));
+  background: linear-gradient(to bottom, rgba(63, 106, 100,0.4), rgba(63, 106, 100,0.08));
 }
 
 .xp-stop-num {
@@ -812,27 +812,13 @@
   text-align: left;
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 14px 34px rgba(14, 107, 98, 0.32);
+  box-shadow: 0 8px 24px rgba(20, 35, 33, 0.18);
   transition: var(--transition);
   position: relative;
   overflow: hidden;
 }
 
-.explore-cta::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.18) 50%, transparent 60%);
-  transform: translateX(-100%);
-  animation: xp-shine 4.5s ease-in-out infinite;
-}
-
-@keyframes xp-shine {
-  0%, 70% { transform: translateX(-100%); }
-  85%, 100% { transform: translateX(100%); }
-}
-
-.explore-cta:hover { transform: translateY(-2px); box-shadow: 0 18px 42px rgba(14, 107, 98, 0.4); }
+.explore-cta:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(20, 35, 33, 0.24); }
 .explore-cta:active { transform: translateY(0); }
 
 .explore-cta-dot {
@@ -880,12 +866,34 @@
 
 .explore-cta:hover .explore-cta-arrow { transform: translateX(4px); }
 
+/* Quiet disclosure for the full planner — keeps the landing to one action. */
+.planner-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 18px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.planner-toggle:hover { color: var(--text); background: var(--bg-subtle); }
+
+.planner-toggle-chevron { transition: transform 200ms var(--ease); }
+.planner-toggle-chevron.is-open { transform: rotate(180deg); }
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .xp-overlay,
   .xp-sheet,
   .xp-card.is-flash,
-  .explore-cta::after,
   .explore-cta-dot::after,
   .xp-user-dot span,
   .xp-radar span {

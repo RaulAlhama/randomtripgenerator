@@ -17,10 +17,10 @@
 
   /* Secondary tracks the same teal family — the UI carries a single accent;
      surfaces stay neutral so the map and photos do the talking. */
-  --secondary: #0e6b62;
-  --secondary-hover: #0a554e;
-  --secondary-soft: rgba(14, 107, 98, 0.09);
-  --secondary-soft-hover: rgba(14, 107, 98, 0.15);
+  --secondary: #3f6a64;
+  --secondary-hover: #35584f;
+  --secondary-soft: rgba(63, 106, 100, 0.09);
+  --secondary-soft-hover: rgba(63, 106, 100, 0.15);
 
   /* Neutral cool-gray fills for chips, numerals and badges that don't need
      to compete with the primary CTA for attention. */
@@ -28,7 +28,7 @@
   --ink-soft-strong: rgba(14, 30, 33, 0.09);
 
   /* Gradients */
-  --grad-ocean: linear-gradient(135deg, #0a4f48 0%, #0e6b62 55%, #23a08e 100%);
+  --grad-ocean: linear-gradient(135deg, #35584f 0%, #466f68 100%);
   --grad-sunset: linear-gradient(135deg, #eaaa50 0%, #d05c28 55%, #9b2226 100%);
   --grad-forest: linear-gradient(135deg, #166534 0%, #22c55e 60%, #a7f3d0 100%);
   --grad-dawn: linear-gradient(135deg, #fde68a 0%, #fca5a5 55%, #c4b5fd 100%);
@@ -51,15 +51,15 @@
   --border: rgba(14, 30, 33, 0.09);
   --border-strong: rgba(14, 30, 33, 0.14);
 
-  --primary: #0e6b62;
-  --primary-hover: #0a554e;
-  --primary-soft: rgba(14, 107, 98, 0.08);
-  --primary-soft-hover: rgba(14, 107, 98, 0.14);
-  --accent: #eaaa50;
+  --primary: #3f6a64;
+  --primary-hover: #35584f;
+  --primary-soft: rgba(63, 106, 100, 0.08);
+  --primary-soft-hover: rgba(63, 106, 100, 0.14);
+  --accent: #dcae6b;
   --success: #4a7c59;
   --warning: #c87941;
   --danger: #c0392b;
-  --ring: rgba(14, 107, 98, 0.20);
+  --ring: rgba(63, 106, 100, 0.20);
 
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -100,26 +100,26 @@
   --border: rgba(210, 235, 240, 0.08);
   --border-strong: rgba(210, 235, 240, 0.14);
 
-  --primary: #17a08f;
-  --primary-hover: #1db5a2;
-  --primary-soft: rgba(23, 160, 143, 0.13);
-  --primary-soft-hover: rgba(23, 160, 143, 0.22);
+  --primary: #5e9189;
+  --primary-hover: #6ea39a;
+  --primary-soft: rgba(94, 145, 137, 0.14);
+  --primary-soft-hover: rgba(94, 145, 137, 0.22);
   --accent: #d9a466;
 
-  --secondary: #4ab8a9;
-  --secondary-hover: #5cccbc;
-  --secondary-soft: rgba(74, 184, 169, 0.12);
-  --secondary-soft-hover: rgba(74, 184, 169, 0.20);
+  --secondary: #5e9189;
+  --secondary-hover: #6ea39a;
+  --secondary-soft: rgba(94, 145, 137, 0.12);
+  --secondary-soft-hover: rgba(94, 145, 137, 0.20);
 
   --ink-soft: rgba(210, 235, 240, 0.06);
   --ink-soft-strong: rgba(210, 235, 240, 0.11);
   --success: #60b070;
   --warning: #d49050;
   --danger: #d65858;
-  --ring: rgba(23, 160, 143, 0.20);
+  --ring: rgba(94, 145, 137, 0.20);
 
-  /* Brighter teal sweep so gradient CTAs don't sink into the dark bg. */
-  --grad-ocean: linear-gradient(135deg, #0d5d54 0%, #128778 55%, #2cbfab 100%);
+  /* Slightly lighter sweep so flat CTAs don't sink into the dark bg. */
+  --grad-ocean: linear-gradient(135deg, #3a5f59 0%, #527e76 100%);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -143,14 +143,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 300ms ease, color 300ms ease;
   background-image:
-    radial-gradient(900px 600px at 80% 0%, rgba(14, 107, 98, 0.05), transparent 55%),
+    radial-gradient(900px 600px at 80% 0%, rgba(63, 106, 100, 0.05), transparent 55%),
     radial-gradient(700px 500px at 10% 60%, rgba(100, 116, 139, 0.04), transparent 55%);
   background-attachment: fixed;
 }
 
 [data-theme="dark"] body {
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, rgba(44, 191, 171, 0.04), transparent 60%),
+    radial-gradient(1200px 600px at 85% -10%, rgba(94, 145, 137, 0.04), transparent 60%),
     radial-gradient(900px 500px at -10% 20%, rgba(96, 140, 160, 0.03), transparent 60%);
 }
 
@@ -1065,11 +1065,11 @@ main {
 @keyframes btn-glow-pulse {
   0%, 100% {
     box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(15,28,32,0.10),
-                0 0 0 0px rgba(14, 107, 98, 0.50);
+                0 0 0 0px rgba(63, 106, 100, 0.35);
   }
   55% {
     box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(15,28,32,0.10),
-                0 0 0 9px rgba(14, 107, 98, 0);
+                0 0 0 9px rgba(63, 106, 100, 0);
   }
 }
 .btn-glow:not(:disabled) { animation: btn-glow-pulse 2.4s ease-in-out infinite; }
@@ -3949,7 +3949,7 @@ main {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--primary, #0e6b62);
+  background: var(--primary, #3f6a64);
   color: #fff;
   border: 2px solid var(--bg-elevated);
   display: flex;
