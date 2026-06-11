@@ -1755,8 +1755,18 @@ app.get('/api/restaurants', async (req, res) => {
 
     const results = Array.isArray(data.results) ? data.results : [];
 
+    // Google matches type=restaurant against ANY of a place's types, so big
+    // venues with food service inside (stadiums, hotels, malls…) sneak in.
+    // If a result also carries one of these types, it's not a restaurant.
+    const NON_RESTAURANT_TYPES = new Set([
+      'stadium', 'lodging', 'shopping_mall', 'movie_theater', 'casino',
+      'bowling_alley', 'amusement_park', 'night_club', 'gym',
+      'department_store', 'supermarket', 'gas_station', 'tourist_attraction'
+    ]);
+
     const ranked = results
       .filter(r => typeof r.rating === 'number' && (r.user_ratings_total || 0) >= 20)
+      .filter(r => !(r.types || []).some(t => NON_RESTAURANT_TYPES.has(t)))
       .sort((a, b) => {
         if (b.rating !== a.rating) return b.rating - a.rating;
         return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
