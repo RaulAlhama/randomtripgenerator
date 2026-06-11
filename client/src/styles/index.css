@@ -2,7 +2,8 @@
 
 /* ========== DESIGN TOKENS ========== */
 :root {
-  /* Brand palette — warm travel */
+  /* Legacy warm swatches — kept only for content imagery (trip covers) and
+     rating stars. Chrome/UI must not use these. */
   --terra-300: #f2a07c;
   --terra-400: #e8784a;
   --terra-500: #d05c28;
@@ -14,51 +15,51 @@
   --amber-500: #eaaa50;
   --rose-400: #e07080;
 
-  /* Cool counterpoint — used for muted "active" states and the eyebrow tag
-     so the warm palette has a chromatic partner to breathe against. */
+  /* Secondary tracks the same teal family — the UI carries a single accent;
+     surfaces stay neutral so the map and photos do the talking. */
   --secondary: #0e6b62;
   --secondary-hover: #0a554e;
   --secondary-soft: rgba(14, 107, 98, 0.09);
   --secondary-soft-hover: rgba(14, 107, 98, 0.15);
 
-  /* Neutral warm-gray fills for chips, numerals and badges that don't need
+  /* Neutral cool-gray fills for chips, numerals and badges that don't need
      to compete with the primary CTA for attention. */
-  --ink-soft: rgba(30, 18, 8, 0.06);
-  --ink-soft-strong: rgba(30, 18, 8, 0.10);
+  --ink-soft: rgba(14, 30, 33, 0.05);
+  --ink-soft-strong: rgba(14, 30, 33, 0.09);
 
   /* Gradients */
-  --grad-ocean: linear-gradient(135deg, #ab4618 0%, #d05c28 55%, #eaaa50 100%);
+  --grad-ocean: linear-gradient(135deg, #0a4f48 0%, #0e6b62 55%, #23a08e 100%);
   --grad-sunset: linear-gradient(135deg, #eaaa50 0%, #d05c28 55%, #9b2226 100%);
   --grad-forest: linear-gradient(135deg, #166534 0%, #22c55e 60%, #a7f3d0 100%);
   --grad-dawn: linear-gradient(135deg, #fde68a 0%, #fca5a5 55%, #c4b5fd 100%);
   --grad-night: linear-gradient(135deg, #0b1437 0%, #1e3a8a 55%, #d05c28 100%);
 
   /* Light theme */
-  --bg: #fdfaf5;
+  --bg: #f7f9fa;
   --bg-elevated: #ffffff;
-  --bg-muted: #f5efe3;
+  --bg-muted: #eef2f3;
   --bg-card: #ffffff;
-  --bg-subtle: rgba(30, 18, 8, 0.03);
-  --bg-glass: rgba(255, 254, 251, 0.80);
-  --bg-glass-strong: rgba(255, 254, 251, 0.95);
+  --bg-subtle: rgba(14, 30, 33, 0.03);
+  --bg-glass: rgba(252, 254, 254, 0.82);
+  --bg-glass-strong: rgba(252, 254, 254, 0.95);
 
-  --text: #1c1008;
-  --text-secondary: #5c3d28;
-  --text-muted: #a0826a;
+  --text: #15232a;
+  --text-secondary: #45565f;
+  --text-muted: #7e8d94;
   --text-on-primary: #ffffff;
 
-  --border: rgba(30, 18, 8, 0.08);
-  --border-strong: rgba(30, 18, 8, 0.13);
+  --border: rgba(14, 30, 33, 0.09);
+  --border-strong: rgba(14, 30, 33, 0.14);
 
-  --primary: #d05c28;
-  --primary-hover: #b84c1c;
-  --primary-soft: rgba(208, 92, 40, 0.09);
-  --primary-soft-hover: rgba(208, 92, 40, 0.15);
+  --primary: #0e6b62;
+  --primary-hover: #0a554e;
+  --primary-soft: rgba(14, 107, 98, 0.08);
+  --primary-soft-hover: rgba(14, 107, 98, 0.14);
   --accent: #eaaa50;
   --success: #4a7c59;
   --warning: #c87941;
   --danger: #c0392b;
-  --ring: rgba(208, 92, 40, 0.20);
+  --ring: rgba(14, 107, 98, 0.20);
 
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -83,26 +84,26 @@
 }
 
 [data-theme="dark"] {
-  --bg: #14120f;
-  --bg-elevated: #1d1a16;
-  --bg-muted: #25211c;
-  --bg-card: #1d1a16;
-  --bg-subtle: rgba(245, 230, 210, 0.04);
-  --bg-glass: rgba(20, 18, 15, 0.70);
-  --bg-glass-strong: rgba(20, 18, 15, 0.92);
+  --bg: #10161a;
+  --bg-elevated: #171f24;
+  --bg-muted: #1e272c;
+  --bg-card: #171f24;
+  --bg-subtle: rgba(210, 235, 235, 0.04);
+  --bg-glass: rgba(16, 22, 26, 0.72);
+  --bg-glass-strong: rgba(16, 22, 26, 0.92);
 
-  --text: #f0eae0;
-  --text-secondary: #c7bdae;
-  --text-muted: #86796a;
+  --text: #e6ecee;
+  --text-secondary: #aab9bf;
+  --text-muted: #74858c;
   --text-on-primary: #ffffff;
 
-  --border: rgba(240, 220, 190, 0.08);
-  --border-strong: rgba(240, 220, 190, 0.14);
+  --border: rgba(210, 235, 240, 0.08);
+  --border-strong: rgba(210, 235, 240, 0.14);
 
-  --primary: #d86838;
-  --primary-hover: #e87a48;
-  --primary-soft: rgba(216, 104, 56, 0.12);
-  --primary-soft-hover: rgba(216, 104, 56, 0.20);
+  --primary: #17a08f;
+  --primary-hover: #1db5a2;
+  --primary-soft: rgba(23, 160, 143, 0.13);
+  --primary-soft-hover: rgba(23, 160, 143, 0.22);
   --accent: #d9a466;
 
   --secondary: #4ab8a9;
@@ -110,12 +111,15 @@
   --secondary-soft: rgba(74, 184, 169, 0.12);
   --secondary-soft-hover: rgba(74, 184, 169, 0.20);
 
-  --ink-soft: rgba(240, 220, 190, 0.06);
-  --ink-soft-strong: rgba(240, 220, 190, 0.11);
+  --ink-soft: rgba(210, 235, 240, 0.06);
+  --ink-soft-strong: rgba(210, 235, 240, 0.11);
   --success: #60b070;
   --warning: #d49050;
   --danger: #d65858;
-  --ring: rgba(216, 104, 56, 0.18);
+  --ring: rgba(23, 160, 143, 0.20);
+
+  /* Brighter teal sweep so gradient CTAs don't sink into the dark bg. */
+  --grad-ocean: linear-gradient(135deg, #0d5d54 0%, #128778 55%, #2cbfab 100%);
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -139,15 +143,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 300ms ease, color 300ms ease;
   background-image:
-    radial-gradient(900px 600px at 80% 0%, rgba(208, 92, 40, 0.06), transparent 55%),
-    radial-gradient(700px 500px at 10% 60%, rgba(234, 170, 80, 0.05), transparent 55%);
+    radial-gradient(900px 600px at 80% 0%, rgba(14, 107, 98, 0.05), transparent 55%),
+    radial-gradient(700px 500px at 10% 60%, rgba(100, 116, 139, 0.04), transparent 55%);
   background-attachment: fixed;
 }
 
 [data-theme="dark"] body {
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, rgba(224, 90, 32, 0.04), transparent 60%),
-    radial-gradient(900px 500px at -10% 20%, rgba(240, 184, 96, 0.03), transparent 60%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(44, 191, 171, 0.04), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(96, 140, 160, 0.03), transparent 60%);
 }
 
 ::selection { background: var(--primary-soft-hover); color: var(--text); }
@@ -193,7 +197,7 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 3px 8px rgba(30, 18, 8, 0.22));
+  filter: drop-shadow(0 3px 8px rgba(15, 28, 32, 0.22));
   transition: transform 220ms var(--ease);
 }
 
@@ -547,7 +551,7 @@ main {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-xl);
-  box-shadow: 0 2px 8px rgba(30, 18, 8, 0.06), 0 12px 40px rgba(30, 18, 8, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 28, 32, 0.06), 0 12px 40px rgba(15, 28, 32, 0.08);
   overflow: hidden;
   animation: card-in 600ms var(--ease) both;
   text-align: left;
@@ -1035,7 +1039,7 @@ main {
 .btn-primary {
   background: var(--primary);
   color: var(--text-on-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(30, 18, 8, 0.10);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(15, 28, 32, 0.10);
   position: relative;
   overflow: hidden;
 }
@@ -1053,19 +1057,19 @@ main {
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(30, 18, 8, 0.14);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(15, 28, 32, 0.14);
 }
 .btn-primary:hover:not(:disabled)::before { opacity: 1; }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @keyframes btn-glow-pulse {
   0%, 100% {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(30,18,8,0.10),
-                0 0 0 0px rgba(208, 92, 40, 0.50);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(15,28,32,0.10),
+                0 0 0 0px rgba(14, 107, 98, 0.50);
   }
   55% {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(30,18,8,0.10),
-                0 0 0 9px rgba(208, 92, 40, 0);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 12px rgba(15,28,32,0.10),
+                0 0 0 9px rgba(14, 107, 98, 0);
   }
 }
 .btn-glow:not(:disabled) { animation: btn-glow-pulse 2.4s ease-in-out infinite; }
@@ -3945,7 +3949,7 @@ main {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--primary, #d05c28);
+  background: var(--primary, #0e6b62);
   color: #fff;
   border: 2px solid var(--bg-elevated);
   display: flex;
