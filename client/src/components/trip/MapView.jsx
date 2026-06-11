@@ -15,11 +15,11 @@ const SAC_COLORS = {
   5: '#dc2626', // T5 demanding alpine
   6: '#7f1d1d', // T6 difficult alpine
 };
-const SAC_DEFAULT_COLOR = '#0e6b62';
+const SAC_DEFAULT_COLOR = '#3f6a64';
 
 const ROUTE_COLORS = {
   driving: '#6366f1',
-  walking: '#10b981',
+  walking: '#3f6a64',
   cycling: '#f59e0b',
 };
 

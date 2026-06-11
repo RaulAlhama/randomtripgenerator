@@ -115,6 +115,9 @@ function HeroMockup() {
 
 export default function Hero({ onExplore }) {
   const [activeTab, setActiveTab] = useState('route');
+  // The planner is the power tool, not the front door: keep it folded so the
+  // landing presents a single action instead of a wall of controls.
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
   return (
     <section className="hero">
@@ -141,19 +144,35 @@ export default function Hero({ onExplore }) {
             </svg>
           </button>
 
-          <Tabs activeTab={activeTab} onChange={setActiveTab} />
+          <button
+            type="button"
+            className="planner-toggle"
+            aria-expanded={plannerOpen}
+            onClick={() => setPlannerOpen((o) => !o)}
+          >
+            ¿Prefieres planificar otra ciudad o buscar senderos?
+            <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
 
-          <div className="search-form">
-            <div className="tab-panel" hidden={activeTab !== 'route'}>
-              <RouteTab />
-            </div>
-            <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
-              <RestaurantsTab />
-            </div>
-            <div className="tab-panel" hidden={activeTab !== 'hiking'}>
-              <HikingTab />
-            </div>
-          </div>
+          {plannerOpen && (
+            <>
+              <Tabs activeTab={activeTab} onChange={setActiveTab} />
+
+              <div className="search-form">
+                <div className="tab-panel" hidden={activeTab !== 'route'}>
+                  <RouteTab />
+                </div>
+                <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
+                  <RestaurantsTab />
+                </div>
+                <div className="tab-panel" hidden={activeTab !== 'hiking'}>
+                  <HikingTab />
+                </div>
+              </div>
+            </>
+          )}
 
           <TrustRow />
         </div>
