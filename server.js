@@ -568,7 +568,7 @@ async function getCityFromCoords(lat, lng) {
 // Map Overpass types to our display types
 const OVERPASS_TYPE_MAP = {
   attraction: 'monument', museum: 'museum', viewpoint: 'viewpoint', artwork: 'monument',
-  gallery: 'museum', information: 'viewpoint', castle: 'palace', ruins: 'historic',
+  gallery: 'museum', castle: 'palace', ruins: 'historic',
   monument: 'monument', memorial: 'monument', archaeological_site: 'historic',
   church: 'church', monastery: 'church', chapel: 'church', cathedral: 'church',
   place_of_worship: 'church', restaurant: 'restaurant', cafe: 'restaurant',
@@ -611,7 +611,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
     } else {
       // Detailed query for walking - catch everything nearby
       query = `[out:json][timeout:${timeout}];(
-        node["tourism"~"attraction|museum|viewpoint|artwork|gallery|information"](around:${radiusMeters},${lat},${lng});
+        node["tourism"~"attraction|museum|viewpoint|artwork|gallery"](around:${radiusMeters},${lat},${lng});
         node["historic"](around:${radiusMeters},${lat},${lng});
         node["amenity"~"marketplace|place_of_worship|fountain"](around:${radiusMeters},${lat},${lng});
         node["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
@@ -637,7 +637,9 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
     // Restaurants tab; theaters/cinemas only matter when there's a show.
     const SKIP_TYPES = new Set([
       'restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'biergarten', 'ice_cream',
-      'theatre', 'cinema', 'nightclub'
+      'theatre', 'cinema', 'nightclub',
+      // Tourist info offices / ticket shops are services, not sights.
+      'information'
     ]);
 
     const pois = data.elements
