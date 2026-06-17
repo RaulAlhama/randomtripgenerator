@@ -2,7 +2,6 @@ import { useState } from 'react';
 import Tabs from './Tabs';
 import RouteTab from './RouteTab';
 import RestaurantsTab from './RestaurantsTab';
-import HikingTab from './HikingTab';
 
 function HeroDecor() {
   return (
@@ -133,15 +132,19 @@ export default function Hero({ onExplore }) {
             mundo. Generadas con IA en segundos. Gratis y sin registro.
           </p>
 
-          <button type="button" className="explore-cta" onClick={onExplore}>
+          <button type="button" className="explore-cta" onClick={() => onExplore('sitios')}>
             <span className="explore-cta-dot" aria-hidden="true" />
             <span className="explore-cta-text">
-              <strong>Explora ahora</strong>
-              <small>Sitios y restaurantes a tu alrededor, sin configurar nada</small>
+              <strong>Generar mi ruta</strong>
+              <small>Sitios cerca de ti ahora mismo, sin configurar nada</small>
             </span>
             <svg className="explore-cta-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
+          </button>
+
+          <button type="button" className="explore-cta-secondary" onClick={() => onExplore('restaurantes')}>
+            <span aria-hidden="true">🍴</span> Restaurantes cerca
           </button>
 
           <button
@@ -150,7 +153,7 @@ export default function Hero({ onExplore }) {
             aria-expanded={plannerOpen}
             onClick={() => setPlannerOpen((o) => !o)}
           >
-            ¿Prefieres planificar otra ciudad o buscar senderos?
+            ¿Prefieres planificar otra ciudad?
             <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -166,9 +169,6 @@ export default function Hero({ onExplore }) {
                 </div>
                 <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
                   <RestaurantsTab />
-                </div>
-                <div className="tab-panel" hidden={activeTab !== 'hiking'}>
-                  <HikingTab />
                 </div>
               </div>
             </>
