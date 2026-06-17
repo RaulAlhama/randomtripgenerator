@@ -1385,21 +1385,36 @@ app.get('/api/search-city', async (req, res) => {
 // Tries Google Places (if key configured) first for food POIs, then falls back to
 // our Wikipedia/Wikidata/Commons resolver. The resolver validates title match so
 // we don't return images from unrelated places with similar names.
+// Google text search matches any place with a similar name, so for a sight
+// it can return a nearby hospital, shop or hotel — and then a user snapshot
+// (a balcony view, a shop interior) as its photo. Reject the match when its
+// types say it isn't the sight we asked for, and fall back to Wikipedia.
+const NON_SIGHT_PHOTO_TYPES = new Set([
+  'hospital', 'doctor', 'pharmacy', 'dentist', 'health',
+  'lodging', 'store', 'supermarket', 'convenience_store', 'clothing_store',
+  'shoe_store', 'furniture_store', 'home_goods_store', 'department_store',
+  'shopping_mall', 'bank', 'atm', 'gas_station', 'car_repair', 'car_dealer',
+  'parking', 'school', 'primary_school', 'secondary_school', 'real_estate_agency'
+]);
+
 app.get('/api/place-image', async (req, res) => {
-  const { name, city } = req.query;
+  const { name, city, type } = req.query;
   if (!name) return res.json({ url: null });
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  const isFood = type === 'restaurant';
 
-  // 1. Try Google Places first for any POI — its photos match the actual place
-  //    most precisely. Wikipedia/Commons is the fallback below.
+  // 1. Google Places: precise photos for restaurants. For sights we accept its
+  //    photo only when the matched place isn't a hospital/shop/hotel/etc.
   if (apiKey) {
     try {
       const query = encodeURIComponent(`${name} ${city || ''}`);
       const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
       const data = await fetchExternal(searchUrl);
-      const photoRef = data.results?.[0]?.photos?.[0]?.photo_reference;
-      if (photoRef) {
+      const top = data.results?.[0];
+      const photoRef = top?.photos?.[0]?.photo_reference;
+      const typesOk = isFood || !(top?.types || []).some((t) => NON_SIGHT_PHOTO_TYPES.has(t));
+      if (photoRef && typesOk) {
         const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
         const cdnUrl = await followRedirect(photoApiUrl);
         if (cdnUrl) return res.json({ url: cdnUrl, source: 'google' });
