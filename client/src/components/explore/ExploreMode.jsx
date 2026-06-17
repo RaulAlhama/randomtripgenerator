@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTrip, formatDuration } from '../../context/TripContext';
 import { fetchRestaurants } from '../../services/api';
-import { THEMES } from '../../constants/themes';
 import ExploreMap from './ExploreMap';
 import ExploreSheet from './ExploreSheet';
-import SpotCard from './SpotCard';
+import ExploreDeck from './ExploreDeck';
+import DeckPlaceCard from './DeckPlaceCard';
+import DeckRestaurantCard from './DeckRestaurantCard';
 import RestaurantStrip from './RestaurantStrip';
 
 // Explore mode assumes the user is on foot with spare time right now.
@@ -49,7 +50,7 @@ function CloseIcon() {
   );
 }
 
-export default function ExploreMode({ onClose }) {
+export default function ExploreMode({ onClose, initialView = 'sitios' }) {
   const {
     currentTrip,
     candidates,
@@ -73,22 +74,21 @@ export default function ExploreMode({ onClose }) {
   } = useTrip();
 
   const [restaurants, setRestaurants] = useState(null); // null = not fetched yet
-  const [activeTheme, setActiveTheme] = useState('mixed');
+  const [view, setView] = useState(initialView);        // 'sitios' | 'restaurantes'
+  const [deckIndex, setDeckIndex] = useState(0);
+  const [restIndex, setRestIndex] = useState(0);
   const [snap, setSnap] = useState('half');
-  const [flashKey, setFlashKey] = useState(null);
   const launchedRef = useRef(false);
-  const cardRefs = useRef({});
-  const flashTimer = useRef(null);
 
   const origin = currentTrip
     ? { lat: currentTrip.origin_lat, lng: currentTrip.origin_lng }
     : null;
 
-  const launch = useCallback((themeKey, knownOrigin) => {
+  const launch = useCallback(() => {
     clearError();
-    const loc = knownOrigin || urlLocationOverride();
+    const loc = urlLocationOverride();
     generateCandidates({
-      theme: themeKey,
+      theme: 'mixed',
       transport: 'walking',
       radius: EXPLORE_RADIUS_KM,
       ...(loc
@@ -101,11 +101,11 @@ export default function ExploreMode({ onClose }) {
   useEffect(() => {
     if (launchedRef.current) return;
     launchedRef.current = true;
-    launch('mixed');
+    launch();
   }, [launch]);
 
   // Restaurants: fetch once we know where the user is. Errors (e.g. Places
-  // not configured) just hide the strip — the core flow keeps working.
+  // not configured) just leave an empty deck — the core flow keeps working.
   useEffect(() => {
     if (!origin || restaurants !== null) return;
     fetchRestaurants(origin.lat, origin.lng, RESTAURANT_RADIUS_M)
@@ -131,23 +131,12 @@ export default function ExploreMode({ onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleClose]);
 
-  useEffect(() => () => clearTimeout(flashTimer.current), []);
-
-  const handleThemeChange = (key) => {
-    if (key === activeTheme || isGenerating) return;
-    setActiveTheme(key);
-    // Reuse the resolved origin so we don't ask the browser for GPS again.
-    launch(key, origin);
-  };
-
-  const handleSpotTap = (key) => {
-    setSnap((s) => (s === 'peek' ? 'half' : s));
-    setFlashKey(key);
-    clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlashKey(null), 1600);
-    requestAnimationFrame(() => {
-      cardRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+  // Removing a card nudges the deck to the next one — it feels like discarding.
+  const handleTogglePlace = (place) => {
+    const key = poiKey(place);
+    const wasSelected = selectedKeys.has(key);
+    toggleCandidate(key);
+    if (wasSelected) setDeckIndex((i) => Math.min(i + 1, (candidates?.length || 1) - 1));
   };
 
   // ---- Boot states (no candidates yet) ----
@@ -163,12 +152,8 @@ export default function ExploreMode({ onClose }) {
             <h2>No hemos podido explorar</h2>
             <p>{generationError}</p>
             <div className="xp-boot-actions">
-              <button type="button" className="xp-cta" onClick={() => launch(activeTheme)}>
-                Reintentar
-              </button>
-              <button type="button" className="xp-ghost-btn" onClick={handleClose}>
-                Volver al inicio
-              </button>
+              <button type="button" className="xp-cta" onClick={launch}>Reintentar</button>
+              <button type="button" className="xp-ghost-btn" onClick={handleClose}>Volver al inicio</button>
             </div>
           </div>
         ) : (
@@ -185,33 +170,15 @@ export default function ExploreMode({ onClose }) {
     );
   }
 
-  // ---- Ready: map + sheet ----
+  // ---- Ready ----
   const isRoute = stage === 'route';
-  const places = isRoute ? (currentTrip?.places || []) : candidates;
   const city = currentTrip?.city || '';
   const selectedCount = selectedKeys.size;
-  const dirUrl = isRoute && origin ? gmapsDirectionsUrl(origin, places) : null;
+  const showSitiosRoute = view === 'sitios' && isRoute;
 
-  const candidatesHeader = (
-    <>
-      <div className="xp-head-row">
-        <div className="xp-head-text">
-          <span className="xp-head-title">Cerca de ti{city ? ` · ${city}` : ''}</span>
-          <span className="xp-head-sub">
-            {candidates.length} sitios a menos de {EXPLORE_RADIUS_KM} km · toca para elegir
-          </span>
-        </div>
-      </div>
-      <button
-        type="button"
-        className="xp-cta"
-        disabled={selectedCount < 2 || isGenerating}
-        onClick={buildRouteFromSelection}
-      >
-        {isGenerating ? 'Calculando ruta…' : `Crear ruta con esto · ${selectedCount}`}
-      </button>
-    </>
-  );
+  // The route view (map + sheet) — only in 'sitios' after building.
+  const routePlaces = currentTrip?.places || [];
+  const dirUrl = origin ? gmapsDirectionsUrl(origin, routePlaces) : null;
 
   const routeHeader = (
     <>
@@ -221,7 +188,7 @@ export default function ExploreMode({ onClose }) {
           <span className="xp-head-sub">
             {routeDistance != null && `${(routeDistance / 1000).toFixed(1)} km`}
             {routeDuration != null && ` · ${formatDuration(routeDuration)} a pie`}
-            {` · ${places.length} paradas`}
+            {` · ${routePlaces.length} paradas`}
           </span>
         </div>
       </div>
@@ -231,9 +198,7 @@ export default function ExploreMode({ onClose }) {
             Empezar en Google Maps
           </a>
         )}
-        <button type="button" className="xp-ghost-btn" onClick={backToCandidates}>
-          Cambiar sitios
-        </button>
+        <button type="button" className="xp-ghost-btn" onClick={backToCandidates}>Cambiar sitios</button>
         <button type="button" className="xp-ghost-btn" onClick={shareTrip} aria-label="Compartir ruta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
@@ -246,21 +211,31 @@ export default function ExploreMode({ onClose }) {
 
   return (
     <div className="xp-overlay" role="dialog" aria-modal="true" aria-label="Explora ahora">
-      <ExploreMap
-        origin={origin}
-        places={places}
-        stage={stage}
-        selectedKeys={selectedKeys}
-        poiKey={poiKey}
-        restaurants={restaurants || []}
-        routeGeometry={isRoute ? routeGeometry : null}
-        onSpotTap={handleSpotTap}
-      />
-
+      {/* Top bar: close · segmented Sitios/Restaurantes · weather */}
       <div className="xp-top">
         <button type="button" className="xp-top-btn" onClick={handleClose} aria-label="Cerrar exploración">
           <CloseIcon />
         </button>
+
+        {!showSitiosRoute && (
+          <div className="xp-seg" role="tablist" aria-label="Vista">
+            <button
+              type="button" role="tab" aria-selected={view === 'sitios'}
+              className={`xp-seg-btn${view === 'sitios' ? ' is-on' : ''}`}
+              onClick={() => setView('sitios')}
+            >
+              Sitios
+            </button>
+            <button
+              type="button" role="tab" aria-selected={view === 'restaurantes'}
+              className={`xp-seg-btn${view === 'restaurantes' ? ' is-on' : ''}`}
+              onClick={() => setView('restaurantes')}
+            >
+              Restaurantes
+            </button>
+          </div>
+        )}
+
         <div className="xp-top-spacer" />
         {weather && (
           <div className="xp-top-pill" title={weather.desc}>
@@ -269,33 +244,22 @@ export default function ExploreMode({ onClose }) {
         )}
       </div>
 
-      {!isRoute && (
-        <div className="xp-themes" role="tablist" aria-label="Temática">
-          {THEMES.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={t.key === activeTheme}
-              className={`xp-chip${t.key === activeTheme ? ' is-on' : ''}`}
-              onClick={() => handleThemeChange(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <ExploreSheet
-        snap={snap}
-        onSnapChange={setSnap}
-        refreshing={isGenerating}
-        handle={isRoute ? routeHeader : candidatesHeader}
-      >
-        {isRoute ? (
-          <>
+      {/* ---- SITIOS · route built ---- */}
+      {showSitiosRoute && (
+        <>
+          <ExploreMap
+            origin={origin}
+            places={routePlaces}
+            stage={stage}
+            selectedKeys={selectedKeys}
+            poiKey={poiKey}
+            restaurants={restaurants || []}
+            routeGeometry={routeGeometry}
+            onSpotTap={() => {}}
+          />
+          <ExploreSheet snap={snap} onSnapChange={setSnap} refreshing={isGenerating} handle={routeHeader}>
             <ol className="xp-stops">
-              {places.map((p, i) => (
+              {routePlaces.map((p, i) => (
                 <li key={poiKey(p)} className="xp-stop">
                   <span className="xp-stop-num">{i + 1}</span>
                   <div className="xp-stop-info">
@@ -306,37 +270,81 @@ export default function ExploreMode({ onClose }) {
               ))}
             </ol>
             <RestaurantStrip restaurants={restaurants || []} title="Para reponer fuerzas" />
-          </>
-        ) : (
-          <div className="xp-list">
-            {candidates.map((p, i) => {
-              const key = poiKey(p);
-              const card = (
-                <SpotCard
-                  key={key}
-                  place={p}
-                  city={city}
-                  selected={selectedKeys.has(key)}
-                  onToggle={() => toggleCandidate(key)}
-                  distanceKm={origin ? haversineKm(origin.lat, origin.lng, p.lat, p.lng) : 0}
-                  highlighted={flashKey === key}
-                  innerRef={(el) => { cardRefs.current[key] = el; }}
-                />
-              );
-              // Surface the restaurant strip early without burying the spots.
-              if (i === 2 && restaurants?.length > 0) {
-                return (
-                  <div key={`${key}-with-rest`} className="xp-list-chunk">
-                    {card}
-                    <RestaurantStrip restaurants={restaurants} />
-                  </div>
-                );
-              }
-              return card;
-            })}
+          </ExploreSheet>
+        </>
+      )}
+
+      {/* ---- SITIOS · curate the deck ---- */}
+      {view === 'sitios' && !isRoute && (
+        <ExploreDeck
+          count={candidates.length}
+          index={deckIndex}
+          onIndexChange={setDeckIndex}
+          header={
+            <div className="xp-deck-header">
+              <span className="xp-deck-title">Cerca de ti{city ? ` · ${city}` : ''}</span>
+              <span className="xp-deck-counter">{deckIndex + 1} / {candidates.length}</span>
+            </div>
+          }
+          footer={
+            <div className="xp-deck-footer">
+              <p className="xp-deck-hint">Desliza para ver · quita los que no te encajen</p>
+              <button
+                type="button"
+                className="xp-cta"
+                disabled={selectedCount < 2 || isGenerating}
+                onClick={buildRouteFromSelection}
+              >
+                {isGenerating ? 'Calculando ruta…' : `Crear ruta · ${selectedCount} sitio${selectedCount === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          }
+          renderCard={(i) => {
+            const p = candidates[i];
+            return (
+              <DeckPlaceCard
+                place={p}
+                city={city}
+                selected={selectedKeys.has(poiKey(p))}
+                onToggle={() => handleTogglePlace(p)}
+                distanceKm={origin ? haversineKm(origin.lat, origin.lng, p.lat, p.lng) : 0}
+              />
+            );
+          }}
+        />
+      )}
+
+      {/* ---- RESTAURANTES · deck ---- */}
+      {view === 'restaurantes' && (
+        restaurants === null ? (
+          <div className="xp-deck-msg"><div className="xp-radar xp-radar-sm" aria-hidden="true"><span /><span /><div className="xp-radar-dot" /></div><p>Buscando restaurantes cerca…</p></div>
+        ) : restaurants.length === 0 ? (
+          <div className="xp-deck-msg">
+            <div className="xp-boot-emoji" aria-hidden="true">🍽️</div>
+            <p>No hemos encontrado restaurantes valorados aquí cerca.</p>
           </div>
-        )}
-      </ExploreSheet>
+        ) : (
+          <ExploreDeck
+            count={restaurants.length}
+            index={restIndex}
+            onIndexChange={setRestIndex}
+            header={
+              <div className="xp-deck-header">
+                <span className="xp-deck-title">Para comer{city ? ` · ${city}` : ''}</span>
+                <span className="xp-deck-counter">{restIndex + 1} / {restaurants.length}</span>
+              </div>
+            }
+            footer={
+              <div className="xp-deck-footer">
+                <p className="xp-deck-hint">Ordenados por valoración · toca «Encontrar lugar» para abrirlo en el mapa</p>
+              </div>
+            }
+            renderCard={(i) => (
+              <DeckRestaurantCard restaurant={restaurants[i]} featured={i === 0} />
+            )}
+          />
+        )
+      )}
     </div>
   );
 }
