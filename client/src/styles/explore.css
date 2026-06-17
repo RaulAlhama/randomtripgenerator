@@ -263,8 +263,11 @@
 .xp-dcard-photo,
 .xp-rcard-photo {
   position: relative;
-  flex: 1 1 auto;
+  /* basis 0 — the photo is purely leftover space, never the image's own
+     height, so tall portrait shots can't push the body off the card. */
+  flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
   background-color: var(--bg-muted);
   background-size: cover;
   background-position: center;
