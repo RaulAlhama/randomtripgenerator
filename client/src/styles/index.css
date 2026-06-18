@@ -197,11 +197,13 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 3px 8px rgba(15, 28, 32, 0.22));
+  color: var(--primary);
+  filter: drop-shadow(0 3px 8px rgba(15, 28, 32, 0.16));
   transition: transform 220ms var(--ease);
 }
 
-.logo-mark img {
+.logo-mark img,
+.logo-mark svg {
   display: block;
   width: 44px;
   height: 44px;
@@ -3844,150 +3846,101 @@ main {
 
 .hero:hover .hero-mockup { transform: rotate(0deg); }
 
-.hero-mockup-cover {
-  padding: 1rem 1.25rem 1.1rem;
-  color: #fff;
-  position: relative;
-  overflow: hidden;
+.hero-mockup-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.85rem;
   border-bottom: 1px solid var(--border);
-  background-color: var(--ink-soft-strong);
+}
+
+.hero-mockup-seg {
+  padding: 0.28rem 0.7rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+}
+
+.hero-mockup-seg.is-on { background: var(--primary); color: var(--text-on-primary); }
+
+.hero-mockup-count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-mockup-photo {
+  position: relative;
+  height: 200px;
+  background-color: var(--bg-muted);
   background-size: cover;
   background-position: center;
-  min-height: 150px;
-  display: flex;
-  align-items: flex-end;
 }
 
-/* Dark gradient so the white text stays legible over any photo */
-.hero-mockup-cover::after {
-  content: '';
+.hero-mockup-chip {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(20, 12, 6, 0.88) 0%, rgba(20, 12, 6, 0.45) 45%, rgba(20, 12, 6, 0.12) 100%);
-}
-
-.hero-mockup-cover-content {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-}
-
-.hero-mockup-eyebrow {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #ffd9c2;
-  margin-bottom: 0.4rem;
-}
-
-.hero-mockup-title {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: #fff;
-  margin-bottom: 0.65rem;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
-}
-
-.hero-mockup-meta {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.hero-mockup-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  padding: 0.18rem 0.55rem;
+  top: 0.7rem;
+  left: 0.7rem;
+  padding: 0.25rem 0.65rem;
   border-radius: var(--radius-pill);
-  font-size: 0.7rem;
-  font-weight: 600;
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
 }
 
-.hero-mockup-body {
-  padding: 0.85rem 1.1rem;
+.hero-mockup-info {
+  padding: 0.85rem 1rem 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.35rem;
 }
 
-.hero-mockup-poi {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--border);
-  position: relative;
-}
-
-.hero-mockup-poi:last-child { border-bottom: none; }
-
-.hero-mockup-thumb {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  flex-shrink: 0;
-  background-color: var(--ink-soft-strong);
-  background-size: cover;
-  background-position: center;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.hero-mockup-num {
-  position: absolute;
-  bottom: -5px;
-  left: -5px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--primary, #3f6a64);
-  color: #fff;
-  border: 2px solid var(--bg-elevated);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
+.hero-mockup-name {
   font-family: var(--font-display);
-}
-
-.hero-mockup-poi-info { min-width: 0; }
-
-.hero-mockup-poi-name {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.3;
-}
-
-.hero-mockup-poi-type {
-  font-size: 0.68rem;
-  color: var(--text-muted);
+  font-size: 1.2rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-top: 0.15rem;
+  line-height: 1.15;
+  color: var(--text);
 }
 
-.hero-mockup-footer {
+.hero-mockup-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem 1.1rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-subtle);
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 600;
+  gap: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+
+.hero-mockup-rate { color: #c98c3f; }
+
+.hero-mockup-desc {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hero-mockup-cta {
+  margin: 0.35rem 1rem 1rem;
+  padding: 0.7rem;
+  border-radius: var(--radius-pill);
+  background: var(--grad-ocean);
+  color: #fff;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 750;
 }
 
 /* ========== WIKILOC CTA SECTION ========== */

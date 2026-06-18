@@ -63,51 +63,34 @@ const unsplash = (id, w, h) =>
 
 const MADRID_EXAMPLE = {
   cover: '1539037116277-4db20889f2d4',
-  stops: [
-    { num: 1, name: 'Plaza Mayor', type: 'Monumento histórico', img: '1533403611115-5b62680b6318' },
-    { num: 2, name: 'Mercado de San Miguel', type: 'Gastronomía', img: '1664695407561-72d0d171e44e' },
-    { num: 3, name: 'Jardines del Retiro', type: 'Naturaleza urbana', img: '1741353171152-5a9cfc05e094' },
-  ],
 };
 
+// Preview of the real product: one full-screen "deck" card you swipe through.
 function HeroMockup() {
   return (
     <figure className="hero-mockup" aria-hidden="true">
+      <div className="hero-mockup-bar">
+        <span className="hero-mockup-seg is-on">Sitios</span>
+        <span className="hero-mockup-seg">Restaurantes</span>
+        <span className="hero-mockup-count">1 / 10</span>
+      </div>
       <div
-        className="hero-mockup-cover"
-        style={{ backgroundImage: `url(${unsplash(MADRID_EXAMPLE.cover, 760, 460)})` }}
+        className="hero-mockup-photo"
+        style={{ backgroundImage: `url(${unsplash(MADRID_EXAMPLE.cover, 760, 560)})` }}
       >
-        <div className="hero-mockup-cover-content">
-          <div className="hero-mockup-eyebrow">Ruta generada con IA · Lugares reales</div>
-          <div className="hero-mockup-title">Madrid · Centro histórico</div>
-          <div className="hero-mockup-meta">
-            <span>A pie</span>
-            <span>4,2 km</span>
-            <span>52 min</span>
-            <span>3 paradas</span>
-          </div>
+        <span className="hero-mockup-chip">Monumento</span>
+      </div>
+      <div className="hero-mockup-info">
+        <div className="hero-mockup-name">Plaza Mayor</div>
+        <div className="hero-mockup-row">
+          <span>📍 120 m</span>
+          <span className="hero-mockup-rate">★ 4,7</span>
         </div>
+        <p className="hero-mockup-desc">
+          El corazón porticado del Madrid de los Austrias, a un paso de todo.
+        </p>
       </div>
-      <div className="hero-mockup-body">
-        {MADRID_EXAMPLE.stops.map((p) => (
-          <div key={p.num} className="hero-mockup-poi">
-            <div
-              className="hero-mockup-thumb"
-              style={{ backgroundImage: `url(${unsplash(p.img, 160, 160)})` }}
-            >
-              <span className="hero-mockup-num">{p.num}</span>
-            </div>
-            <div className="hero-mockup-poi-info">
-              <div className="hero-mockup-poi-name">{p.name}</div>
-              <div className="hero-mockup-poi-type">{p.type}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="hero-mockup-footer">
-        <span>Generado en 3 s</span>
-        <span>Lugares reales · sin registro</span>
-      </div>
+      <div className="hero-mockup-cta">Crear ruta · 10 sitios</div>
     </figure>
   );
 }
@@ -125,11 +108,12 @@ export default function Hero({ onExplore }) {
       <div className="hero-layout">
         <div className="hero-content">
           <h1>
-            Tu próxima escapada,<br /><em>en segundos</em>
+            Qué ver cerca de ti,<br /><em>ahora mismo</em>
           </h1>
           <p className="subtitle">
-            Rutas turísticas con <strong>lugares reales</strong> en cualquier ciudad del
-            mundo. Generadas con IA en segundos. Gratis y sin registro.
+            Detecta dónde estás y te arma una <strong>ruta a pie</strong> con los mejores
+            sitios y restaurantes a tu alrededor. O planifica cualquier ciudad del mundo.
+            Gratis y sin registro.
           </p>
 
           <button type="button" className="explore-cta" onClick={() => onExplore('sitios')}>

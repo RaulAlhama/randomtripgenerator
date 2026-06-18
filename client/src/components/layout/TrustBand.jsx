@@ -13,12 +13,12 @@ const ITEMS = [
     ),
   },
   {
-    title: 'Senderos y ciudad',
-    text: 'Rutas a pie, en bici, en coche y de montaña.',
+    title: 'Al instante, a tu alrededor',
+    text: 'Detecta dónde estás y arma la ruta a pie.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m3 20 5-10 4 7 3-5 6 8z" />
-        <circle cx="8.5" cy="6.5" r="1.5" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="m16 8-5.5 2.5L8 16l5.5-2.5L16 8z" />
       </svg>
     ),
   },
