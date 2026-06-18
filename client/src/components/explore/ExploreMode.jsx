@@ -50,7 +50,7 @@ function CloseIcon() {
   );
 }
 
-export default function ExploreMode({ onClose, initialView = 'sitios' }) {
+export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null }) {
   const {
     currentTrip,
     candidates,
@@ -86,16 +86,18 @@ export default function ExploreMode({ onClose, initialView = 'sitios' }) {
 
   const launch = useCallback(() => {
     clearError();
-    const loc = urlLocationOverride();
+    // A searched city (from the planner) wins; otherwise ?lat&lng for testing;
+    // otherwise fall back to the browser's GPS.
+    const loc = initialLocation || urlLocationOverride();
     generateCandidates({
       theme: 'mixed',
       transport: 'walking',
-      radius: EXPLORE_RADIUS_KM,
+      radius: initialRadiusKm || EXPLORE_RADIUS_KM,
       ...(loc
         ? { locationMode: 'search', searchLocation: loc }
         : { locationMode: 'gps' }),
     });
-  }, [generateCandidates, clearError]);
+  }, [generateCandidates, clearError, initialLocation, initialRadiusKm]);
 
   // Launch once on open.
   useEffect(() => {
