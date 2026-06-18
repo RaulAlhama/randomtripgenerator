@@ -19,16 +19,20 @@ import './styles/explore.css';
 
 function AppShell() {
   const { currentTrip, isGenerating } = useTrip();
-  // null = closed; otherwise the deck view to open with ('sitios' | 'restaurantes').
-  const [exploreView, setExploreView] = useState(null);
-  const exploreOpen = exploreView !== null;
+  // null = closed; otherwise { view, location, radiusKm } for the deck overlay.
+  const [explore, setExplore] = useState(null);
+  const exploreOpen = explore !== null;
   const hasActiveTrip = Boolean(currentTrip || isGenerating);
 
   return (
     <div className={`container${hasActiveTrip && !exploreOpen ? ' has-trip' : ''}`}>
       <Header />
       <main>
-        <Hero onExplore={(v) => setExploreView(v || 'sitios')} />
+        <Hero
+          onExplore={(view, opts = {}) =>
+            setExplore({ view: view || 'sitios', location: opts.location || null, radiusKm: opts.radiusKm || null })
+          }
+        />
         {/* While explore mode is open it owns the trip state — keep the
             page-level trip UI unmounted so two Leaflet maps never coexist. */}
         {!exploreOpen && (
@@ -51,7 +55,12 @@ function AppShell() {
       <Footer />
       {exploreOpen && (
         <ErrorBoundary>
-          <ExploreMode initialView={exploreView} onClose={() => setExploreView(null)} />
+          <ExploreMode
+            initialView={explore.view}
+            initialLocation={explore.location}
+            initialRadiusKm={explore.radiusKm}
+            onClose={() => setExplore(null)}
+          />
         </ErrorBoundary>
       )}
     </div>

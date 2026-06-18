@@ -1229,6 +1229,19 @@
 .planner-toggle-chevron { transition: transform 200ms var(--ease); }
 .planner-toggle-chevron.is-open { transform: rotate(180deg); }
 
+/* Minimal "plan another city" form: just a city search + radius + go. */
+.city-planner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.25rem;
+}
+
+.city-planner-go {
+  width: 100%;
+  justify-content: center;
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .xp-overlay,

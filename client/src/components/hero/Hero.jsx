@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import Tabs from './Tabs';
-import RouteTab from './RouteTab';
-import RestaurantsTab from './RestaurantsTab';
+import CityPlanner from './CityPlanner';
 
 function HeroDecor() {
   return (
@@ -96,7 +94,6 @@ function HeroMockup() {
 }
 
 export default function Hero({ onExplore }) {
-  const [activeTab, setActiveTab] = useState('route');
   // The planner is the power tool, not the front door: keep it folded so the
   // landing presents a single action instead of a wall of controls.
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -153,18 +150,11 @@ export default function Hero({ onExplore }) {
           </button>
 
           {plannerOpen && (
-            <>
-              <Tabs activeTab={activeTab} onChange={setActiveTab} />
-
-              <div className="search-form">
-                <div className="tab-panel" hidden={activeTab !== 'route'}>
-                  <RouteTab />
-                </div>
-                <div className="tab-panel" hidden={activeTab !== 'restaurants'}>
-                  <RestaurantsTab />
-                </div>
-              </div>
-            </>
+            <div className="search-form">
+              <CityPlanner
+                onPlan={(location, radiusKm) => onExplore('sitios', { location, radiusKm })}
+              />
+            </div>
           )}
 
           <TrustRow />
