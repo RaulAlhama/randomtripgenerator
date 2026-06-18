@@ -3,7 +3,7 @@ export async function fetchAuthConfig() {
   return response.json();
 }
 
-export async function generateTrip(lat, lng, theme, transport, radiusMeters, count, city, country) {
+export async function generateTrip(lat, lng, theme, transport, radiusMeters, count, city, country, fast) {
   const params = new URLSearchParams({
     lat: String(lat),
     lng: String(lng),
@@ -14,11 +14,23 @@ export async function generateTrip(lat, lng, theme, transport, radiusMeters, cou
   if (count) params.set('count', String(count));
   if (city) params.set('city', city);
   if (country) params.set('country', country);
+  if (fast) params.set('fast', '1');
   const response = await fetch(`/api/generate-trip?${params}`);
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Error al generar la ruta');
   }
+  return response.json();
+}
+
+// Backfill descriptions for a fast (description-less) candidate response.
+export async function fetchPlaceDescriptions(places, city, country, theme) {
+  const response = await fetch('/api/descriptions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ places, city, country, theme }),
+  });
+  if (!response.ok) throw new Error('No se pudieron obtener las descripciones');
   return response.json();
 }
 

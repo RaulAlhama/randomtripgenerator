@@ -1121,7 +1121,7 @@ function fallbackDescription(place, city) {
 }
 
 // Main function: build route from real POIs + LLM descriptions
-async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount) {
+async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount, fast = false) {
   // In candidate mode the user curates the final list, so return more POIs and
   // skip the distance-trim loop below. In legacy mode (no candidateCount),
   // pick a tight set sized to the radius.
@@ -1176,9 +1176,12 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 
     console.log(`[Route] Using ${sorted.length} verified Overpass POIs (nearest-neighbor sorted)`);
 
-    // Ask LLM for descriptions AND resolve images AND fetch Google data in parallel
+    // Resolve images + Google data always. The LLM descriptions are the slow
+    // part (~30s for a full pool), so in fast candidate mode we skip them here
+    // and let the client fill them in afterwards via /api/descriptions.
+    const wantDescriptions = !(fast && isCandidateMode);
     const [descriptions, placesWithImages, googleData] = await Promise.all([
-      getDescriptionsFromLLM(sorted, city, country, theme),
+      wantDescriptions ? getDescriptionsFromLLM(sorted, city, country, theme) : Promise.resolve(null),
       fetchAllPOIImages(sorted, city),
       fetchAllPOIGoogleData(sorted, city)
     ]);
@@ -1190,7 +1193,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     // Prominent, greppable alert when the LLM produced no descriptions at all
     // (most common cause: Nebius out of credit). Lets us spot it fast in logs
     // instead of finding out from a user screenshot.
-    if (!descriptions) {
+    if (wantDescriptions && !descriptions) {
       console.error(`[Nebius][ALERT] Sin descripciones de la IA para "${city}" — usando textos de reserva. Revisa el crédito/estado de Nebius.`);
     }
 
@@ -1201,7 +1204,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
         type: p.type,
         lat: p.lat,
         lng: p.lng,
-        description: (descriptions && descriptions[i]) || fallbackDescription(p, city),
+        description: wantDescriptions ? ((descriptions && descriptions[i]) || fallbackDescription(p, city)) : null,
         wikipedia: p.wikipedia || null,
         wikidata: p.wikidata || null,
         // Prefer Google Places photo (most precise match for the actual place),
@@ -1660,8 +1663,11 @@ app.get('/api/generate-trip', async (req, res) => {
     ]);
     console.log('[API] Location:', locationInfo.city, locationInfo.country, '| Real POIs:', realPOIs.length);
 
+    // fast=1: skip the slow LLM descriptions so the candidate deck appears in
+    // seconds; the client backfills them via POST /api/descriptions.
+    const fast = req.query.fast === '1';
     const { places, poiSource } = await buildRoute(
-      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance, candidateCount
+      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance, candidateCount, fast
     );
 
     if (!places || places.length === 0) {
@@ -1680,6 +1686,34 @@ app.get('/api/generate-trip', async (req, res) => {
   } catch (error) {
     console.error('Error generating trip:', error);
     res.status(500).json({ error: 'Failed to generate trip: ' + error.message });
+  }
+});
+
+// Companion to /api/generate-trip?fast=1: the deck shows instantly without
+// descriptions, then fetches them here in the background and merges them in.
+app.post('/api/descriptions', async (req, res) => {
+  try {
+    const { places, city = '', country = '', theme = 'mixed' } = req.body || {};
+    if (!Array.isArray(places) || places.length === 0) {
+      return res.json({ descriptions: [] });
+    }
+
+    const VALID_THEMES = ['mixed', 'monuments', 'nature', 'food', 'historical', 'cultural', 'classic', 'surprise'];
+    const safeTheme = VALID_THEMES.includes(theme) ? theme : 'mixed';
+    const safeCity = String(city).slice(0, 80);
+    const safe = places.slice(0, 12).map((p) => ({
+      name: String(p?.name || '').slice(0, 120),
+      type: String(p?.type || 'place').slice(0, 40),
+    }));
+
+    // Cautious mode: the model only has name + type here, so keep it from
+    // inventing specifics it can't verify.
+    const llm = await getDescriptionsFromLLM(safe, safeCity, String(country).slice(0, 80), safeTheme, { cautious: true });
+    const descriptions = safe.map((p, i) => (llm && llm[i]) || fallbackDescription(p, safeCity));
+    res.json({ descriptions });
+  } catch (error) {
+    console.error('Error generating descriptions:', error);
+    res.status(500).json({ error: 'Failed to generate descriptions' });
   }
 });
 

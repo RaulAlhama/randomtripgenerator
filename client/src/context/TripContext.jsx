@@ -1,5 +1,5 @@
 import { createContext, useReducer, useCallback, useContext } from 'react';
-import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchHikingTrails as apiFetchHikingTrails } from '../services/api';
+import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchHikingTrails as apiFetchHikingTrails, fetchPlaceDescriptions } from '../services/api';
 import { saveTrip } from '../services/trips';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -23,6 +23,7 @@ const SET_STAGE = 'SET_STAGE';
 const SET_CANDIDATES = 'SET_CANDIDATES';
 const SET_SELECTED_KEYS = 'SET_SELECTED_KEYS';
 const TOGGLE_SELECTION = 'TOGGLE_SELECTION';
+const MERGE_DESCRIPTIONS = 'MERGE_DESCRIPTIONS';
 const SET_HIKING_TRAILS = 'SET_HIKING_TRAILS';
 const SET_SELECTED_TRAIL = 'SET_SELECTED_TRAIL';
 
@@ -116,6 +117,22 @@ function tripReducer(state, action) {
       if (next.has(action.payload)) next.delete(action.payload);
       else next.add(action.payload);
       return { ...state, selectedKeys: next };
+    }
+    case MERGE_DESCRIPTIONS: {
+      // Fill descriptions arriving from the background /api/descriptions call.
+      // Match by poiKey so it lands on the right place wherever it appears
+      // (candidate pool and/or a route already built from it) without
+      // clobbering either array.
+      const map = action.payload;
+      const apply = (arr) =>
+        arr ? arr.map((p) => (map[poiKey(p)] ? { ...p, description: map[poiKey(p)] } : p)) : arr;
+      return {
+        ...state,
+        candidates: apply(state.candidates),
+        currentTrip: state.currentTrip
+          ? { ...state.currentTrip, places: apply(state.currentTrip.places) }
+          : state.currentTrip,
+      };
     }
     case SET_HIKING_TRAILS:
       return { ...state, hikingTrails: action.payload };
@@ -337,6 +354,10 @@ export function TripProvider({ children }) {
       sim.start();
 
       const radiusMeters = Math.round(effectiveRadius * 1000);
+      // Fast mode (skip server-side LLM descriptions) only when we're going to
+      // show the curation deck. Sorpréndeme/autoBuild jumps straight to a route,
+      // so it keeps the synchronous descriptions.
+      const fast = !autoBuild;
       const tripData = await apiGenerateTrip(
         location.lat,
         location.lng,
@@ -345,7 +366,8 @@ export function TripProvider({ children }) {
         radiusMeters,
         CANDIDATE_COUNT,
         location.name,
-        location.country
+        location.country,
+        fast
       );
 
       sim.stop();
@@ -388,6 +410,26 @@ export function TripProvider({ children }) {
         apiFetchWeather(location.lat, location.lng)
           .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
           .catch(() => {});
+
+        // Fast mode returned no descriptions so the deck could appear instantly.
+        // Backfill them in the background and merge by poiKey when they arrive.
+        if (fast) {
+          fetchPlaceDescriptions(
+            candidates.map((p) => ({ name: p.name, type: p.type })),
+            trip.city,
+            trip.country,
+            effectiveTheme
+          )
+            .then(({ descriptions }) => {
+              if (!Array.isArray(descriptions)) return;
+              const map = {};
+              candidates.forEach((p, i) => {
+                if (descriptions[i]) map[poiKey(p)] = descriptions[i];
+              });
+              if (Object.keys(map).length) dispatch({ type: MERGE_DESCRIPTIONS, payload: map });
+            })
+            .catch(() => {});
+        }
       }
     } catch (error) {
       sim.stop();
