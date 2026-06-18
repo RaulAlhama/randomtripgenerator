@@ -108,7 +108,7 @@ export default function Hero({ onExplore }) {
       <div className="hero-layout">
         <div className="hero-content">
           <h1>
-            Qué ver cerca de ti,<br /><em>ahora mismo</em>
+            Qué ver cerca de ti, <br /><em>ahora mismo</em>
           </h1>
           <p className="subtitle">
             Detecta dónde estás y te arma una <strong>ruta a pie</strong> con los mejores
@@ -117,14 +117,23 @@ export default function Hero({ onExplore }) {
           </p>
 
           <button type="button" className="explore-cta" onClick={() => onExplore('sitios')}>
-            <span className="explore-cta-dot" aria-hidden="true" />
+            <span className="explore-cta-badge" aria-hidden="true">
+              <span className="explore-cta-pulse" />
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z" />
+                <circle cx="12" cy="10" r="2.5" />
+              </svg>
+            </span>
             <span className="explore-cta-text">
               <strong>Generar mi ruta</strong>
-              <small>Sitios cerca de ti ahora mismo, sin configurar nada</small>
+              <small>Sitios cerca de ti, al instante</small>
             </span>
-            <svg className="explore-cta-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
+            <span className="explore-cta-go">
+              Empezar
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
           </button>
 
           <button type="button" className="explore-cta-secondary" onClick={() => onExplore('restaurantes')}>
