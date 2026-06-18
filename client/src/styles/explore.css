@@ -434,7 +434,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 18px;
+  margin: 0 auto 18px;
   padding: 11px 18px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
@@ -1130,71 +1130,81 @@
 /* ---------- Hero entry CTA ---------- */
 .explore-cta {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 14px;
   width: 100%;
-  margin: 0 0 18px;
-  padding: 14px 18px;
+  max-width: 250px;
+  min-height: 250px;
+  margin: 0 auto 14px;
+  padding: 30px 26px;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--grad-ocean);
   color: #fff;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 8px 24px rgba(20, 35, 33, 0.18);
+  box-shadow: 0 16px 40px rgba(20, 35, 33, 0.26);
   transition: var(--transition);
   position: relative;
   overflow: hidden;
 }
 
-.explore-cta:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(20, 35, 33, 0.24); }
-.explore-cta:active { transform: translateY(0); }
+.explore-cta:hover { transform: translateY(-3px); box-shadow: 0 24px 52px rgba(20, 35, 33, 0.34); }
+.explore-cta:active { transform: translateY(-1px) scale(0.99); }
 
-.explore-cta-dot {
-  flex: none;
+.explore-cta-badge {
   position: relative;
-  width: 14px;
-  height: 14px;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
-.explore-cta-dot::after {
-  content: '';
+.explore-cta-pulse {
   position: absolute;
-  inset: -4px;
+  inset: 0;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  animation: xp-pulse 2s ease-out infinite;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  animation: xp-pulse 2.2s ease-out infinite;
 }
 
 .explore-cta-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
+  gap: 4px;
 }
 
 .explore-cta-text strong {
-  font-size: 1.05rem;
+  font-size: 1.32rem;
   font-weight: 800;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
 }
 
 .explore-cta-text small {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  opacity: 0.88;
+  opacity: 0.9;
 }
 
-.explore-cta-arrow {
-  flex: none;
-  transition: transform 220ms var(--ease);
+.explore-cta-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.9rem;
+  font-weight: 750;
+  transition: background 200ms var(--ease);
 }
 
-.explore-cta:hover .explore-cta-arrow { transform: translateX(4px); }
+.explore-cta:hover .explore-cta-go { background: rgba(255, 255, 255, 0.26); }
 
 /* Quiet disclosure for the full planner — keeps the landing to one action. */
 .planner-toggle {
@@ -1224,7 +1234,7 @@
   .xp-overlay,
   .xp-sheet,
   .xp-card.is-flash,
-  .explore-cta-dot::after,
+  .explore-cta-pulse,
   .xp-user-dot span,
   .xp-radar span {
     animation: none;
