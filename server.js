@@ -1187,8 +1187,16 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     }
   }
 
+  // The curation deck shows one big photo per card, so a card with no image is
+  // dead weight. In deck mode we over-fetch, then keep only POIs that resolved
+  // an image (below), trimming back down to desiredCount.
+  const deckMode = isCandidateMode && fast;
+
   if (pois.length > 0) {
-    let selected = selectPOIsForTheme(pois, theme, Math.min(desiredCount, pois.length));
+    const selectCount = deckMode
+      ? Math.min(pois.length, desiredCount + 8)
+      : Math.min(desiredCount, pois.length);
+    let selected = selectPOIsForTheme(pois, theme, selectCount);
     // Sort in walking order to minimize total route distance
     let sorted = sortByProximity(selected, lat, lng);
 
@@ -1235,7 +1243,12 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
         type: p.type,
         lat: p.lat,
         lng: p.lng,
-        description: wantDescriptions ? ((descriptions && descriptions[i]) || fallbackDescription(p, city)) : null,
+        // Fast deck mode skips the slow LLM here, but a card should never be
+        // blank: ship the instant local fallback now and let the client upgrade
+        // it via the background /api/descriptions call.
+        description: wantDescriptions
+          ? ((descriptions && descriptions[i]) || fallbackDescription(p, city))
+          : fallbackDescription(p, city),
         wikipedia: p.wikipedia || null,
         wikidata: p.wikidata || null,
         // Prefer Google Places photo (most precise match for the actual place),
@@ -1250,6 +1263,17 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
         openNow: g.openNow ?? null,
       };
     });
+
+    // Deck mode: drop the imageless cards, keep desiredCount. Guard against
+    // pruning the deck into uselessness — if too few have images (a sparse
+    // village), fall back to the full set rather than a 1-card deck.
+    if (deckMode) {
+      const withImg = places.filter(p => p.imageUrl);
+      const finalPlaces = (withImg.length >= 3 ? withImg : places).slice(0, desiredCount);
+      console.log(`[Route] Deck: ${withImg.length}/${places.length} POIs with image, returning ${finalPlaces.length}`);
+      return { places: finalPlaces, poiSource: 'overpass' };
+    }
+
     return { places, poiSource: 'overpass' };
   }
 
