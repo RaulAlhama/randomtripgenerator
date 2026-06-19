@@ -78,6 +78,8 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   const [deckIndex, setDeckIndex] = useState(0);
   const [restIndex, setRestIndex] = useState(0);
   const [snap, setSnap] = useState('half');
+  // Restaurants the user dropped into the walking route (keyed by placeId).
+  const [routeRestaurants, setRouteRestaurants] = useState([]);
   const launchedRef = useRef(false);
 
   const origin = currentTrip
@@ -141,6 +143,36 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
     if (wasSelected) setDeckIndex((i) => Math.min(i + 1, (candidates?.length || 1) - 1));
   };
 
+  // Normalize a restaurant into the place shape the route builder expects.
+  const restaurantToPlace = (r) => ({
+    placeId: r.placeId,
+    name: r.name,
+    lat: r.lat,
+    lng: r.lng,
+    type: 'restaurant',
+    description: r.address || null,
+    imageUrl: r.photoUrl || null,
+    rating: r.rating,
+  });
+
+  const isRestaurantAdded = (r) => routeRestaurants.some((p) => p.placeId === r.placeId);
+
+  const toggleRestaurant = (r) => {
+    if (!Number.isFinite(r.lat) || !Number.isFinite(r.lng)) return;
+    setRouteRestaurants((prev) =>
+      prev.some((p) => p.placeId === r.placeId)
+        ? prev.filter((p) => p.placeId !== r.placeId)
+        : [...prev, restaurantToPlace(r)]
+    );
+  };
+
+  const handleBuildRoute = () => {
+    // The route view lives under 'sitios'; jump there so building from the
+    // Restaurantes deck still lands on the map instead of staying on the deck.
+    setView('sitios');
+    buildRouteFromSelection(routeRestaurants);
+  };
+
   // ---- Boot states (no candidates yet) ----
   if (!candidates) {
     return (
@@ -176,6 +208,8 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   const isRoute = stage === 'route';
   const city = currentTrip?.city || '';
   const selectedCount = selectedKeys.size;
+  const restaurantCount = routeRestaurants.length;
+  const totalStops = selectedCount + restaurantCount;
   const showSitiosRoute = view === 'sitios' && isRoute;
 
   // The route view (map + sheet) — only in 'sitios' after building.
@@ -214,7 +248,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   return (
     <div className="xp-overlay" role="dialog" aria-modal="true" aria-label="Explora ahora">
       {/* Top bar: close · segmented Sitios/Restaurantes · weather */}
-      <div className="xp-top">
+      <div className={`xp-top${!showSitiosRoute ? ' xp-top-deck' : ''}`}>
         <button type="button" className="xp-top-btn" onClick={handleClose} aria-label="Cerrar exploración">
           <CloseIcon />
         </button>
@@ -263,7 +297,9 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
             <ol className="xp-stops">
               {routePlaces.map((p, i) => (
                 <li key={poiKey(p)} className="xp-stop">
-                  <span className="xp-stop-num">{i + 1}</span>
+                  <span className={`xp-stop-num${p.type === 'restaurant' ? ' is-food' : ''}`}>
+                    {p.type === 'restaurant' ? '🍴' : i + 1}
+                  </span>
                   <div className="xp-stop-info">
                     <span className="xp-stop-name">{p.name}</span>
                     {p.description && <span className="xp-stop-desc">{p.description}</span>}
@@ -290,14 +326,18 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
           }
           footer={
             <div className="xp-deck-footer">
-              <p className="xp-deck-hint">Desliza para ver · quita los que no te encajen</p>
+              <p className="xp-deck-hint">
+                {restaurantCount > 0
+                  ? `${selectedCount} sitio${selectedCount === 1 ? '' : 's'} + ${restaurantCount} para comer`
+                  : 'Desliza para ver · quita los que no te encajen'}
+              </p>
               <button
                 type="button"
                 className="xp-cta"
-                disabled={selectedCount < 2 || isGenerating}
-                onClick={buildRouteFromSelection}
+                disabled={totalStops < 2 || isGenerating}
+                onClick={handleBuildRoute}
               >
-                {isGenerating ? 'Calculando ruta…' : `Crear ruta · ${selectedCount} sitio${selectedCount === 1 ? '' : 's'}`}
+                {isGenerating ? 'Calculando ruta…' : `Crear ruta · ${totalStops} parada${totalStops === 1 ? '' : 's'}`}
               </button>
             </div>
           }
@@ -337,12 +377,34 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
               </div>
             }
             footer={
-              <div className="xp-deck-footer">
-                <p className="xp-deck-hint">Ordenados por valoración · toca «Encontrar lugar» para abrirlo en el mapa</p>
-              </div>
+              restaurantCount > 0 ? (
+                <div className="xp-deck-footer">
+                  <p className="xp-deck-hint">
+                    {restaurantCount} para comer en tu ruta · {selectedCount} sitio{selectedCount === 1 ? '' : 's'}
+                  </p>
+                  <button
+                    type="button"
+                    className="xp-cta"
+                    disabled={totalStops < 2 || isGenerating}
+                    onClick={handleBuildRoute}
+                  >
+                    {isGenerating ? 'Calculando ruta…' : `Crear ruta · ${totalStops} parada${totalStops === 1 ? '' : 's'}`}
+                  </button>
+                </div>
+              ) : (
+                <div className="xp-deck-footer">
+                  <p className="xp-deck-hint">Añade los que te apetezcan a la ruta · o ábrelos en el mapa</p>
+                </div>
+              )
             }
             renderCard={(i) => (
-              <DeckRestaurantCard restaurant={restaurants[i]} featured={i === 0} />
+              <DeckRestaurantCard
+                restaurant={restaurants[i]}
+                featured={i === 0}
+                added={isRestaurantAdded(restaurants[i])}
+                canAdd={Number.isFinite(restaurants[i].lat) && Number.isFinite(restaurants[i].lng)}
+                onToggleRoute={() => toggleRestaurant(restaurants[i])}
+              />
             )}
           />
         )

@@ -897,6 +897,37 @@ async function callNebiusOnce(body, apiBaseUrl, apiKey) {
 // options.cautious: for places the model probably doesn't know (local bars,
 // obscure trails) — tells it to describe type/context instead of inventing
 // specifics. Used by the SEO page generator, where hallucinated "facts"
+// In-memory cache for place descriptions. A description is stable for a given
+// place, so caching avoids repeat LLM calls (cost + latency) when the same
+// deck is reopened or different users explore the same city. Soft-capped with
+// LRU-style eviction; lost on restart, which is fine — it just re-warms.
+const DESCRIPTION_CACHE = new Map();
+const DESCRIPTION_CACHE_MAX = 5000;
+
+function descCacheKey(name, city, theme) {
+  return `${String(name).trim().toLowerCase()}|${String(city).trim().toLowerCase()}|${theme}`;
+}
+
+function getCachedDescription(name, city, theme) {
+  const key = descCacheKey(name, city, theme);
+  if (!DESCRIPTION_CACHE.has(key)) return undefined;
+  // Touch recency: re-insert moves the entry to the newest position.
+  const val = DESCRIPTION_CACHE.get(key);
+  DESCRIPTION_CACHE.delete(key);
+  DESCRIPTION_CACHE.set(key, val);
+  return val;
+}
+
+function setCachedDescription(name, city, theme, description) {
+  if (!description) return;
+  const key = descCacheKey(name, city, theme);
+  if (DESCRIPTION_CACHE.has(key)) DESCRIPTION_CACHE.delete(key);
+  DESCRIPTION_CACHE.set(key, description);
+  while (DESCRIPTION_CACHE.size > DESCRIPTION_CACHE_MAX) {
+    DESCRIPTION_CACHE.delete(DESCRIPTION_CACHE.keys().next().value); // evict oldest
+  }
+}
+
 // would be published permanently.
 async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
   try {
@@ -1706,10 +1737,34 @@ app.post('/api/descriptions', async (req, res) => {
       type: String(p?.type || 'place').slice(0, 40),
     }));
 
-    // Cautious mode: the model only has name + type here, so keep it from
-    // inventing specifics it can't verify.
-    const llm = await getDescriptionsFromLLM(safe, safeCity, String(country).slice(0, 80), safeTheme, { cautious: true });
-    const descriptions = safe.map((p, i) => (llm && llm[i]) || fallbackDescription(p, safeCity));
+    // Serve cached descriptions first; only ask the LLM for the misses.
+    const descriptions = new Array(safe.length);
+    const misses = [];
+    safe.forEach((p, i) => {
+      const cached = getCachedDescription(p.name, safeCity, safeTheme);
+      if (cached !== undefined) descriptions[i] = cached;
+      else misses.push({ p, i });
+    });
+
+    if (misses.length > 0) {
+      // Cautious mode: the model only has name + type here, so keep it from
+      // inventing specifics it can't verify.
+      const llm = await getDescriptionsFromLLM(
+        misses.map((m) => m.p),
+        safeCity,
+        String(country).slice(0, 80),
+        safeTheme,
+        { cautious: true }
+      );
+      misses.forEach((m, j) => {
+        const real = llm && llm[j];
+        descriptions[m.i] = real || fallbackDescription(m.p, safeCity);
+        // Only cache genuine LLM output — never the generic fallback, so a
+        // temporary LLM outage doesn't permanently poison the cache.
+        if (real) setCachedDescription(m.p.name, safeCity, safeTheme, real);
+      });
+    }
+
     res.json({ descriptions });
   } catch (error) {
     console.error('Error generating descriptions:', error);
