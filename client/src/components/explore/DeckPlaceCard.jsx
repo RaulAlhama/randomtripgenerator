@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { typeIcons, typeLabels } from '../../constants/poi';
 
 async function resolvePlaceImage(name, city, type) {
@@ -19,6 +19,21 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
   const icon = typeIcons[place.type] || typeIcons.default;
   const [imageUrl, setImageUrl] = useState(place.imageUrl || null);
   const [imgError, setImgError] = useState(false);
+
+  // "Ver más": clamp long descriptions and only offer the toggle when the text
+  // actually overflows the 3-line clamp.
+  const descRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    setExpanded(false);
+    const el = descRef.current;
+    if (!el) { setOverflows(false); return; }
+    // Measure in the clamped state (default), so scrollHeight > clientHeight
+    // means there's hidden text worth a "Ver más".
+    setOverflows(el.scrollHeight - el.clientHeight > 4);
+  }, [place.description]);
 
   useEffect(() => {
     setImgError(false);
@@ -62,7 +77,23 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
           </span>
           {hasRating && <span className="xp-dcard-rating">★ {place.rating.toFixed(1)}</span>}
         </div>
-        {place.description && <p className="xp-dcard-desc">{place.description}</p>}
+        {place.description && (
+          <div className="xp-dcard-desc-wrap">
+            <p ref={descRef} className={`xp-dcard-desc${expanded ? ' is-expanded' : ''}`}>
+              {place.description}
+            </p>
+            {(overflows || expanded) && (
+              <button
+                type="button"
+                className="xp-dcard-more"
+                onClick={() => setExpanded((e) => !e)}
+                aria-expanded={expanded}
+              >
+                {expanded ? 'Ver menos' : 'Ver más'}
+              </button>
+            )}
+          </div>
+        )}
 
         <button
           type="button"

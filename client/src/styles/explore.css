@@ -366,6 +366,31 @@
   overflow: hidden;
 }
 
+/* Expanded description: unclamp, but stay bounded inside the card and scroll. */
+.xp-dcard-desc.is-expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: 28vh;
+  overflow-y: auto;
+}
+
+.xp-dcard-desc-wrap { display: flex; flex-direction: column; gap: 2px; }
+
+.xp-dcard-more {
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.xp-dcard-more:hover { text-decoration: underline; }
+
 .xp-dcard-action,
 .xp-rcard-action {
   margin-top: 4px;
