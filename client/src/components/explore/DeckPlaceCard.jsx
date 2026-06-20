@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { typeIcons, typeLabels } from '../../constants/poi';
+import SaveHeart from './SaveHeart';
 
 async function resolvePlaceImage(name, city, type) {
   try {
@@ -62,6 +63,19 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
         )}
         <div className="xp-dcard-scrim" />
         <span className="xp-dcard-type">{typeLabels[place.type] || typeLabels.default}</span>
+        <SaveHeart
+          item={{
+            kind: 'place',
+            name: place.name,
+            lat: place.lat,
+            lng: place.lng,
+            type: place.type,
+            city,
+            imageUrl: imageUrl || place.imageUrl || null,
+            rating: place.rating ?? null,
+            description: place.description || null,
+          }}
+        />
         {!selected && <span className="xp-dcard-removed">Fuera de la ruta</span>}
       </div>
 

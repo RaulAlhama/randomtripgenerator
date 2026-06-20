@@ -1,9 +1,11 @@
+import SaveHeart from './SaveHeart';
+
 // One full-screen restaurant card in the swipe deck. The first card in the
 // deck is flagged `featured` — this is the slot that can later become paid
 // "destacado" inventory. `added`/`onToggleRoute` let the user drop the
 // restaurant into the walking route as an extra stop. `canAdd` is false when
 // the place has no coordinates to route to.
-export default function DeckRestaurantCard({ restaurant: r, featured, added, canAdd = true, onToggleRoute }) {
+export default function DeckRestaurantCard({ restaurant: r, featured, added, canAdd = true, onToggleRoute, city = '' }) {
   const priceLabel = r.priceLevel > 0 ? '€'.repeat(r.priceLevel) : null;
 
   return (
@@ -14,6 +16,20 @@ export default function DeckRestaurantCard({ restaurant: r, featured, added, can
       >
         {!r.photoUrl && <span className="xp-rcard-photo-icon" aria-hidden="true">🍽️</span>}
         <div className="xp-dcard-scrim" />
+        <SaveHeart
+          item={{
+            kind: 'restaurant',
+            placeId: r.placeId,
+            name: r.name,
+            lat: r.lat,
+            lng: r.lng,
+            city,
+            imageUrl: r.photoUrl || null,
+            rating: r.rating ?? null,
+            address: r.address || null,
+            mapsUrl: r.mapsUrl || null,
+          }}
+        />
         {featured && <span className="xp-rcard-badge">Destacado</span>}
         {added && <span className="xp-rcard-inroute" aria-hidden="true">✓ En tu ruta</span>}
         {r.openNow === true && <span className="xp-rcard-open">Abierto ahora</span>}
