@@ -401,6 +401,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
               <DeckRestaurantCard
                 restaurant={restaurants[i]}
                 featured={i === 0}
+                city={city}
                 added={isRestaurantAdded(restaurants[i])}
                 canAdd={Number.isFinite(restaurants[i].lat) && Number.isFinite(restaurants[i].lng)}
                 onToggleRoute={() => toggleRestaurant(restaurants[i])}

@@ -311,13 +311,46 @@
 .xp-dcard-removed {
   position: absolute;
   top: 14px;
-  right: 14px;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 5px 12px;
   border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+/* Heart "save" toggle overlaid top-right of a deck card photo. */
+.xp-save {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.xp-save:hover { transform: scale(1.08); }
+.xp-save:active { transform: scale(0.92); }
+.xp-save.is-saved { color: var(--primary); }
+
+/* In-route badge moves to top-center so it never sits under the heart. */
+.xp-rcard-inroute {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
 }
 
 .xp-dcard-body,
