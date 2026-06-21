@@ -957,7 +957,7 @@ ${placeList}
 Devuelve un JSON con una clave "descriptions" que sea un array de strings, una descripcion por lugar, en el MISMO ORDEN que la lista anterior.
 Ejemplo: {"descriptions": ["Estatua del siglo XIX dedicada al poeta, ubicada en un rincón tranquilo del Retiro.", "Mercado historico con los mejores productos frescos de la ciudad.", ...]}
 
-IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo, su zona y por que puede interesar, SIN inventar detalles especificos (fechas, premios, platos estrella, hitos del recorrido o lugares por los que pasa).' : ''}`;
+IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar. NO menciones barrios, distritos ni calles concretas: solo tienes el nombre y la ciudad, no puedes saber la zona con certeza y el mapa ya muestra donde esta. Centrate en QUE es el lugar y POR QUE merece la pena.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo y por que puede interesar, SIN inventar detalles especificos (fechas, premios, platos estrella, barrios, hitos del recorrido o lugares por los que pasa).' : ''}`;
 
     console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
 

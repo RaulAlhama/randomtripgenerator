@@ -93,7 +93,7 @@ export default function ExploreMap({
               position={[place.lat, place.lng]}
               icon={icon}
               zIndexOffset={selected ? 300 : 100}
-              eventHandlers={{ click: () => onSpotTap?.(key) }}
+              eventHandlers={{ click: () => onSpotTap?.(place) }}
             />
           );
         })}
