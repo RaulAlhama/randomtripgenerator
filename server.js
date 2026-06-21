@@ -1042,12 +1042,12 @@ Para cada lugar incluye:
 - type: Categoria (monument, museum, park, plaza, church, palace, viewpoint, historic, market, garden)
 - lat: Latitud GPS real
 - lng: Longitud GPS real
-- description: Una frase atractiva en ESPAÑOL explicando por que merece la pena visitarlo
+- description: Una frase atractiva en ESPAÑOL explicando por que merece la pena visitarlo (sin nombrar barrios, distritos ni calles)
 
 Devuelve un objeto JSON con una clave "places" que contenga un array:
 {"places": [{"name": "Nombre del Lugar", "type": "monument", "lat": ${lat.toFixed(2)}, "lng": ${lng.toFixed(2)}, "description": "Descripcion en español"}, ...]}
 
-IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}. Si no estas seguro de que un lugar existe, NO lo incluyas. NO incluyas restaurantes, cafes, bares, locales gastronomicos, teatros ni cines: esta ruta es para VER lugares de interes (cosas que enseñaria una oficina de turismo a alguien que tiene un dia para visitar la ciudad). La app tiene una pestaña aparte para restaurantes y los teatros solo merecen la pena si hay un espectaculo ese dia. Devuelve exactamente ${placeCount} lugares. Ordenalos para una ruta ${modeLabel}.`;
+IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}. Si no estas seguro de que un lugar existe, NO lo incluyas. NO incluyas restaurantes, cafes, bares, locales gastronomicos, teatros ni cines: esta ruta es para VER lugares de interes (cosas que enseñaria una oficina de turismo a alguien que tiene un dia para visitar la ciudad). La app tiene una pestaña aparte para restaurantes y los teatros solo merecen la pena si hay un espectaculo ese dia. En las descripciones NO menciones barrios, distritos ni calles concretas: centrate en QUE es el lugar y POR QUE merece la pena. Devuelve exactamente ${placeCount} lugares. Ordenalos para una ruta ${modeLabel}.`;
 
   console.log('[Nebius] Fallback: requesting full route for:', city, '| theme:', theme, '| transport:', transport);
 
