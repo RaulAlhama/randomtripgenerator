@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
-import { TripProvider, useTrip } from './context/TripContext';
+import { TripProvider } from './context/TripContext';
 import { useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SavedProvider, useSaved } from './context/SavedContext';
@@ -12,9 +12,7 @@ import BottomNav from './components/layout/BottomNav';
 import HowItWorks from './components/layout/HowItWorks';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
-import StatusCard from './components/ui/StatusCard';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
-import TripResult from './components/trip/TripResult';
 import MyTrips from './components/trips/MyTrips';
 import SavedView from './components/saved/SavedView';
 import ProfileView from './components/profile/ProfileView';
@@ -45,42 +43,26 @@ function RoutesTab({ onExplore }) {
 }
 
 function AppShell() {
-  const { currentTrip, isGenerating } = useTrip();
   const { saved } = useSaved();
   // null = closed; otherwise { view, location, radiusKm } for the deck overlay.
   const [explore, setExplore] = useState(null);
   // Which bottom-nav section is showing.
   const [tab, setTab] = useState('explorar');
   const exploreOpen = explore !== null;
-  const hasActiveTrip = Boolean(currentTrip || isGenerating);
 
   const openExplore = (view, opts = {}) =>
     setExplore({ view: view || 'sitios', location: opts.location || null, radiusKm: opts.radiusKm || null });
 
   return (
-    <div className={`container has-bottom-nav${hasActiveTrip && !exploreOpen ? ' has-trip' : ''}`}>
+    <div className="container has-bottom-nav">
       <Header />
       <main>
         {tab === 'explorar' && (
           <>
             <Hero onExplore={openExplore} />
-            {/* While explore mode is open it owns the trip state — keep the
-                page-level trip UI unmounted so two Leaflet maps never coexist. */}
-            {!exploreOpen && (
-              <>
-                <StatusCard />
-                <ErrorBoundary>
-                  <TripResult />
-                </ErrorBoundary>
-              </>
-            )}
-            {(!hasActiveTrip || exploreOpen) && (
-              <>
-                <TrustBand />
-                <HowItWorks />
-                <InspirationCarousel onExplore={openExplore} />
-              </>
-            )}
+            <TrustBand />
+            <HowItWorks />
+            <InspirationCarousel onExplore={openExplore} />
           </>
         )}
 

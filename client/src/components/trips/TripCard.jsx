@@ -15,7 +15,7 @@ const THEME_ICON_NAMES = {
   mixed: 'sparkle',
 };
 
-export default function TripCard({ trip, onDelete, onView }) {
+export default function TripCard({ trip, onDelete }) {
   const placesArr = trip.places || [];
   const distKm = trip.route_distance ? (trip.route_distance / 1000).toFixed(1) : '?';
   const durText = trip.route_duration ? formatDuration(trip.route_duration) : '?';
@@ -29,10 +29,6 @@ export default function TripCard({ trip, onDelete, onView }) {
   const transportDef = TRANSPORTS.find((t) => t.key === transportKey);
   const modeLabel = transportDef?.label || transportKey;
 
-  const handleCardClick = () => {
-    onView(trip);
-  };
-
   const handleDeleteClick = (e) => {
     e.stopPropagation();
     onDelete(trip.id);
@@ -42,7 +38,6 @@ export default function TripCard({ trip, onDelete, onView }) {
     <div
       className="saved-trip-card"
       data-theme-kind={trip.theme || 'classic'}
-      onClick={handleCardClick}
     >
       <div className="saved-trip-cover">
         <span className="saved-trip-theme-large" aria-hidden="true">

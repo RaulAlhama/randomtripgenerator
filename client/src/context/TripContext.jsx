@@ -1,15 +1,12 @@
 import { createContext, useReducer, useCallback, useContext } from 'react';
-import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchHikingTrails as apiFetchHikingTrails, fetchPlaceDescriptions } from '../services/api';
+import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchPlaceDescriptions } from '../services/api';
 import { saveTrip } from '../services/trips';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { WEATHER_CODES } from '../constants/weather';
 
 // Action types
-const SET_LOCATION_MODE = 'SET_LOCATION_MODE';
 const SET_SEARCH_LOCATION = 'SET_SEARCH_LOCATION';
-const SET_THEME = 'SET_THEME';
-const SET_TRANSPORT = 'SET_TRANSPORT';
 const SET_RADIUS = 'SET_RADIUS';
 const SET_GENERATING = 'SET_GENERATING';
 const SET_STATUS = 'SET_STATUS';
@@ -24,11 +21,8 @@ const SET_CANDIDATES = 'SET_CANDIDATES';
 const SET_SELECTED_KEYS = 'SET_SELECTED_KEYS';
 const TOGGLE_SELECTION = 'TOGGLE_SELECTION';
 const MERGE_DESCRIPTIONS = 'MERGE_DESCRIPTIONS';
-const SET_HIKING_TRAILS = 'SET_HIKING_TRAILS';
-const SET_SELECTED_TRAIL = 'SET_SELECTED_TRAIL';
 
 const CANDIDATE_COUNT = 10;
-const SURPRISE_COUNT = 6;
 
 // Stable identity for a POI across selection toggles
 function poiKey(p) {
@@ -81,11 +75,9 @@ const initialState = {
   routeDistance: null,
   routeDuration: null,
   weather: null,
-  stage: 'idle',          // 'idle' | 'candidates' | 'route' | 'hiking'
+  stage: 'idle',          // 'idle' | 'candidates' | 'route'
   candidates: null,        // full POI pool returned by /api/generate-trip
   selectedKeys: new Set(), // subset of candidates the user wants in the route
-  hikingTrails: null,      // array of trails returned by /api/hiking-trails
-  selectedTrailId: null,   // currently highlighted/zoomed trail
 };
 
 // Progress stages — message shown when progress reaches each threshold.
@@ -108,14 +100,8 @@ function messageForProgress(pct) {
 
 function tripReducer(state, action) {
   switch (action.type) {
-    case SET_LOCATION_MODE:
-      return { ...state, locationMode: action.payload };
     case SET_SEARCH_LOCATION:
       return { ...state, searchLocation: action.payload };
-    case SET_THEME:
-      return { ...state, selectedTheme: action.payload };
-    case SET_TRANSPORT:
-      return { ...state, selectedTransport: action.payload };
     case SET_RADIUS:
       return { ...state, selectedRadius: action.payload };
     case SET_GENERATING:
@@ -165,10 +151,6 @@ function tripReducer(state, action) {
           : state.currentTrip,
       };
     }
-    case SET_HIKING_TRAILS:
-      return { ...state, hikingTrails: action.payload };
-    case SET_SELECTED_TRAIL:
-      return { ...state, selectedTrailId: action.payload };
     case CLOSE_TRIP:
       return {
         ...state,
@@ -183,8 +165,6 @@ function tripReducer(state, action) {
         stage: 'idle',
         candidates: null,
         selectedKeys: new Set(),
-        hikingTrails: null,
-        selectedTrailId: null,
       };
     default:
       return state;
@@ -279,20 +259,8 @@ export function TripProvider({ children }) {
   const { isAuthenticated, getAccessToken } = useAuth();
   const { showToast } = useToast();
 
-  const setLocationMode = useCallback((mode) => {
-    dispatch({ type: SET_LOCATION_MODE, payload: mode });
-  }, []);
-
   const setSearchLocation = useCallback((location) => {
     dispatch({ type: SET_SEARCH_LOCATION, payload: location });
-  }, []);
-
-  const setTheme = useCallback((theme) => {
-    dispatch({ type: SET_THEME, payload: theme });
-  }, []);
-
-  const setTransport = useCallback((transport) => {
-    dispatch({ type: SET_TRANSPORT, payload: transport });
   }, []);
 
   const setRadius = useCallback((radius) => {
@@ -359,7 +327,6 @@ export function TripProvider({ children }) {
     const effectiveTheme = overrides.theme ?? state.selectedTheme;
     const effectiveTransport = overrides.transport ?? state.selectedTransport;
     const effectiveRadius = overrides.radius ?? state.selectedRadius;
-    const autoBuild = !!overrides.autoBuild;
 
     const sim = makeProgressSimulator();
 
@@ -385,10 +352,9 @@ export function TripProvider({ children }) {
       sim.start();
 
       const radiusMeters = Math.round(effectiveRadius * 1000);
-      // Fast mode (skip server-side LLM descriptions) only when we're going to
-      // show the curation deck. Sorpréndeme/autoBuild jumps straight to a route,
-      // so it keeps the synchronous descriptions.
-      const fast = !autoBuild;
+      // Fast mode: skip server-side LLM descriptions so the deck appears
+      // instantly. Descriptions are backfilled in the background below.
+      const fast = true;
       const tripData = await apiGenerateTrip(
         location.lat,
         location.lng,
@@ -419,49 +385,40 @@ export function TripProvider({ children }) {
         transport: effectiveTransport,
       };
 
-      // Default: all candidates selected. Sorpréndeme overrides this to the first SURPRISE_COUNT.
-      const initialSelection = autoBuild
-        ? new Set(candidates.slice(0, SURPRISE_COUNT).map(poiKey))
-        : new Set(candidates.map(poiKey));
+      // The deck starts with every candidate selected; the user swipes to remove.
+      const initialSelection = new Set(candidates.map(poiKey));
 
       dispatch({ type: SET_CANDIDATES, payload: candidates });
       dispatch({ type: SET_SELECTED_KEYS, payload: initialSelection });
       dispatch({ type: SET_TRIP, payload: trip });
 
-      if (autoBuild) {
-        // Jump straight to route stage using the auto-selected subset.
-        await buildRouteInternal(trip, candidates, initialSelection, effectiveTheme, effectiveTransport, location);
-      } else {
-        dispatch({ type: SET_STAGE, payload: 'candidates' });
-        dispatch({ type: SET_PROGRESS, payload: 100 });
-        dispatch({ type: SET_STATUS, payload: null });
-        dispatch({ type: SET_GENERATING, payload: false });
+      dispatch({ type: SET_STAGE, payload: 'candidates' });
+      dispatch({ type: SET_PROGRESS, payload: 100 });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
 
-        // Fetch weather in the background — it's relevant in both stages.
-        apiFetchWeather(location.lat, location.lng)
-          .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
-          .catch(() => {});
+      // Fetch weather in the background.
+      apiFetchWeather(location.lat, location.lng)
+        .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+        .catch(() => {});
 
-        // Fast mode returned no descriptions so the deck could appear instantly.
-        // Backfill them in the background and merge by poiKey when they arrive.
-        if (fast) {
-          fetchPlaceDescriptions(
-            candidates.map((p) => ({ name: p.name, type: p.type })),
-            trip.city,
-            trip.country,
-            effectiveTheme
-          )
-            .then(({ descriptions }) => {
-              if (!Array.isArray(descriptions)) return;
-              const map = {};
-              candidates.forEach((p, i) => {
-                if (descriptions[i]) map[poiKey(p)] = descriptions[i];
-              });
-              if (Object.keys(map).length) dispatch({ type: MERGE_DESCRIPTIONS, payload: map });
-            })
-            .catch(() => {});
-        }
-      }
+      // Descriptions were skipped server-side for speed; backfill them now and
+      // merge by poiKey when they arrive.
+      fetchPlaceDescriptions(
+        candidates.map((p) => ({ name: p.name, type: p.type })),
+        trip.city,
+        trip.country,
+        effectiveTheme
+      )
+        .then(({ descriptions }) => {
+          if (!Array.isArray(descriptions)) return;
+          const map = {};
+          candidates.forEach((p, i) => {
+            if (descriptions[i]) map[poiKey(p)] = descriptions[i];
+          });
+          if (Object.keys(map).length) dispatch({ type: MERGE_DESCRIPTIONS, payload: map });
+        })
+        .catch(() => {});
     } catch (error) {
       sim.stop();
       console.error('Error al generar candidatos:', error);
@@ -481,7 +438,7 @@ export function TripProvider({ children }) {
     state.selectedRadius,
   ]);
 
-  // Internal: shared route-build logic used by buildRouteFromSelection and Sorpréndeme.
+  // Internal: shared route-build logic used by buildRouteFromSelection.
   // Filters candidates by selection, fetches the OSRM route, transitions to 'route' stage.
   async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin, extraPlaces = []) {
     const chosen = candidates.filter(p => selectedKeys.has(poiKey(p)));
@@ -568,85 +525,6 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_STAGE, payload: 'candidates' });
   }, [state.candidates, state.currentTrip]);
 
-  // Hiking flow — parallel to the tourism flow but with a single Overpass
-  // call and no LLM/Places enrichment. Sets stage='hiking' and stores the
-  // trail list in state for HikingPanel to render.
-  const generateHikingTrails = useCallback(async (overrides = {}) => {
-    const effectiveLocationMode = overrides.locationMode ?? state.locationMode;
-    const effectiveSearchLocation = overrides.searchLocation ?? state.searchLocation;
-    const effectiveRadius = overrides.radius ?? state.selectedRadius;
-
-    try {
-      dispatch({ type: SET_ERROR, payload: null });
-      dispatch({ type: SET_PROGRESS, payload: 30 });
-      dispatch({ type: SET_STATUS, payload: 'Buscando senderos cercanos...' });
-      dispatch({ type: SET_GENERATING, payload: true });
-
-      let location;
-      if (effectiveLocationMode === 'search') {
-        if (!effectiveSearchLocation) {
-          throw new Error('Busca y selecciona una ubicación primero');
-        }
-        location = effectiveSearchLocation;
-      } else {
-        location = await getUserLocation();
-      }
-
-      // Hiking trails are usually outside cities — multiply the slider value
-      // to broaden the catch. A 5 km slider becomes a 15 km hiking search.
-      const radiusMeters = Math.min(Math.round(effectiveRadius * 1000 * 3), 25000);
-      const data = await apiFetchHikingTrails(location.lat, location.lng, radiusMeters);
-
-      if (!data.trails || data.trails.length === 0) {
-        throw new Error('No se encontraron senderos en esa zona. Prueba con un radio mayor.');
-      }
-
-      const trip = {
-        city: '',
-        country: '',
-        places: [],
-        origin_lat: location.lat,
-        origin_lng: location.lng,
-        trip_type: 'hiking',
-        theme: 'hiking',
-        transport: 'walking',
-      };
-
-      dispatch({ type: SET_HIKING_TRAILS, payload: data.trails });
-      dispatch({ type: SET_SELECTED_TRAIL, payload: data.trails[0]?.id ?? null });
-      dispatch({ type: SET_TRIP, payload: trip });
-      dispatch({ type: SET_STAGE, payload: 'hiking' });
-      dispatch({ type: SET_PROGRESS, payload: 100 });
-      dispatch({ type: SET_STATUS, payload: null });
-      dispatch({ type: SET_GENERATING, payload: false });
-
-      apiFetchWeather(location.lat, location.lng)
-        .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
-        .catch(() => {});
-    } catch (error) {
-      console.error('Error al buscar senderos:', error);
-      const msg = error.message || 'Error al buscar senderos';
-      dispatch({ type: SET_ERROR, payload: msg });
-      dispatch({ type: SET_STATUS, payload: null });
-      dispatch({ type: SET_GENERATING, payload: false });
-      dispatch({ type: SET_PROGRESS, payload: 0 });
-      showToast(msg, 'error');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.locationMode, state.searchLocation, state.selectedRadius]);
-
-  const selectTrail = useCallback((trailId) => {
-    dispatch({ type: SET_SELECTED_TRAIL, payload: trailId });
-  }, []);
-
-  // One-click shortcut: generate + auto-build route from the first SURPRISE_COUNT POIs.
-  const surpriseMe = useCallback(async (overrides = {}) => {
-    return generateCandidates({ ...overrides, autoBuild: true });
-  }, [generateCandidates]);
-
-  // Backward-compat alias for the InspirationCarousel and any external callers.
-  const generateTrip = surpriseMe;
-
   const closeTrip = useCallback(() => {
     dispatch({ type: CLOSE_TRIP });
   }, []);
@@ -679,59 +557,6 @@ export function TripProvider({ children }) {
     }
   }, [state.currentTrip, showToast]);
 
-  const viewSavedTrip = useCallback(
-    async (trip) => {
-      try {
-        dispatch({ type: SET_GENERATING, payload: true });
-        dispatch({ type: SET_STATUS, payload: 'Cargando ruta guardada...' });
-
-        const loadedTrip = {
-          city: trip.city,
-          country: trip.country,
-          places: trip.places || [],
-          origin_lat: trip.origin_lat,
-          origin_lng: trip.origin_lng,
-          poiSource: null,
-          route_distance: trip.route_distance,
-          route_duration: trip.route_duration,
-          theme: trip.theme,
-          transport: trip.transport_mode,
-        };
-
-        dispatch({ type: SET_TRIP, payload: loadedTrip });
-        dispatch({ type: SET_STAGE, payload: 'route' });
-        dispatch({ type: SET_CANDIDATES, payload: null });
-        dispatch({ type: SET_SELECTED_KEYS, payload: new Set() });
-
-        const transport = trip.transport_mode || 'driving';
-        const routeData = await fetchRouteData(
-          trip.origin_lat,
-          trip.origin_lng,
-          trip.places || [],
-          transport
-        );
-
-        dispatch({ type: SET_ROUTE, payload: routeData });
-
-        try {
-          const weatherData = await apiFetchWeather(trip.origin_lat, trip.origin_lng);
-          const weather = parseWeather(weatherData);
-          dispatch({ type: SET_WEATHER, payload: weather });
-        } catch (e) {
-          console.error('Error fetching weather:', e);
-        }
-
-        dispatch({ type: SET_STATUS, payload: null });
-      } catch (error) {
-        console.error('Error loading saved trip:', error);
-        showToast('No se pudo cargar la ruta guardada', 'error');
-      } finally {
-        dispatch({ type: SET_GENERATING, payload: false });
-      }
-    },
-    [showToast]
-  );
-
   const clearError = useCallback(() => {
     dispatch({ type: SET_ERROR, payload: null });
   }, []);
@@ -739,22 +564,14 @@ export function TripProvider({ children }) {
   const value = {
     ...state,
     poiKey,
-    setLocationMode,
     setSearchLocation,
-    setTheme,
-    setTransport,
     setRadius,
     toggleCandidate,
     generateCandidates,
     buildRouteFromSelection,
     backToCandidates,
-    surpriseMe,
-    generateTrip, // legacy alias = surpriseMe
-    generateHikingTrails,
-    selectTrail,
     closeTrip,
     shareTrip,
-    viewSavedTrip,
     clearError,
   };
 

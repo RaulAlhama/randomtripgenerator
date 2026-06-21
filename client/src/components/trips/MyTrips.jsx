@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useTrip } from '../../context/TripContext';
 import { useToast } from '../../context/ToastContext';
 import { loadTrips, deleteTrip as apiDeleteTrip } from '../../services/trips';
 import TripCard from './TripCard';
 
 export default function MyTrips() {
   const { isAuthenticated, getAccessToken } = useAuth();
-  const { viewSavedTrip } = useTrip();
   const { showToast } = useToast();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,10 +42,6 @@ export default function MyTrips() {
     }
   }, [getAccessToken, showToast, fetchTrips]);
 
-  const handleView = useCallback((trip) => {
-    viewSavedTrip(trip);
-  }, [viewSavedTrip]);
-
   if (!isAuthenticated) return null;
 
   return (
@@ -68,7 +62,6 @@ export default function MyTrips() {
               key={trip.id}
               trip={trip}
               onDelete={handleDelete}
-              onView={handleView}
             />
           ))}
         </div>
