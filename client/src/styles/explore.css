@@ -1250,6 +1250,50 @@
   overflow: hidden;
 }
 
+/* Tap a stop to reopen its full card */
+.xp-stop.is-tappable {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 140ms var(--ease);
+}
+.xp-stop.is-tappable:hover,
+.xp-stop.is-tappable:focus-visible {
+  background: var(--bg-subtle);
+  outline: none;
+}
+.xp-stop-go {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  color: var(--text-muted);
+}
+
+/* Reopened-stop card overlay */
+.xp-cardmodal {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: xp-cardmodal-fade 160ms var(--ease);
+}
+@keyframes xp-cardmodal-fade { from { opacity: 0; } to { opacity: 1; } }
+.xp-cardmodal-inner {
+  position: relative;
+  width: min(92vw, 380px);
+  height: min(80vh, 560px);
+}
+.xp-cardmodal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
 /* ---------- Desktop: dock the sheet as a left panel ---------- */
 @media (min-width: 900px) {
   .xp-sheet {

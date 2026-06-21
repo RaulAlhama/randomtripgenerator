@@ -80,6 +80,8 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   const [snap, setSnap] = useState('half');
   // Restaurants the user dropped into the walking route (keyed by placeId).
   const [routeRestaurants, setRouteRestaurants] = useState([]);
+  // A built-route stop reopened as a detail card (tap a number / map pin).
+  const [cardStop, setCardStop] = useState(null);
   const launchedRef = useRef(false);
 
   const origin = currentTrip
@@ -130,10 +132,15 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   }, [closeTrip, onClose]);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // A reopened stop card closes first; only then does Escape exit the deck.
+      if (cardStop) setCardStop(null);
+      else handleClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose]);
+  }, [handleClose, cardStop]);
 
   // Removing a card nudges the deck to the next one — it feels like discarding.
   const handleTogglePlace = (place) => {
@@ -291,12 +298,21 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
             poiKey={poiKey}
             restaurants={restaurants || []}
             routeGeometry={routeGeometry}
-            onSpotTap={() => {}}
+            onSpotTap={setCardStop}
           />
           <ExploreSheet snap={snap} onSnapChange={setSnap} refreshing={isGenerating} handle={routeHeader}>
             <ol className="xp-stops">
               {routePlaces.map((p, i) => (
-                <li key={poiKey(p)} className="xp-stop">
+                <li
+                  key={poiKey(p)}
+                  className="xp-stop is-tappable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setCardStop(p)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardStop(p); }
+                  }}
+                >
                   <span className={`xp-stop-num${p.type === 'restaurant' ? ' is-food' : ''}`}>
                     {p.type === 'restaurant' ? '🍴' : i + 1}
                   </span>
@@ -304,11 +320,42 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
                     <span className="xp-stop-name">{p.name}</span>
                     {p.description && <span className="xp-stop-desc">{p.description}</span>}
                   </div>
+                  <svg className="xp-stop-go" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
                 </li>
               ))}
             </ol>
             <RestaurantStrip restaurants={restaurants || []} title="Para reponer fuerzas" />
           </ExploreSheet>
+
+          {cardStop && (
+            <div
+              className="xp-cardmodal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={cardStop.name}
+              onClick={() => setCardStop(null)}
+            >
+              <div className="xp-cardmodal-inner" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="xp-top-btn xp-cardmodal-close"
+                  onClick={() => setCardStop(null)}
+                  aria-label="Cerrar"
+                >
+                  <CloseIcon />
+                </button>
+                <DeckPlaceCard
+                  place={cardStop}
+                  city={city}
+                  selected
+                  readOnly
+                  distanceKm={origin ? haversineKm(origin.lat, origin.lng, cardStop.lat, cardStop.lng) : 0}
+                />
+              </div>
+            </div>
+          )}
         </>
       )}
 

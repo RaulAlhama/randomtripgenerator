@@ -16,7 +16,9 @@ async function resolvePlaceImage(name, city, type) {
 
 // One full-screen place card in the swipe deck. Included by default; the
 // action toggles it out of (or back into) the route.
-export default function DeckPlaceCard({ place, city, selected, onToggle, distanceKm }) {
+// readOnly: render the card as a passive detail view (no add/remove action,
+// no "out of route" badge) — used when reopening a stop from the built route.
+export default function DeckPlaceCard({ place, city, selected, onToggle, distanceKm, readOnly = false }) {
   const icon = typeIcons[place.type] || typeIcons.default;
   const [imageUrl, setImageUrl] = useState(place.imageUrl || null);
   const [imgError, setImgError] = useState(false);
@@ -76,7 +78,7 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
             description: place.description || null,
           }}
         />
-        {!selected && <span className="xp-dcard-removed">Fuera de la ruta</span>}
+        {!selected && !readOnly && <span className="xp-dcard-removed">Fuera de la ruta</span>}
       </div>
 
       <div className="xp-dcard-body">
@@ -109,28 +111,30 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
           </div>
         )}
 
-        <button
-          type="button"
-          className={`xp-dcard-action${selected ? '' : ' is-add'}`}
-          onClick={onToggle}
-          aria-pressed={selected}
-        >
-          {selected ? (
-            <>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-              Quitar de la ruta
-            </>
-          ) : (
-            <>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              Volver a añadir
-            </>
-          )}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className={`xp-dcard-action${selected ? '' : ' is-add'}`}
+            onClick={onToggle}
+            aria-pressed={selected}
+          >
+            {selected ? (
+              <>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+                Quitar de la ruta
+              </>
+            ) : (
+              <>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Volver a añadir
+              </>
+            )}
+          </button>
+        )}
       </div>
     </article>
   );
