@@ -78,7 +78,7 @@ function AppShell() {
               <>
                 <TrustBand />
                 <HowItWorks />
-                <InspirationCarousel />
+                <InspirationCarousel onExplore={openExplore} />
               </>
             )}
           </>

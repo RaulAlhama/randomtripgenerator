@@ -1,29 +1,12 @@
-import { useTrip } from '../../context/TripContext';
 import { INSPIRATION_EXAMPLES } from '../../constants/inspiration';
 import CarouselCard from './CarouselCard';
 
-export default function InspirationCarousel() {
-  const {
-    setLocationMode,
-    setSearchLocation,
-    setTheme,
-    setRadius,
-    generateTrip,
-  } = useTrip();
-
+export default function InspirationCarousel({ onExplore }) {
+  // Send the click straight into the swipe deck for that city — the same
+  // experience as the hero CTA, instead of the legacy page-level map.
   const handleCardClick = (example) => {
-    setLocationMode('search');
-    const loc = { lat: example.lat, lng: example.lng, name: example.city, country: 'España' };
-    setSearchLocation(loc);
-    setTheme(example.theme);
-    setRadius(example.radius);
-    generateTrip({
-      locationMode: 'search',
-      searchLocation: loc,
-      theme: example.theme,
-      transport: 'walking',
-      radius: example.radius,
-    });
+    const location = { lat: example.lat, lng: example.lng, name: example.city, country: 'España' };
+    onExplore('sitios', { location, radiusKm: example.radius });
   };
 
   const cards = INSPIRATION_EXAMPLES.map((example, index) => (
