@@ -548,64 +548,75 @@
 /* Restaurant stop in the route list — fork glyph instead of a number. */
 .xp-stop-num.is-food { background: var(--bg-subtle); font-size: 0.95rem; }
 
-/* ---------- Hero secondary entry (restaurants) ---------- */
-.explore-cta-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 auto 18px;
-  padding: 11px 18px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  background: var(--bg-card);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.explore-cta-secondary:hover { background: var(--bg-subtle); transform: translateY(-1px); }
-
 /* Desktop: present the deck as a centred device panel so the cards read as a
    deliberate frame instead of floating, lost, in a sea of whitespace. */
 @media (min-width: 900px) {
-  /* Ambient backdrop so the framed deck pops off the page. */
+  /* Ambient backdrop so the framed deck reads as a deliberate stage, not a
+     mobile card lost in whitespace. */
   .xp-overlay {
     background:
-      radial-gradient(120% 90% at 50% -10%, var(--bg-subtle) 0%, transparent 55%),
+      radial-gradient(110% 75% at 50% 0%, var(--bg-muted) 0%, transparent 60%),
       var(--bg);
   }
 
   .xp-deck {
     left: 50%;
     right: auto;
-    top: 84px;
-    bottom: 30px;
+    top: 80px;
+    bottom: 32px;
     transform: translateX(-50%);
-    width: 432px;
-    padding: 16px 0 18px;
+    width: 440px;
+    padding: 18px 0 20px;
     background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 30px;
-    box-shadow: 0 30px 70px rgba(20, 35, 33, 0.22);
+    border: 1px solid var(--border-strong);
+    border-radius: 28px;
+    box-shadow: var(--shadow-xl), 0 2px 6px rgba(20, 35, 33, 0.06);
     overflow: hidden;
   }
 
-  .xp-deck-cell { justify-content: center; padding: 0 18px; }
+  .xp-deck-cell { justify-content: center; padding: 0 20px; }
   .xp-dcard,
   .xp-rcard { max-width: 100%; margin: 0; }
-  .xp-deck-header { max-width: 100%; margin: 0; width: 100%; padding: 2px 24px 10px; }
-  .xp-deck-footer { max-width: 100%; margin: 0; width: 100%; padding: 12px 24px 4px; }
+  .xp-deck-header { max-width: 100%; margin: 0; width: 100%; padding: 2px 26px 10px; }
+  .xp-deck-footer { max-width: 100%; margin: 0; width: 100%; padding: 12px 26px 4px; }
 
   /* Float the controls in a row that lines up with the framed deck. */
   .xp-top-deck {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    width: 432px;
+    width: 440px;
   }
+
+  /* Click arrows sit in the gutters either side of the framed deck. */
+  .xp-deck-arrow {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 50%;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-glass-strong);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    z-index: 15;
+    transition: transform 180ms var(--ease), color 180ms var(--ease), opacity 180ms var(--ease);
+  }
+  .xp-deck-arrow-prev { left: calc(50% - 220px - 68px); transform: translateY(-50%); }
+  .xp-deck-arrow-next { left: calc(50% + 220px + 16px); transform: translateY(-50%); }
+  .xp-deck-arrow:hover:not(:disabled) { color: var(--primary); transform: translateY(-50%) scale(1.08); }
+  .xp-deck-arrow:active:not(:disabled) { transform: translateY(-50%) scale(0.95); }
+  .xp-deck-arrow:disabled { opacity: 0.3; cursor: default; }
+}
+
+/* Mobile / tablet: swipe instead of arrows. */
+@media (max-width: 899px) {
+  .xp-deck-arrow { display: none; }
 }
 
 /* ---------- Map markers ---------- */
@@ -1310,7 +1321,9 @@
 
   .xp-sheet-handle { cursor: default; padding-top: 18px; }
 
-  .xp-top {
+  /* Route view only: push the floating controls right of the left-docked sheet.
+     Must not leak into the deck view, which centres its own top bar below. */
+  .xp-top:not(.xp-top-deck) {
     left: 456px;
   }
 
@@ -1320,85 +1333,6 @@
     top: calc(12px + 54px);
   }
 }
-
-/* ---------- Hero entry CTA ---------- */
-.explore-cta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  width: 100%;
-  max-width: 250px;
-  min-height: 250px;
-  margin: 0 auto 14px;
-  padding: 30px 26px;
-  border: none;
-  border-radius: var(--radius-xl);
-  background: var(--grad-ocean);
-  color: #fff;
-  text-align: center;
-  cursor: pointer;
-  font-family: inherit;
-  box-shadow: 0 16px 40px rgba(20, 35, 33, 0.26);
-  transition: var(--transition);
-  position: relative;
-  overflow: hidden;
-}
-
-.explore-cta:hover { transform: translateY(-3px); box-shadow: 0 24px 52px rgba(20, 35, 33, 0.34); }
-.explore-cta:active { transform: translateY(-1px) scale(0.99); }
-
-.explore-cta-badge {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
-.explore-cta-pulse {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  animation: xp-pulse 2.2s ease-out infinite;
-}
-
-.explore-cta-text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.explore-cta-text strong {
-  font-size: 1.32rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-
-.explore-cta-text small {
-  font-size: 0.85rem;
-  font-weight: 500;
-  opacity: 0.9;
-}
-
-.explore-cta-go {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 0.9rem;
-  font-weight: 750;
-  transition: background 200ms var(--ease);
-}
-
-.explore-cta:hover .explore-cta-go { background: rgba(255, 255, 255, 0.26); }
 
 /* Quiet disclosure for the full planner — keeps the landing to one action. */
 .planner-toggle {
@@ -1441,7 +1375,6 @@
   .xp-overlay,
   .xp-sheet,
   .xp-card.is-flash,
-  .explore-cta-pulse,
   .xp-user-dot span,
   .xp-radar span {
     animation: none;

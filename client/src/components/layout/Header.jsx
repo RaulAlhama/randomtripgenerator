@@ -64,7 +64,6 @@ export default function Header() {
       <Logo />
 
       <nav className="header-nav" aria-label="Secciones">
-        <a href="#como-funciona">Cómo funciona</a>
         <a href="#inspiracion">Inspiración</a>
       </nav>
 
@@ -95,9 +94,6 @@ export default function Header() {
 
         {menuOpen && (
           <div className="header-menu" role="menu">
-            <a href="#como-funciona" role="menuitem" onClick={() => setMenuOpen(false)}>
-              Cómo funciona
-            </a>
             <a href="#inspiracion" role="menuitem" onClick={() => setMenuOpen(false)}>
               Inspiración
             </a>

@@ -376,7 +376,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
               <p className="xp-deck-hint">
                 {restaurantCount > 0
                   ? `${selectedCount} sitio${selectedCount === 1 ? '' : 's'} + ${restaurantCount} para comer`
-                  : 'Desliza para ver · quita los que no te encajen'}
+                  : 'Repasa los sitios · quita los que no te encajen'}
               </p>
               <button
                 type="button"
