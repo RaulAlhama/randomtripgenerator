@@ -25,6 +25,18 @@ export default function ExploreDeck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count]);
 
+  // Desktop has no touch swipe: arrow keys page the deck too.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.closest('input, textarea')) return;
+      if (e.key === 'ArrowRight') go(index + 1);
+      else if (e.key === 'ArrowLeft') go(index - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, count]);
+
   const onPointerDown = (e) => {
     if (e.target.closest('button, a, input')) return;
     const width = trackRef.current?.offsetWidth || window.innerWidth;
@@ -62,7 +74,28 @@ export default function ExploreDeck({
     : 0;
 
   return (
-    <div className="xp-deck">
+    <>
+      {/* Desktop affordance: click arrows (or use ← →) instead of swiping. */}
+      <button
+        type="button"
+        className="xp-deck-arrow xp-deck-arrow-prev"
+        onClick={() => go(index - 1)}
+        disabled={index === 0}
+        aria-label="Sitio anterior"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+      </button>
+      <button
+        type="button"
+        className="xp-deck-arrow xp-deck-arrow-next"
+        onClick={() => go(index + 1)}
+        disabled={index === count - 1}
+        aria-label="Siguiente sitio"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+      </button>
+
+      <div className="xp-deck">
       {header}
 
       <div className="xp-deck-stage">
@@ -85,6 +118,7 @@ export default function ExploreDeck({
       </div>
 
       {footer}
-    </div>
+      </div>
+    </>
   );
 }

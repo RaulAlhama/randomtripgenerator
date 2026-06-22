@@ -1,32 +1,24 @@
 // Honest credibility band: claims that are true regardless of traffic
 // (no fabricated counters or testimonials). Reinforces the real
 // differentiators vs generic "AI trip planner" wrappers.
+// Only the claims the hero doesn't already make — the real differentiators
+// vs a generic "AI trip planner": real OSM places, real Google data, no friction.
 const ITEMS = [
   {
     title: 'Lugares reales',
     text: 'De OpenStreetMap, no inventados por IA.',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z" />
         <circle cx="12" cy="10" r="3" />
       </svg>
     ),
   },
   {
-    title: 'Al instante, a tu alrededor',
-    text: 'Detecta dónde estás y arma la ruta a pie.',
+    title: 'Fotos y datos de Google',
+    text: 'Valoraciones y horarios reales.',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="m16 8-5.5 2.5L8 16l5.5-2.5L16 8z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Fotos e info real',
-    text: 'Fotos, valoraciones y horarios de Google.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="16" rx="2" />
         <circle cx="8.5" cy="9.5" r="1.5" />
         <path d="m21 16-5-5L5 20" />
@@ -34,10 +26,10 @@ const ITEMS = [
     ),
   },
   {
-    title: 'Gratis y sin fricción',
-    text: 'Sin registro y sin anuncios.',
+    title: 'Gratis, sin fricción',
+    text: 'Sin registro ni anuncios.',
     icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8" />
         <path d="M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
       </svg>

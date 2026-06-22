@@ -9,7 +9,6 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import BottomNav from './components/layout/BottomNav';
-import HowItWorks from './components/layout/HowItWorks';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
@@ -61,7 +60,6 @@ function AppShell() {
           <>
             <Hero onExplore={openExplore} />
             <TrustBand />
-            <HowItWorks />
             <InspirationCarousel onExplore={openExplore} />
           </>
         )}

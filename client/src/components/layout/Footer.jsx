@@ -29,12 +29,11 @@ export default function Footer() {
               <img src="/icons/logo-mark.png" alt="" width="26" height="26" decoding="async" />
               RandomTrip
             </span>
-            <p>Rutas turísticas generadas con IA. Descubre tu ciudad, o cualquier otra, en segundos.</p>
+            <p>Rutas turísticas a pie generadas en segundos: detecta dónde estás y traza un itinerario por lugares reales de OpenStreetMap, con fotos, valoraciones y horarios de Google. Gratis y sin registro, en tu ciudad o en cualquier otra del mundo.</p>
           </div>
           <div className="footer-links">
             <div className="footer-links-group">
               <h4>Producto</h4>
-              <a href="#como-funciona">Cómo funciona</a>
               <a href="#inspiracion">Inspiración</a>
             </div>
             <div className="footer-links-group">
