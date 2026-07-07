@@ -1279,6 +1279,62 @@
   color: var(--text-muted);
 }
 
+/* ---------- Activities promo (Civitatis affiliate, route sheet) ---------- */
+.xp-promo { margin: 14px 0 4px; }
+
+.xp-promo-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  text-decoration: none;
+  transition: background 140ms var(--ease);
+}
+.xp-promo-card:hover,
+.xp-promo-card:focus-visible {
+  background: var(--border);
+  outline: none;
+}
+
+.xp-promo-icon {
+  flex: none;
+  font-size: 1.35rem;
+}
+
+.xp-promo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xp-promo-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.xp-promo-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.xp-promo-go {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.xp-promo-disclosure {
+  margin: 6px 2px 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 /* Reopened-stop card overlay */
 .xp-cardmodal {
   position: absolute;

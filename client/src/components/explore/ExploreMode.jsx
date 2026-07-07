@@ -8,6 +8,7 @@ import ExploreDeck from './ExploreDeck';
 import DeckPlaceCard from './DeckPlaceCard';
 import DeckRestaurantCard from './DeckRestaurantCard';
 import RestaurantStrip from './RestaurantStrip';
+import ActivityPromo from './ActivityPromo';
 
 // Explore mode assumes the user is on foot with spare time right now.
 const EXPLORE_RADIUS_KM = 2;
@@ -339,6 +340,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
                 </li>
               ))}
             </ol>
+            <ActivityPromo city={city} />
             <RestaurantStrip restaurants={restaurants || []} title="Para reponer fuerzas" />
           </ExploreSheet>
 
