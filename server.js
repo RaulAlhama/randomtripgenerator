@@ -937,6 +937,40 @@ function parseLLMJsonSafe(raw) {
   return null;
 }
 
+// When the model runs out of tokens mid-array, the JSON never closes and
+// parseLLMJsonSafe gives up. Salvage the string elements that did come out
+// complete: 8 real descriptions + 2 local fallbacks beats 10 fallbacks.
+// Each complete literal (quotes included) is handed to JSON.parse so escape
+// sequences are decoded exactly like a full parse would.
+function salvageDescriptionsArray(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const start = raw.indexOf('[');
+  if (start < 0) return null;
+  const out = [];
+  let i = start + 1;
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === ']') break;
+    if (ch === '"') {
+      let j = i + 1;
+      let esc = false;
+      let closed = false;
+      for (; j < raw.length; j++) {
+        const c = raw[j];
+        if (esc) { esc = false; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') { closed = true; break; }
+      }
+      if (!closed) break; // truncated mid-string — drop the tail
+      try { out.push(JSON.parse(raw.slice(i, j + 1))); } catch { /* skip */ }
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+  return out.length > 0 ? out : null;
+}
+
 // Call the Nebius chat-completions endpoint once and return the message
 // content string (empty string on error). Centralised so the retry wrapper
 // below doesn't duplicate request plumbing.
@@ -1025,53 +1059,63 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
 
     console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
 
-    const requestBody = JSON.stringify({
+    // Nemotron burns completion tokens on hidden reasoning before emitting
+    // the JSON; with 10 cards (and the longer cautious prompt) 3000 still
+    // truncated mid-array. The cap is not a spend — only generated tokens
+    // bill — so keep it roomy. The retry asks for one short sentence per
+    // place at low temperature, which shrinks both reasoning and output.
+    const buildBody = (attempt) => ({
       model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
       messages: [
-        { role: 'system', content: 'Eres un experto en turismo. Responde con JSON valido. Todas las descripciones en español. Cada descripcion debe ser especifica e informativa sobre el lugar.' },
-        { role: 'user', content: prompt }
+        {
+          role: 'system',
+          content: attempt === 0
+            ? 'Eres un experto en turismo. Responde con JSON valido. Todas las descripciones en español. Cada descripcion debe ser especifica e informativa sobre el lugar.'
+            : 'Eres un experto en turismo. Devuelve EXCLUSIVAMENTE un objeto JSON valido y completo con la clave "descriptions". Sin markdown ni prosa. Descripciones en español, UNA sola frase corta por lugar (maximo 20 palabras).',
+        },
+        { role: 'user', content: prompt },
       ],
-      temperature: 0.7,
-      // Nemotron spends completion tokens on hidden reasoning before the
-      // JSON; 1500 caused mid-array truncation with 8 long descriptions.
-      max_tokens: 3000,
-      response_format: { type: 'json_object' }
+      temperature: attempt === 0 ? 0.7 : 0.3,
+      max_tokens: 6000,
+      response_format: { type: 'json_object' },
     });
 
-    const baseUrl = apiBaseUrl.replace(/\/+$/, '');
-    const response = await fetchExternal(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: requestBody
-    });
-
-    if (response.error || response.detail) {
-      const detail = response.error?.message || response.detail || JSON.stringify(response.error);
-      console.error('[Nebius][ALERT] API error getting descriptions:', detail);
-      if (/credit|balance|quota|insufficient|payment|402/i.test(String(detail))) {
-        console.error('[Nebius][ALERT] Parece un problema de CRÉDITO/cuota en Nebius. Recarga saldo para restaurar las descripciones IA.');
+    // best = the longest partial we've salvaged; callers pad the missing
+    // tail with local fallbacks per index, so partial output is still useful.
+    let best = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let content = '';
+      try {
+        content = await callNebiusOnce(buildBody(attempt), apiBaseUrl, apiKey);
+      } catch (e) {
+        console.error('[Nebius][ALERT] API error getting descriptions:', e.message);
+        if (/credit|balance|quota|insufficient|payment|402/i.test(String(e.message))) {
+          console.error('[Nebius][ALERT] Parece un problema de CRÉDITO/cuota en Nebius. Recarga saldo para restaurar las descripciones IA.');
+        }
+        return null; // API-level failure — retrying in-request won't help
       }
-      return null;
+      if (!content) {
+        console.error('[Nebius][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota en Nebius).');
+        continue;
+      }
+
+      const parsed = parseLLMJsonSafe(content);
+      let descriptions = parsed
+        ? (parsed.descriptions || Object.values(parsed).find((v) => Array.isArray(v)))
+        : salvageDescriptionsArray(content);
+      if (!Array.isArray(descriptions) || descriptions.length === 0) descriptions = null;
+
+      if (descriptions && descriptions.length >= places.length) return descriptions;
+      if (descriptions) {
+        if (!best || descriptions.length > best.length) best = descriptions;
+        console.warn(`[Nebius] Truncated descriptions (${descriptions.length}/${places.length})${attempt === 0 ? ', retrying' : ''}`);
+      } else if (attempt === 0) {
+        console.warn('[Nebius] Invalid descriptions JSON, retrying with stricter prompt:', content.substring(0, 200));
+      }
     }
 
-    const content = response.choices?.[0]?.message?.content || '';
-    if (!content) {
-      console.error('[Nebius][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota en Nebius).');
-      return null;
-    }
-
-    const parsed = parseLLMJsonSafe(content);
-    if (!parsed) {
-      console.error('[Nebius] Failed to parse descriptions JSON:', content.substring(0, 300));
-      return null;
-    }
-    const descriptions = parsed.descriptions || Object.values(parsed).find(v => Array.isArray(v));
-    if (Array.isArray(descriptions)) return descriptions;
-
-    console.error('[Nebius] Unexpected descriptions format:', Object.keys(parsed));
+    if (best) return best;
+    console.error('[Nebius] No usable descriptions after retry');
     return null;
   } catch (e) {
     console.error('[Nebius] Failed to get descriptions:', e.message);
@@ -1130,7 +1174,7 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
       { role: 'user', content: prompt },
     ],
     temperature: attempt === 0 ? 0.85 : 0.3,
-    max_tokens: 3000,
+    max_tokens: 5000,
     response_format: { type: 'json_object' },
   });
 
@@ -2537,4 +2581,5 @@ module.exports = {
   fetchAllPOIImages,
   fetchExternal,
   parseLLMJsonSafe,
+  salvageDescriptionsArray,
 };
