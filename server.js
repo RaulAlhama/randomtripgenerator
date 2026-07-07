@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 const { initDatabase, query } = require('./database');
 const { CITIES, CITY_BY_SLUG } = require('./cityData');
 
@@ -41,6 +42,15 @@ const restaurantsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Has hecho muchas busquedas, espera un momento' }
+});
+
+// Creating share links writes rows without auth, so keep it tight.
+const shareLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Has compartido muchas rutas, espera un momento' }
 });
 
 app.use('/api/', apiLimiter);
@@ -2096,6 +2106,123 @@ app.delete('/api/trips/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ========== SHARED ROUTES (public, no auth) ==========
+
+// Whitelist-copy one place of a share payload. Anything not listed here never
+// reaches the DB, and URLs must be http(s) so a share can't smuggle javascript:
+// links into another visitor's browser.
+function sanitizeSharedPlace(p) {
+  if (!p || typeof p !== 'object') return null;
+  const lat = Number(p.lat);
+  const lng = Number(p.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  const str = (v, max) => (typeof v === 'string' && v.trim() ? v.slice(0, max) : null);
+  const httpUrl = (v, max) => (typeof v === 'string' && /^https?:\/\//i.test(v) ? v.slice(0, max) : null);
+  const name = str(p.name, 160);
+  if (!name) return null;
+  return {
+    name,
+    lat,
+    lng,
+    type: str(p.type, 40) || 'place',
+    description: str(p.description, 600),
+    imageUrl: httpUrl(p.imageUrl, 600),
+    rating: typeof p.rating === 'number' ? p.rating : null,
+    userRatingsTotal: typeof p.userRatingsTotal === 'number' ? p.userRatingsTotal : null,
+    website: httpUrl(p.website, 300),
+    phone: str(p.phone, 40),
+    openNow: typeof p.openNow === 'boolean' ? p.openNow : null,
+    openingHours: Array.isArray(p.openingHours)
+      ? p.openingHours.slice(0, 7).map((s) => String(s).slice(0, 120))
+      : null,
+    placeId: str(p.placeId, 160),
+    wikipedia: str(p.wikipedia, 200),
+    wikidata: str(p.wikidata, 40),
+  };
+}
+
+const SHARE_SLUG_RE = /^[A-Za-z0-9_-]{4,16}$/;
+
+async function getSharedTripCached(slug) {
+  const cacheKey = `share:${slug}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached === '__none__' ? null : cached;
+  const result = await query(
+    `SELECT slug, city, country, transport, origin_lat, origin_lng, places,
+            route_distance, route_duration, created_at
+     FROM shared_trips WHERE slug = $1`,
+    [slug]
+  );
+  const row = result.rows[0] || null;
+  cacheSet(cacheKey, row || '__none__');
+  return row;
+}
+
+// Create a share link for a built route. Public on purpose: sharing is the
+// growth loop and must not require login.
+app.post('/api/share', shareLimiter, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const originLat = Number(b.origin_lat);
+    const originLng = Number(b.origin_lng);
+    if (!Number.isFinite(originLat) || !Number.isFinite(originLng)
+        || Math.abs(originLat) > 90 || Math.abs(originLng) > 180) {
+      return res.status(400).json({ error: 'Origen inválido' });
+    }
+    const places = (Array.isArray(b.places) ? b.places : [])
+      .map(sanitizeSharedPlace)
+      .filter(Boolean)
+      .slice(0, 15);
+    if (places.length < 2) {
+      return res.status(400).json({ error: 'La ruta necesita al menos 2 paradas' });
+    }
+    const transport = ['driving', 'walking', 'cycling'].includes(b.transport) ? b.transport : 'walking';
+    const city = String(b.city || '').slice(0, 80);
+    const country = String(b.country || '').slice(0, 80);
+    const dist = Number.isFinite(Number(b.route_distance)) ? Number(b.route_distance) : null;
+    const dur = Number.isFinite(Number(b.route_duration)) ? Number(b.route_duration) : null;
+
+    // 48 random bits → collisions are ~impossible, but retry once anyway.
+    let slug = null;
+    for (let attempt = 0; attempt < 2 && !slug; attempt++) {
+      const candidate = crypto.randomBytes(6).toString('base64url');
+      try {
+        await query(
+          `INSERT INTO shared_trips
+             (slug, city, country, transport, origin_lat, origin_lng, places, route_distance, route_duration)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [candidate, city, country, transport, originLat, originLng, JSON.stringify(places), dist, dur]
+        );
+        slug = candidate;
+      } catch (e) {
+        if (e.code !== '23505') throw e; // 23505 = unique_violation → retry
+      }
+    }
+    if (!slug) throw new Error('Could not allocate a share slug');
+
+    console.log(`[Share] Created /r/${slug} — ${city || 'sin ciudad'}, ${places.length} paradas`);
+    res.json({ slug });
+  } catch (error) {
+    console.error('Error sharing trip:', error);
+    res.status(500).json({ error: 'No se pudo crear el enlace' });
+  }
+});
+
+app.get('/api/share/:slug', async (req, res) => {
+  const slug = String(req.params.slug || '');
+  if (!SHARE_SLUG_RE.test(slug)) {
+    return res.status(400).json({ error: 'Enlace no válido' });
+  }
+  try {
+    const trip = await getSharedTripCached(slug);
+    if (!trip) return res.status(404).json({ error: 'Esta ruta ya no está disponible' });
+    res.json(trip);
+  } catch (error) {
+    console.error('Error fetching shared trip:', error);
+    res.status(500).json({ error: 'No se pudo cargar la ruta' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // SEO: per-city landing pages, pre-generated variant pages + dynamic sitemap
 // ---------------------------------------------------------------------------
@@ -2252,6 +2379,40 @@ app.get('/ciudad/:slug/:variant', async (req, res, next) => {
     res.type('html').send(html);
   } catch (err) {
     console.error('[ciudad/variant] render failed:', err.message);
+    next();
+  }
+});
+
+// Inject page-specific metadata into the built index.html. Same regexes the
+// /ciudad pages rely on — assertIndexPatterns guards them at startup.
+function applyMetaTags(html, { title, desc, url }) {
+  return html
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(title)}</title>`)
+    .replace(/<meta name="description" content="[\s\S]*?"\s*\/>/, `<meta name="description" content="${escapeHtml(desc)}" />`)
+    .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="${url}" />`)
+    .replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="${url}" />`)
+    .replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`)
+    .replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+}
+
+// Shared route pages: the same SPA, but with the share's own title/description
+// so a WhatsApp/Twitter preview says "Ruta a pie por Sevilla: 6 paradas"
+// instead of the generic homepage blurb. Unknown/expired slugs fall through to
+// the SPA, which shows its "ruta no disponible" state.
+app.get('/r/:slug', async (req, res, next) => {
+  const slug = String(req.params.slug || '');
+  if (!SHARE_SLUG_RE.test(slug)) return next();
+  try {
+    const trip = await getSharedTripCached(slug);
+    if (!trip) return next();
+    const stops = Array.isArray(trip.places) ? trip.places : [];
+    const names = stops.slice(0, 3).map((p) => p && p.name).filter(Boolean).join(', ');
+    const modeLabel = trip.transport === 'cycling' ? 'en bici' : trip.transport === 'driving' ? 'en coche' : 'a pie';
+    const title = `Ruta ${modeLabel} por ${trip.city || 'la zona'}: ${stops.length} paradas — RandomTrip`;
+    const desc = `Ruta compartida por ${trip.city || 'la zona'}${names ? `: ${names} y más` : ''}. Ábrela en el mapa y empieza a caminar.`;
+    res.type('html').send(applyMetaTags(readIndexHtml(), { title, desc, url: `${SITE_ORIGIN}/r/${slug}` }));
+  } catch (err) {
+    console.error('[share page] render failed:', err.message);
     next();
   }
 });
