@@ -2304,15 +2304,30 @@ function readIndexHtml() {
   return fs.readFileSync(indexPath, 'utf8');
 }
 
-// Civitatis affiliate id. One value serves both layers: the client reads
-// VITE_CIVITATIS_AID at build time, the server reads either name at runtime
-// (Render exposes the same env to both). Empty → affiliate sections vanish.
+// Activities affiliate for the /ciudad pages. Same provider priority as the
+// client (services/affiliates.js): Civitatis → GetYourGuide. One value can
+// serve both layers: the client reads the VITE_ name at build time and the
+// server accepts either name at runtime (Render exposes the same env to
+// both). With nothing configured, affiliate sections vanish.
 const CIVITATIS_AID = process.env.CIVITATIS_AID || process.env.VITE_CIVITATIS_AID || '';
+const GYG_PARTNER_ID = process.env.GYG_PARTNER_ID || process.env.VITE_GYG_PARTNER_ID || '';
 
-function civitatisLink(slug) {
-  return CIVITATIS_AID
-    ? `https://www.civitatis.com/es/${slug}/?aid=${encodeURIComponent(CIVITATIS_AID)}`
-    : null;
+function activityAffiliateLink(city) {
+  if (CIVITATIS_AID) {
+    return {
+      provider: 'Civitatis',
+      url: `https://www.civitatis.com/es/${city.slug}/?aid=${encodeURIComponent(CIVITATIS_AID)}`,
+    };
+  }
+  if (GYG_PARTNER_ID) {
+    // GYG city pages need internal location ids, so deep-link the search
+    // page — any getyourguide.com URL with ?partner_id= attributes the sale.
+    return {
+      provider: 'GetYourGuide',
+      url: `https://www.getyourguide.es/s/?q=${encodeURIComponent(city.name)}&partner_id=${encodeURIComponent(GYG_PARTNER_ID)}`,
+    };
+  }
+  return null;
 }
 
 // Build the pre-rendered #seo-prerender block for a city landing page.
@@ -2341,14 +2356,14 @@ ${variantLinks.join('\n')}
 `
     : '';
 
-  const civUrl = civitatisLink(city.slug);
-  const activitiesSection = civUrl
+  const aff = activityAffiliateLink(city);
+  const activitiesSection = aff
     ? `
       <h2>Reserva actividades en ${escapeHtml(city.name)}</h2>
       <p>
         ¿Prefieres una visita con guía? Reserva
-        <a href="${civUrl}" rel="sponsored noopener" target="_blank">tours, entradas y free tours
-        en ${escapeHtml(city.name)}</a> con cancelación gratuita (enlace de afiliado).
+        <a href="${aff.url}" rel="sponsored noopener" target="_blank">tours, entradas y visitas guiadas
+        en ${escapeHtml(city.name)}</a> con ${escapeHtml(aff.provider)} (enlace de afiliado).
       </p>
 `
     : '';

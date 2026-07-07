@@ -31,7 +31,8 @@ Optional:
 Client build-time (Vite, set in the build environment):
 - `VITE_UMAMI_WEBSITE_ID` — enables Umami analytics (cookieless); without it analytics no-ops
 - `VITE_UMAMI_SRC` — Umami script URL, defaults to `https://cloud.umami.is/script.js`
-- `VITE_CIVITATIS_AID` — Civitatis affiliate id; enables the activities promo in the route view and on `/ciudad/*` SEO pages (the server also reads it, or `CIVITATIS_AID`, at runtime). Without it, affiliate sections don't render
+- `VITE_CIVITATIS_AID` — Civitatis affiliate id; enables the activities promo in the route view and on `/ciudad/*` SEO pages (the server also reads it, or `CIVITATIS_AID`, at runtime)
+- `VITE_GYG_PARTNER_ID` — GetYourGuide partner id, same promo surfaces (server also reads `GYG_PARTNER_ID`). Provider priority when both are set: Civitatis → GetYourGuide. With neither, affiliate sections don't render
 
 ## Architecture
 
