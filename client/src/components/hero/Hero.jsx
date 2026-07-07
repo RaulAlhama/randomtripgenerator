@@ -77,7 +77,7 @@ export default function Hero({ onExplore }) {
           </h1>
           <p className="subtitle">
             Detecta dónde estás y te monta una <strong>ruta a pie</strong> por los mejores
-            sitios y restaurantes de alrededor. Gratis y sin registro.
+            sitios de alrededor, o te enseña dónde comer bien. Gratis y sin registro.
           </p>
         </div>
 
@@ -86,16 +86,24 @@ export default function Hero({ onExplore }) {
         </div>
 
         <div className="hero-actions">
-          <button type="button" className="hero-cta" onClick={() => onExplore('sitios')}>
-            Generar mi ruta
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </button>
+          {/* Two jobs, equal billing: build a route OR find a place to eat. */}
+          <div className="hero-cta-row">
+            <button type="button" className="hero-cta" onClick={() => onExplore('sitios')}>
+              Generar mi ruta
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </button>
 
-          <button type="button" className="hero-cta-ghost" onClick={() => onExplore('restaurantes')}>
-            Ver restaurantes cerca
-          </button>
+            <button type="button" className="hero-cta hero-cta-alt" onClick={() => onExplore('restaurantes')}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+                <path d="M7 2v20" />
+                <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" />
+              </svg>
+              Restaurantes cerca
+            </button>
+          </div>
 
           <button
             type="button"

@@ -30,37 +30,6 @@ function poiKey(p) {
   return `${p.name}|${p.lat}|${p.lng}`;
 }
 
-function haversineKm(a, b) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
-
-// Greedy nearest-neighbour ordering from the origin. Used when restaurants are
-// mixed into the route so the walk stays efficient instead of doubling back to
-// a café tacked on at the end.
-function orderByNearestNeighbor(origin, places) {
-  const remaining = [...places];
-  const ordered = [];
-  let cur = origin;
-  while (remaining.length) {
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(cur, remaining[i]);
-      if (d < bestDist) { bestDist = d; best = i; }
-    }
-    cur = remaining[best];
-    ordered.push(remaining.splice(best, 1)[0]);
-  }
-  return ordered;
-}
-
 const initialState = {
   locationMode: 'gps',
   searchLocation: null,
@@ -174,8 +143,9 @@ function tripReducer(state, action) {
 
 const TripContext = createContext(null);
 
-// Geolocation helper
-function getUserLocation() {
+// Geolocation helper. Exported so flows that don't need the trip pipeline
+// (e.g. the standalone Restaurantes view) can resolve a position the same way.
+export function getUserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Tu navegador no soporta geolocalizacion'));
@@ -443,17 +413,8 @@ export function TripProvider({ children }) {
 
   // Internal: shared route-build logic used by buildRouteFromSelection.
   // Filters candidates by selection, fetches the OSRM route, transitions to 'route' stage.
-  async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin, extraPlaces = []) {
-    const chosen = candidates.filter(p => selectedKeys.has(poiKey(p)));
-    // Restaurants picked in the Restaurantes deck come in as extraPlaces. Dedupe
-    // (a place could be in both) and, when present, re-order the whole set by
-    // nearest-neighbour so the inserted stops don't wreck the walking path.
-    const seen = new Set(chosen.map(poiKey));
-    const extras = extraPlaces.filter((p) => p && !seen.has(poiKey(p)));
-    let selectedPlaces = chosen.concat(extras);
-    if (extras.length > 0) {
-      selectedPlaces = orderByNearestNeighbor(origin, selectedPlaces);
-    }
+  async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin) {
+    const selectedPlaces = candidates.filter(p => selectedKeys.has(poiKey(p)));
     if (selectedPlaces.length < 2) {
       throw new Error('Selecciona al menos 2 sitios para crear la ruta');
     }
@@ -490,11 +451,9 @@ export function TripProvider({ children }) {
   }
 
   // Stage 2: user confirmed selection → build the route.
-  // extraPlaces = restaurants picked in the Restaurantes deck, merged as stops.
-  const buildRouteFromSelection = useCallback(async (extraPlaces = []) => {
+  const buildRouteFromSelection = useCallback(async () => {
     if (!state.candidates || !state.currentTrip) return;
-    const extras = Array.isArray(extraPlaces) ? extraPlaces : [];
-    if (state.selectedKeys.size + extras.length < 2) {
+    if (state.selectedKeys.size < 2) {
       showToast('Selecciona al menos 2 sitios para crear la ruta', 'error');
       return;
     }
@@ -510,8 +469,7 @@ export function TripProvider({ children }) {
         state.selectedKeys,
         state.currentTrip.theme,
         state.currentTrip.transport,
-        origin,
-        extras
+        origin
       );
     } catch (error) {
       console.error('Error al construir la ruta:', error);
