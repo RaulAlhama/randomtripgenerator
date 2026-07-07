@@ -210,6 +210,19 @@ function fetchExternal(url, options = {}) {
 }
 
 // ========== IMAGE RESOLUTION ==========
+// Google text search matches any place with a similar name, so for a sight it
+// can return a nearby shop, restaurant, hospital or hotel — and then that
+// business's photo/rating, not the monument's. When the matched place's types
+// say it isn't a sight, reject the whole match and fall back to Wikipedia.
+const NON_SIGHT_PHOTO_TYPES = new Set([
+  'hospital', 'doctor', 'pharmacy', 'dentist', 'health',
+  'lodging', 'store', 'supermarket', 'convenience_store', 'clothing_store',
+  'shoe_store', 'furniture_store', 'home_goods_store', 'department_store',
+  'shopping_mall', 'bank', 'atm', 'gas_station', 'car_repair', 'car_dealer',
+  'parking', 'school', 'primary_school', 'secondary_school', 'real_estate_agency',
+  'restaurant', 'food', 'cafe', 'bar', 'meal_takeaway', 'meal_delivery', 'bakery'
+]);
+
 // Normalize text for fuzzy matching: lowercase, strip accents and non-alphanumeric
 function normalizeText(s) {
   return (s || '')
@@ -457,6 +470,15 @@ async function fetchPOIGoogleData(place, city) {
     const search = await fetchExternal(searchUrl);
     const top = search?.results?.[0];
     if (!top || !top.place_id) {
+      cacheSet(cacheKey, '__none__');
+      return null;
+    }
+
+    // Reject mismatches: if the top result is a shop/restaurant/hospital/etc.,
+    // it's a different business that merely shares the name. Its photo, rating
+    // and phone all belong to that business, not the sight — drop the whole
+    // match so the deck falls back to the title-validated Wikipedia image.
+    if ((top.types || []).some((t) => NON_SIGHT_PHOTO_TYPES.has(t))) {
       cacheSet(cacheKey, '__none__');
       return null;
     }
@@ -756,22 +778,33 @@ const THEME_TYPE_SCORES = {
   food: { restaurant: 3, cafe: 3, marketplace: 3 }
 };
 
-// Select and shuffle POIs based on theme
+// Notability proxy from OSM tags: a mapper linking a POI to Wikipedia/Wikidata
+// (or attaching a photo) is strong evidence it's a real, characteristic sight —
+// exactly what separates "Monumento al Nazareno" from an obscure roadside node.
+// Small towns often have none of these tags, in which case every POI scores 0
+// and selection degrades gracefully to the previous random/theme behaviour.
+function poiNotability(p) {
+  return (p.wikidata ? 3 : 0) + (p.wikipedia ? 3 : 0) + (p.image ? 1 : 0);
+}
+
+// Select and rank POIs based on theme, biased toward notable (characteristic) places
 function selectPOIsForTheme(pois, theme, count) {
   const scores = THEME_TYPE_SCORES[theme] || {};
   const hasThemeScores = Object.keys(scores).length > 0;
 
-  // 'mixed' (new default): preserve a balanced variety without biasing toward any
-  // single category. We score equally and shuffle so each call returns a fresh mix.
+  // 'mixed' (default): no category bias, but rank notable sights first. The
+  // random term (0–2) keeps repeated calls fresh while still letting a
+  // Wikipedia-linked POI (notability ≥3) reliably outrank an untagged one.
   if (theme === 'mixed' || !hasThemeScores) {
-    const shuffled = [...pois].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
+    const scored = pois.map(p => ({ ...p, score: poiNotability(p) + Math.random() * 2 }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, count);
   }
 
-  // Score each POI by theme relevance
+  // Themed: combine theme relevance + notability, plus a little randomness.
   const scored = pois.map(p => ({
     ...p,
-    score: (scores[p.rawType] || 1) + Math.random() * 0.5  // add randomness
+    score: (scores[p.rawType] || 1) + poiNotability(p) + Math.random() * 0.5
   }));
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, count);
@@ -1443,18 +1476,8 @@ app.get('/api/search-city', async (req, res) => {
 // Tries Google Places (if key configured) first for food POIs, then falls back to
 // our Wikipedia/Wikidata/Commons resolver. The resolver validates title match so
 // we don't return images from unrelated places with similar names.
-// Google text search matches any place with a similar name, so for a sight
-// it can return a nearby hospital, shop or hotel — and then a user snapshot
-// (a balcony view, a shop interior) as its photo. Reject the match when its
-// types say it isn't the sight we asked for, and fall back to Wikipedia.
-const NON_SIGHT_PHOTO_TYPES = new Set([
-  'hospital', 'doctor', 'pharmacy', 'dentist', 'health',
-  'lodging', 'store', 'supermarket', 'convenience_store', 'clothing_store',
-  'shoe_store', 'furniture_store', 'home_goods_store', 'department_store',
-  'shopping_mall', 'bank', 'atm', 'gas_station', 'car_repair', 'car_dealer',
-  'parking', 'school', 'primary_school', 'secondary_school', 'real_estate_agency'
-]);
-
+// For sights we accept Google's photo only when the matched place isn't a
+// hospital/shop/hotel/restaurant (see NON_SIGHT_PHOTO_TYPES), and fall back to Wikipedia.
 app.get('/api/place-image', async (req, res) => {
   const { name, city, type } = req.query;
   if (!name) return res.json({ url: null });
