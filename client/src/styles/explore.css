@@ -346,13 +346,6 @@
 .xp-save:active { transform: scale(0.92); }
 .xp-save.is-saved { color: var(--primary); }
 
-/* In-route badge moves to top-center so it never sits under the heart. */
-.xp-rcard-inroute {
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-}
-
 .xp-dcard-body,
 .xp-rcard-body {
   flex: none;
@@ -487,65 +480,8 @@
 
 .xp-rcard-open.is-closed { color: var(--danger); }
 
-/* Add-to-route controls on the restaurant card */
-.xp-rcard-actions {
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.xp-rcard-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 50px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  color: var(--text-on-primary);
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 750;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.xp-rcard-add:hover { filter: brightness(1.06); transform: translateY(-1px); }
-.xp-rcard-add:active { transform: scale(0.98); }
-
-.xp-rcard-add.is-added {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-secondary);
-}
-
-/* With the add button present, "Encontrar lugar" drops to the secondary role. */
-.xp-rcard-actions .xp-rcard-action {
-  margin-top: 0;
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-secondary);
-}
-.xp-rcard-actions .xp-rcard-action:hover { background: var(--bg-muted); filter: none; transform: translateY(-1px); }
-
-.xp-rcard.is-added { box-shadow: inset 0 0 0 2px var(--primary); }
-
-.xp-rcard-inroute {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--primary);
-  color: var(--text-on-primary);
-  font-size: 0.72rem;
-  font-weight: 800;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-/* Restaurant stop in the route list — fork glyph instead of a number. */
+/* Restaurant stop in the route list — fork glyph instead of a number.
+   Kept for older saved/shared routes that still carry restaurant stops. */
 .xp-stop-num.is-food { background: var(--bg-subtle); font-size: 0.95rem; }
 
 /* Desktop: present the deck as a centred device panel so the cards read as a

@@ -1874,28 +1874,38 @@ main {
 .hero-cta svg { transition: transform 200ms var(--ease); }
 .hero-cta:hover svg { transform: translateX(3px); }
 
-.hero-cta-ghost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 0.7rem;
-  padding: 0.5rem 0.4rem;
-  border: none;
+/* Two jobs, equal billing: same size and shape for both. The brand solid is
+   the route; the outlined twin is restaurants. */
+.hero-cta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  max-width: 340px;
+}
+.hero-cta-row .hero-cta { max-width: none; }
+
+.hero-cta-alt {
   background: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 0.92rem;
-  font-weight: 650;
-  cursor: pointer;
-  border-bottom: 1.5px solid transparent;
-  border-radius: 0;
-  transition: color 180ms var(--ease), border-color 180ms var(--ease);
-}
-.hero-cta-ghost:hover {
+  border: 2px solid var(--brand-pine);
   color: var(--brand-pine);
-  border-bottom-color: currentColor;
+  box-shadow: none;
+  /* compensate the border so both buttons render the same height */
+  padding: calc(1rem - 2px) 1.6rem;
 }
-[data-theme="dark"] .hero-cta-ghost:hover { color: var(--map-route); }
+.hero-cta-alt:hover {
+  background: var(--brand-pine);
+  color: var(--brand-pine-ink);
+}
+[data-theme="dark"] .hero-cta-alt {
+  border-color: var(--map-route);
+  color: var(--map-route);
+}
+[data-theme="dark"] .hero-cta-alt:hover {
+  background: var(--brand-pine);
+  color: var(--brand-pine-ink);
+  border-color: var(--brand-pine);
+}
 
 /* ============================================================
    BOTTOM NAV + TAB VIEWS (mobile-app shell)
