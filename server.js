@@ -2260,6 +2260,17 @@ function readIndexHtml() {
   return fs.readFileSync(indexPath, 'utf8');
 }
 
+// Civitatis affiliate id. One value serves both layers: the client reads
+// VITE_CIVITATIS_AID at build time, the server reads either name at runtime
+// (Render exposes the same env to both). Empty → affiliate sections vanish.
+const CIVITATIS_AID = process.env.CIVITATIS_AID || process.env.VITE_CIVITATIS_AID || '';
+
+function civitatisLink(slug) {
+  return CIVITATIS_AID
+    ? `https://www.civitatis.com/es/${slug}/?aid=${encodeURIComponent(CIVITATIS_AID)}`
+    : null;
+}
+
 // Build the pre-rendered #seo-prerender block for a city landing page.
 // publishedList feeds the "Más rutas" section linking this city's
 // pre-generated variant pages (only the ones that passed the quality gates).
@@ -2286,6 +2297,18 @@ ${variantLinks.join('\n')}
 `
     : '';
 
+  const civUrl = civitatisLink(city.slug);
+  const activitiesSection = civUrl
+    ? `
+      <h2>Reserva actividades en ${escapeHtml(city.name)}</h2>
+      <p>
+        ¿Prefieres una visita con guía? Reserva
+        <a href="${civUrl}" rel="sponsored noopener" target="_blank">tours, entradas y free tours
+        en ${escapeHtml(city.name)}</a> con cancelación gratuita (enlace de afiliado).
+      </p>
+`
+    : '';
+
   return `<div id="seo-prerender">
       <h1>Qué visitar en ${escapeHtml(city.name)}</h1>
       <p>${escapeHtml(city.intro)}</p>
@@ -2302,7 +2325,7 @@ ${variantSection}
         inteligencia artificial y los ordena para recorrerlos a pie, en bici o en coche.
         Gratis y sin registro. <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
       </p>
-
+${activitiesSection}
       <h2>Rutas en otras ciudades</h2>
       <ul>
 ${otherCities}
