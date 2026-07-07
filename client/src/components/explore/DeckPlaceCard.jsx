@@ -2,9 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { typeIcons, typeLabels } from '../../constants/poi';
 import SaveHeart from './SaveHeart';
 
-async function resolvePlaceImage(name, city, type) {
+async function resolvePlaceImage(name, city, type, lat, lng) {
   try {
     const params = new URLSearchParams({ name, city: city || '', type: type || '' });
+    // With coordinates the server can reject same-named places across town.
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      params.set('lat', String(lat));
+      params.set('lng', String(lng));
+    }
     const res = await fetch(`/api/place-image?${params.toString()}`);
     if (!res.ok) return null;
     const data = await res.json();
@@ -43,7 +48,7 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
     setImageUrl(place.imageUrl || null);
     if (place.imageUrl) return;
     let cancelled = false;
-    resolvePlaceImage(place.name, city, place.type).then((url) => {
+    resolvePlaceImage(place.name, city, place.type, place.lat, place.lng).then((url) => {
       if (!cancelled && url) setImageUrl(url);
     });
     return () => { cancelled = true; };

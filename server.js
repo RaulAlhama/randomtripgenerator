@@ -223,6 +223,12 @@ const NON_SIGHT_PHOTO_TYPES = new Set([
   'restaurant', 'food', 'cafe', 'bar', 'meal_takeaway', 'meal_delivery', 'bakery'
 ]);
 
+// A Google match farther than this from the POI's own coordinates is a
+// different place that happens to share the name, not the sight we asked
+// about. Generous enough to absorb OSM-centroid-vs-Google-pin drift on big
+// ways (parks, palaces), tight enough to reject cross-town homonyms.
+const GOOGLE_MATCH_MAX_METERS = 2000;
+
 // Normalize text for fuzzy matching: lowercase, strip accents and non-alphanumeric
 function normalizeText(s) {
   return (s || '')
@@ -466,10 +472,25 @@ async function fetchPOIGoogleData(place, city) {
 
   try {
     const query = encodeURIComponent(`${place.name} ${city || ''}`);
-    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&language=es&key=${apiKey}`;
+    // Anchor the text search to the POI's coordinates — without the bias,
+    // "name + city" happily matches a same-named place anywhere in town.
+    const hasCoords = Number.isFinite(place.lat) && Number.isFinite(place.lng);
+    const bias = hasCoords ? `&location=${place.lat},${place.lng}&radius=2000` : '';
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}${bias}&language=es&key=${apiKey}`;
     const search = await fetchExternal(searchUrl);
     const top = search?.results?.[0];
     if (!top || !top.place_id) {
+      cacheSet(cacheKey, '__none__');
+      return null;
+    }
+
+    // The bias is only a preference for Google, so verify the match is
+    // actually near the POI. Searching the Carlos III statue at Puerta del
+    // Sol returned Universidad Carlos III (13 km away) — and then the deck
+    // wore the university's photo and rating on the statue's card.
+    const gLoc = top.geometry?.location;
+    if (hasCoords && gLoc && Number.isFinite(gLoc.lat) && Number.isFinite(gLoc.lng)
+        && haversineMeters(place.lat, place.lng, gLoc.lat, gLoc.lng) > GOOGLE_MATCH_MAX_METERS) {
       cacheSet(cacheKey, '__none__');
       return null;
     }
@@ -1479,23 +1500,33 @@ app.get('/api/search-city', async (req, res) => {
 // For sights we accept Google's photo only when the matched place isn't a
 // hospital/shop/hotel/restaurant (see NON_SIGHT_PHOTO_TYPES), and fall back to Wikipedia.
 app.get('/api/place-image', async (req, res) => {
-  const { name, city, type } = req.query;
+  const { name, city, type, lat, lng } = req.query;
   if (!name) return res.json({ url: null });
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const isFood = type === 'restaurant';
+  const latNum = parseFloat(lat);
+  const lngNum = parseFloat(lng);
+  const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum)
+    && Math.abs(latNum) <= 90 && Math.abs(lngNum) <= 180;
 
   // 1. Google Places: precise photos for restaurants. For sights we accept its
   //    photo only when the matched place isn't a hospital/shop/hotel/etc.
+  //    When the caller knows the POI's coordinates, the search is biased to
+  //    them and far-away matches (same-named place across town) are rejected.
   if (apiKey) {
     try {
       const query = encodeURIComponent(`${name} ${city || ''}`);
-      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
+      const bias = hasCoords ? `&location=${latNum},${lngNum}&radius=2000` : '';
+      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}${bias}&key=${apiKey}`;
       const data = await fetchExternal(searchUrl);
       const top = data.results?.[0];
+      const gLoc = top?.geometry?.location;
+      const nearOk = !hasCoords || !gLoc || !Number.isFinite(gLoc.lat) || !Number.isFinite(gLoc.lng)
+        || haversineMeters(latNum, lngNum, gLoc.lat, gLoc.lng) <= GOOGLE_MATCH_MAX_METERS;
       const photoRef = top?.photos?.[0]?.photo_reference;
       const typesOk = isFood || !(top?.types || []).some((t) => NON_SIGHT_PHOTO_TYPES.has(t));
-      if (photoRef && typesOk) {
+      if (photoRef && typesOk && nearOk) {
         const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
         const cdnUrl = await followRedirect(photoApiUrl);
         if (cdnUrl) return res.json({ url: cdnUrl, source: 'google' });
@@ -1819,6 +1850,17 @@ app.post('/api/descriptions', async (req, res) => {
   }
 });
 
+// OSRM demo servers per transport mode. The classic demo
+// (router.project-osrm.org) only loads the car profile; FOSSGIS runs sibling
+// instances with real foot/bike profiles — same API, same response shape.
+// The profile must match the mode: routing a walk with the car profile
+// follows one-way streets and multiplies a short stroll into many km.
+const OSRM_SERVERS = {
+  driving: 'https://router.project-osrm.org/route/v1/driving',
+  walking: 'https://routing.openstreetmap.de/routed-foot/route/v1/foot',
+  cycling: 'https://routing.openstreetmap.de/routed-bike/route/v1/bike',
+};
+
 // Get route via OSRM
 app.get('/api/route', async (req, res) => {
   try {
@@ -1837,20 +1879,32 @@ app.get('/api/route', async (req, res) => {
       osrmCoords += `;${wp[1]},${wp[0]}`;
     });
 
-    // Public OSRM only supports driving reliably
-    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
-    const data = await fetchExternal(osrmUrl);
+    const suffix = '?overview=full&geometries=geojson';
+    let profileUsed = OSRM_SERVERS[mode] ? mode : 'driving';
+    let data = null;
+    try {
+      data = await fetchExternal(`${OSRM_SERVERS[profileUsed]}/${osrmCoords}${suffix}`);
+    } catch (_) { /* handled by the driving fallback below */ }
 
-    if (data.code !== 'Ok') {
+    // If the foot/bike instance is down, degrade to the car router rather
+    // than failing: a detoured geometry beats no route at all.
+    if ((!data || data.code !== 'Ok') && profileUsed !== 'driving') {
+      console.warn(`[Route] ${profileUsed} OSRM failed (${(data && data.code) || 'network error'}), retrying with driving profile`);
+      profileUsed = 'driving';
+      data = await fetchExternal(`${OSRM_SERVERS.driving}/${osrmCoords}${suffix}`);
+    }
+
+    if (!data || data.code !== 'Ok') {
       return res.status(400).json({ error: 'No route found' });
     }
 
     const route = data.routes[0];
     let duration = route.duration;
 
-    // Adjust duration for non-driving modes
+    // Only on the driving fallback: car durations (and one-way detours) say
+    // nothing about walking/cycling, so re-derive time from distance.
     const transportConfig = TRANSPORT_CONFIG[mode];
-    if (transportConfig && transportConfig.speedKmh) {
+    if (profileUsed !== mode && transportConfig && transportConfig.speedKmh) {
       duration = (route.distance / 1000 / transportConfig.speedKmh) * 3600;
     }
 
