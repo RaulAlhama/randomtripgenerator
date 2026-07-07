@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTrip, formatDuration } from '../../context/TripContext';
 import { fetchRestaurants } from '../../services/api';
+import { track } from '../../services/analytics';
 import ExploreMap from './ExploreMap';
 import ExploreSheet from './ExploreSheet';
 import ExploreDeck from './ExploreDeck';
@@ -50,7 +51,7 @@ function CloseIcon() {
   );
 }
 
-export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null }) {
+export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null, sharedSlug = null }) {
   const {
     currentTrip,
     candidates,
@@ -69,6 +70,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
     buildRouteFromSelection,
     backToCandidates,
     shareTrip,
+    loadSharedTrip,
     closeTrip,
     clearError,
   } = useTrip();
@@ -90,6 +92,11 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
 
   const launch = useCallback(() => {
     clearError();
+    // Opened from a share link: load that stored route instead of exploring.
+    if (sharedSlug) {
+      loadSharedTrip(sharedSlug);
+      return;
+    }
     // A searched city (from the planner) wins; otherwise ?lat&lng for testing;
     // otherwise fall back to the browser's GPS.
     const loc = initialLocation || urlLocationOverride();
@@ -101,7 +108,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
         ? { locationMode: 'search', searchLocation: loc }
         : { locationMode: 'gps' }),
     });
-  }, [generateCandidates, clearError, initialLocation, initialRadiusKm]);
+  }, [generateCandidates, clearError, initialLocation, initialRadiusKm, sharedSlug, loadSharedTrip]);
 
   // Launch once on open.
   useEffect(() => {
@@ -237,7 +244,13 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
       </div>
       <div className="xp-head-actions">
         {dirUrl && (
-          <a className="xp-cta" href={dirUrl} target="_blank" rel="noopener noreferrer">
+          <a
+            className="xp-cta"
+            href={dirUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => track('gmaps_opened', { city, stops: routePlaces.length })}
+          >
             Empezar en Google Maps
           </a>
         )}

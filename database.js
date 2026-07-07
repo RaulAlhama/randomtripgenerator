@@ -68,6 +68,24 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_seo_pages_lookup ON seo_pages(status, city_slug, page_type)
     `);
 
+    // Publicly shareable routes (no auth): each share gets a short slug and
+    // an /r/:slug URL. Separate from `trips`, which is the per-user private
+    // collection — a share must survive the sharer deleting their account.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shared_trips (
+        slug TEXT PRIMARY KEY,
+        city TEXT DEFAULT '',
+        country TEXT DEFAULT '',
+        transport TEXT DEFAULT 'walking',
+        origin_lat DOUBLE PRECISION NOT NULL,
+        origin_lng DOUBLE PRECISION NOT NULL,
+        places JSONB NOT NULL,
+        route_distance DOUBLE PRECISION,
+        route_duration DOUBLE PRECISION,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('Database connected and initialized');
   } finally {
     client.release();

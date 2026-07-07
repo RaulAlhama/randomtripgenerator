@@ -17,7 +17,14 @@ import SavedView from './components/saved/SavedView';
 import ProfileView from './components/profile/ProfileView';
 import Toast from './components/ui/Toast';
 import ExploreMode from './components/explore/ExploreMode';
+import { track } from './services/analytics';
 import './styles/explore.css';
+
+// /r/:slug = a shared route link; open it straight into the route view.
+function sharedSlugFromPath() {
+  const m = window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{4,16})$/);
+  return m ? m[1] : null;
+}
 
 // "Rutas" tab: saved trips for logged-in users; otherwise a friendly empty
 // state that points back to exploring (MyTrips renders null when not authed).
@@ -43,14 +50,26 @@ function RoutesTab({ onExplore }) {
 
 function AppShell() {
   const { saved } = useSaved();
-  // null = closed; otherwise { view, location, radiusKm } for the deck overlay.
-  const [explore, setExplore] = useState(null);
+  // null = closed; otherwise { view, location, radiusKm, sharedSlug } for the
+  // deck overlay. A /r/:slug URL opens the shared route directly on load.
+  const [explore, setExplore] = useState(() => {
+    const slug = sharedSlugFromPath();
+    return slug ? { view: 'sitios', location: null, radiusKm: null, sharedSlug: slug } : null;
+  });
   // Which bottom-nav section is showing.
   const [tab, setTab] = useState('explorar');
   const exploreOpen = explore !== null;
 
-  const openExplore = (view, opts = {}) =>
+  const openExplore = (view, opts = {}) => {
+    track('explore_opened', { view: view || 'sitios' });
     setExplore({ view: view || 'sitios', location: opts.location || null, radiusKm: opts.radiusKm || null });
+  };
+
+  const closeExplore = () => {
+    // Leaving a shared route: drop /r/:slug so refresh/share-from-here point home.
+    if (explore?.sharedSlug) window.history.replaceState(null, '', '/');
+    setExplore(null);
+  };
 
   return (
     <div className="container has-bottom-nav">
@@ -96,7 +115,8 @@ function AppShell() {
             initialView={explore.view}
             initialLocation={explore.location}
             initialRadiusKm={explore.radiusKm}
-            onClose={() => setExplore(null)}
+            sharedSlug={explore.sharedSlug || null}
+            onClose={closeExplore}
           />
         </ErrorBoundary>
       )}

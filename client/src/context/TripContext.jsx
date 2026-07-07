@@ -1,5 +1,6 @@
 import { createContext, useReducer, useCallback, useContext } from 'react';
-import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchPlaceDescriptions } from '../services/api';
+import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchPlaceDescriptions, createShareLink, fetchSharedTrip } from '../services/api';
+import { track } from '../services/analytics';
 import { saveTrip } from '../services/trips';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -385,6 +386,8 @@ export function TripProvider({ children }) {
         transport: effectiveTransport,
       };
 
+      track('candidates_loaded', { city: trip.city, count: candidates.length, source: tripData.poiSource });
+
       // The deck starts with every candidate selected; the user swipes to remove.
       const initialSelection = new Set(candidates.map(poiKey));
 
@@ -472,6 +475,12 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_STATUS, payload: null });
     dispatch({ type: SET_GENERATING, payload: false });
 
+    track('route_created', {
+      city: trip.city,
+      stops: selectedPlaces.length,
+      km: Math.round((routeData.distance || 0) / 100) / 10,
+    });
+
     // Weather: only fetch here if Sorpréndeme path bypassed the candidates-stage fetch.
     apiFetchWeather(origin.lat, origin.lng)
       .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
@@ -529,33 +538,119 @@ export function TripProvider({ children }) {
     dispatch({ type: CLOSE_TRIP });
   }, []);
 
-  const shareTrip = useCallback(() => {
-    if (!state.currentTrip || !state.currentTrip.places || state.currentTrip.places.length === 0) return;
+  // Share a built route as a URL (/r/:slug). A link brings the recipient into
+  // the app — the old plain-text share was a dead end. The slug is created
+  // lazily on first share and reused afterwards (or comes with the trip when
+  // it was itself opened from a share).
+  const shareTrip = useCallback(async () => {
+    const trip = state.currentTrip;
+    if (!trip || !trip.places || trip.places.length === 0) return;
 
-    const city = state.currentTrip.city || 'la zona';
-    const placesText = state.currentTrip.places
-      .map((p, i) => `${i + 1}. ${p.name} - ${p.description || ''}`)
-      .join('\n');
-
-    const text = `Mi ruta en ${city}:\n\n${placesText}\n\nGenerado con RandomTrip!`;
-
-    if (navigator.share) {
-      navigator.share({ title: `Ruta en ${city}`, text })
-        .catch(() => {
-          navigator.clipboard.writeText(text).then(() => {
-            showToast('Ruta copiada al portapapeles', 'success');
-          }).catch(() => {
-            showToast('No se pudo copiar al portapapeles', 'error');
-          });
+    const city = trip.city || 'la zona';
+    try {
+      let slug = trip.shareSlug;
+      if (!slug) {
+        const resp = await createShareLink({
+          city: trip.city,
+          country: trip.country,
+          transport: trip.transport || 'walking',
+          origin_lat: trip.origin_lat,
+          origin_lng: trip.origin_lng,
+          places: trip.places,
+          route_distance: trip.route_distance ?? state.routeDistance,
+          route_duration: trip.route_duration ?? state.routeDuration,
         });
-    } else {
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('Ruta copiada al portapapeles', 'success');
-      }).catch(() => {
-        showToast('No se pudo copiar al portapapeles', 'error');
-      });
+        slug = resp.slug;
+        dispatch({ type: SET_TRIP, payload: { ...trip, shareSlug: slug } });
+      }
+
+      const url = `${window.location.origin}/r/${slug}`;
+      track('share_clicked', { city, stops: trip.places.length });
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Ruta por ${city} — RandomTrip`,
+            text: `Mi ruta por ${city}: ${trip.places.length} paradas`,
+            url,
+          });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // user closed the sheet
+          // otherwise fall through to clipboard
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Enlace de la ruta copiado', 'success');
+      } catch {
+        showToast(`Tu enlace: ${url}`, 'info');
+      }
+    } catch (error) {
+      console.error('Error al compartir:', error);
+      showToast(error.message || 'No se pudo crear el enlace', 'error');
     }
-  }, [state.currentTrip, showToast]);
+  }, [state.currentTrip, state.routeDistance, state.routeDuration, showToast]);
+
+  // Open a shared route (/r/:slug): load the stored stops, recompute the
+  // geometry (same waypoints → same route) and land directly on the route
+  // view. The shared places double as the candidate pool so "Cambiar sitios"
+  // lets the recipient remix the route.
+  const loadSharedTrip = useCallback(async (slug) => {
+    const sim = makeProgressSimulator();
+    try {
+      dispatch({ type: SET_ERROR, payload: null });
+      dispatch({ type: SET_GENERATING, payload: true });
+      dispatch({ type: SET_STATUS, payload: 'Cargando la ruta compartida…' });
+      sim.start();
+
+      const shared = await fetchSharedTrip(slug);
+      const places = Array.isArray(shared.places) ? shared.places : [];
+      if (places.length < 2) throw new Error('Esta ruta ya no está disponible');
+      const origin = { lat: shared.origin_lat, lng: shared.origin_lng };
+      const transport = shared.transport || 'walking';
+
+      const trip = {
+        city: shared.city || 'la zona',
+        country: shared.country || '',
+        places,
+        origin_lat: origin.lat,
+        origin_lng: origin.lng,
+        theme: 'mixed',
+        transport,
+        shareSlug: slug,
+      };
+
+      dispatch({ type: SET_CANDIDATES, payload: places });
+      dispatch({ type: SET_SELECTED_KEYS, payload: new Set(places.map(poiKey)) });
+
+      const routeData = await fetchRouteData(origin.lat, origin.lng, places, transport);
+      sim.stop();
+
+      dispatch({
+        type: SET_TRIP,
+        payload: { ...trip, route_distance: routeData.distance, route_duration: routeData.duration },
+      });
+      dispatch({ type: SET_ROUTE, payload: routeData });
+      dispatch({ type: SET_STAGE, payload: 'route' });
+      dispatch({ type: SET_PROGRESS, payload: 100 });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_GENERATING, payload: false });
+
+      apiFetchWeather(origin.lat, origin.lng)
+        .then((weatherData) => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+        .catch(() => {});
+
+      track('shared_route_opened', { city: trip.city, stops: places.length });
+    } catch (error) {
+      sim.stop();
+      console.error('Error al cargar la ruta compartida:', error);
+      dispatch({ type: SET_GENERATING, payload: false });
+      dispatch({ type: SET_STATUS, payload: null });
+      dispatch({ type: SET_PROGRESS, payload: 0 });
+      dispatch({ type: SET_ERROR, payload: error.message || 'Esta ruta ya no está disponible' });
+    }
+  }, []);
 
   const clearError = useCallback(() => {
     dispatch({ type: SET_ERROR, payload: null });
@@ -572,6 +667,7 @@ export function TripProvider({ children }) {
     backToCandidates,
     closeTrip,
     shareTrip,
+    loadSharedTrip,
     clearError,
   };
 

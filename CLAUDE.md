@@ -24,7 +24,13 @@ Required in `.env`:
 Optional:
 - `NEBIUS_API_BASE_URL` — defaults to `https://api.tokenfactory.nebius.com/v1/`
 - `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE` — enables Auth0 login (app works without these)
+- `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs and the Restaurantes tab; without it those degrade to Wikipedia images / 503
+- `GOOGLE_PLACES_DAILY_BUDGET_USD` — daily in-memory spend cap for Google Places (default `6`)
 - `PORT` — defaults to `3000`
+
+Client build-time (Vite, set in the build environment):
+- `VITE_UMAMI_WEBSITE_ID` — enables Umami analytics (cookieless); without it analytics no-ops
+- `VITE_UMAMI_SRC` — Umami script URL, defaults to `https://cloud.umami.is/script.js`
 
 ## Architecture
 
@@ -69,10 +75,18 @@ React 19 + Vite. Component-based with Context API for state management.
 | GET | `/api/auth-config` | No | Auth0 config for frontend |
 | GET | `/api/generate-trip` | No | Generate trip via Overpass + LLM |
 | GET | `/api/route` | No | Get route via OSRM |
-| GET | `/api/search-city` | No | Search cities via Nominatim |
+| GET | `/api/search-city` | No | Search cities via Photon (Komoot) |
+| POST | `/api/descriptions` | No | Backfill LLM descriptions for a fast deck |
+| GET | `/api/restaurants` | No | Nearby restaurants via Google Places |
+| GET | `/api/hiking-trails` | No | OSM hiking routes near a point |
+| GET | `/api/place-image` | No | Resolve a POI image (Google → Wikipedia), accepts optional `lat`/`lng` for geo-validation |
+| POST | `/api/share` | No | Create a public share link for a route (rate-limited) |
+| GET | `/api/share/:slug` | No | Fetch a shared route |
 | POST | `/api/trips` | JWT | Save trip |
 | GET | `/api/trips` | JWT | List user's trips |
 | DELETE | `/api/trips/:id` | JWT | Delete trip (ownership verified) |
+
+Shared routes are served as HTML at `/r/:slug` with per-route OG/meta tags injected into the built `index.html` (same pattern as `/ciudad/*` SEO pages). The frontend detects `/r/:slug` on load and opens the route view directly.
 
 ### Database (PostgreSQL via `pg`)
 `trips` table: id (SERIAL PK), user_id (indexed), city, country, theme, transport_mode, origin_lat, origin_lng, places (JSON string), route_distance, route_duration, created_at. Connection via `DATABASE_URL` env var. SSL enabled in production.
