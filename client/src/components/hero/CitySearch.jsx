@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTrip } from '../../context/TripContext';
-import { searchCity } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
+import { searchCity, resolveCity } from '../../services/api';
+
+// Google bills autocomplete per session: all keystrokes + the final resolve
+// share one token, regenerated after each selection.
+function newSessionToken() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
 
 export default function CitySearch() {
   const { setSearchLocation } = useTrip();
+  const { showToast } = useToast();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
+  const sessionRef = useRef(null);
 
   const handleSearch = useCallback(async (value) => {
     if (value.length < 3) {
@@ -16,8 +27,9 @@ export default function CitySearch() {
       setShowResults(false);
       return;
     }
+    if (!sessionRef.current) sessionRef.current = newSessionToken();
     try {
-      const cities = await searchCity(value);
+      const cities = await searchCity(value, sessionRef.current);
       setResults(cities);
       setShowResults(true);
     } catch (error) {
@@ -32,10 +44,23 @@ export default function CitySearch() {
     debounceRef.current = setTimeout(() => handleSearch(value.trim()), 300);
   };
 
-  const handleSelectCity = (city) => {
+  const handleSelectCity = async (city) => {
+    let { lat, lng } = city;
+    if (city.placeId && (lat == null || lng == null)) {
+      try {
+        const loc = await resolveCity(city.placeId, sessionRef.current);
+        lat = loc.lat;
+        lng = loc.lng;
+      } catch (error) {
+        console.error('Error al resolver la ciudad:', error);
+        showToast('No se pudo localizar la ciudad, inténtalo de nuevo', 'error');
+        return;
+      }
+    }
+    sessionRef.current = null; // selection closes the Google billing session
     setSearchLocation({
-      lat: parseFloat(city.lat),
-      lng: parseFloat(city.lng),
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
       name: city.name,
       country: city.country || '',
     });
@@ -79,7 +104,7 @@ export default function CitySearch() {
         ) : (
           results.map((city, index) => (
             <div
-              key={`${city.lat}-${city.lng}-${index}`}
+              key={`${city.placeId || `${city.lat}-${city.lng}`}-${index}`}
               className="city-result-item"
               onClick={() => handleSelectCity(city)}
             >

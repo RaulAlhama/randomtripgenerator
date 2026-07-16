@@ -64,6 +64,8 @@ app.use('/api/restaurants', restaurantsLimiter);
 const DAILY_BUDGET_USD = parseFloat(process.env.GOOGLE_PLACES_DAILY_BUDGET_USD || '6');
 const COST_PER_TRIP_USD = 0.30;       // ~8 text searches + 8 photos
 const COST_PER_RESTAURANTS_USD = 0.15; // 1 nearby + up to 12 photos
+const COST_PER_CITY_AUTOCOMPLETE_USD = 0.003; // 1 Autocomplete request (per-request rate; free inside a session)
+const COST_PER_CITY_RESOLVE_USD = 0.017;      // 1 Place Details closing an autocomplete session
 
 let dailyCostUsd = 0;
 let budgetDayKey = new Date().toISOString().slice(0, 10);
@@ -1483,67 +1485,157 @@ function cityRank(name, query, importance) {
   return [3, impBoost];
 }
 
-// Search cities via Photon (Komoot's OSM-based autocomplete). Unlike Nominatim,
-// Photon does real prefix matching so partial input like "Alham" matches "Alhama de Aragón".
+// Search cities via Google Places Autocomplete. Google matches alt names
+// ("Ibiza" finds Eivissa and shows it as "Ibiza"), tolerates typos and ranks
+// by popularity — the quality users expect from address boxes in online shops.
+// Predictions carry no coordinates; the client resolves the chosen one via
+// /api/resolve-city. `session` groups the keystrokes and the resolve into one
+// Google billing session. Returns null (→ Photon fallback) when the key is
+// missing, the daily budget is spent, or Google errors out.
+async function searchCityGoogle(q, session) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) return null;
+
+  const cacheKey = `citysearch:${q.toLowerCase()}`;
+  const cached = cacheGet(cacheKey);
+  if (cached !== null) return cached;
+
+  if (!tryReserveBudget(COST_PER_CITY_AUTOCOMPLETE_USD)) return null;
+
+  const sessionParam = session && /^[\w-]{8,64}$/.test(session)
+    ? `&sessiontoken=${session}` : '';
+  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
+              `?input=${encodeURIComponent(q)}&types=(cities)&language=es${sessionParam}&key=${apiKey}`;
+  const data = await fetchExternal(url).catch(() => null);
+  if (!data || (data.status !== 'OK' && data.status !== 'ZERO_RESULTS')) {
+    console.warn(`[Search] Google autocomplete failed (${data?.status || 'no response'}), falling back to Photon`);
+    return null;
+  }
+
+  const results = (data.predictions || []).slice(0, 6).map(p => {
+    const terms = (p.terms || []).map(t => t.value);
+    return {
+      name: p.structured_formatting?.main_text || terms[0] || p.description,
+      region: terms.length > 2 ? terms.slice(1, -1).join(', ') : '',
+      country: terms.length > 1 ? terms[terms.length - 1] : '',
+      countryCode: '',
+      displayName: p.description,
+      placeId: p.place_id,
+      lat: null,
+      lng: null
+    };
+  });
+  cacheSet(cacheKey, results);
+  return results;
+}
+
+// Fallback: search cities via Photon (Komoot's OSM-based autocomplete). Unlike
+// Nominatim, Photon does real prefix matching so "Alham" matches "Alhama de Aragón".
+async function searchCityPhoton(q) {
+  // Ask Photon only for settlement-type places (repeated osm_tag params are
+  // OR'ed). Without this, popular names can fill every slot with streets,
+  // quarters and railway stops before any city appears — e.g. "Ibiza"
+  // returned 20 non-settlement hits and the town (OSM name "Eivissa",
+  // matched via its Spanish alt name) never made it into the response.
+  // Photon only supports lang=default|de|en|fr; we omit lang so it returns
+  // each place's local name (Spanish cities come back in Spanish, etc).
+  const placeTags = [...CITYLIKE_PLACE_TYPES].map(t => `&osm_tag=place:${t}`).join('');
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}` +
+              `&limit=20${placeTags}`;
+  const data = await fetchExternal(url);
+  const features = Array.isArray(data?.features) ? data.features : [];
+
+  // 1. Keep only city-like results
+  const filtered = features.filter(isPhotonCity);
+
+  // 2. Map to our shape (Photon ranks by relevance; we use its order as the importance proxy)
+  const mapped = filtered.map((f, idx) => {
+    const p = f.properties || {};
+    const coords = f.geometry?.coordinates || [];
+    return {
+      name: photonName(f),
+      region: photonRegion(f),
+      country: p.country || '',
+      countryCode: (p.countrycode || '').toLowerCase(),
+      displayName: [photonName(f), photonRegion(f), p.country].filter(Boolean).join(', '),
+      lat: parseFloat(coords[1]),
+      lng: parseFloat(coords[0]),
+      _importance: filtered.length - idx, // higher = earlier in Photon's ranking
+      _rankKey: null
+    };
+  });
+
+  // 3. Deduplicate by normalized name + country (keep the most important)
+  const dedup = new Map();
+  for (const c of mapped) {
+    const key = `${normalizeForMatch(c.name)}|${c.countryCode}|${normalizeForMatch(c.region)}`;
+    const existing = dedup.get(key);
+    if (!existing || (c._importance || 0) > (existing._importance || 0)) {
+      dedup.set(key, c);
+    }
+  }
+
+  // 4. Sort by rank against the query, then by OSM importance
+  return [...dedup.values()]
+    .map(c => ({ ...c, _rankKey: cityRank(c.name, q, c._importance) }))
+    .sort((a, b) => {
+      if (a._rankKey[0] !== b._rankKey[0]) return a._rankKey[0] - b._rankKey[0];
+      return a._rankKey[1] - b._rankKey[1];
+    })
+    .slice(0, 6)
+    .map(({ _importance, _rankKey, ...c }) => c); // strip internals
+}
+
 app.get('/api/search-city', async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, session } = req.query;
     if (!q || q.length < 2) {
       return res.json([]);
     }
-
-    // Ask for more candidates (we filter after). Photon only supports
-    // lang=default|de|en|fr; we omit lang so it returns each place's local
-    // name (Spanish cities come back in Spanish, etc).
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}` +
-                `&limit=20`;
-    const data = await fetchExternal(url);
-    const features = Array.isArray(data?.features) ? data.features : [];
-
-    // 1. Keep only city-like results
-    const filtered = features.filter(isPhotonCity);
-
-    // 2. Map to our shape (Photon ranks by relevance; we use its order as the importance proxy)
-    const mapped = filtered.map((f, idx) => {
-      const p = f.properties || {};
-      const coords = f.geometry?.coordinates || [];
-      return {
-        name: photonName(f),
-        region: photonRegion(f),
-        country: p.country || '',
-        countryCode: (p.countrycode || '').toLowerCase(),
-        displayName: [photonName(f), photonRegion(f), p.country].filter(Boolean).join(', '),
-        lat: parseFloat(coords[1]),
-        lng: parseFloat(coords[0]),
-        _importance: filtered.length - idx, // higher = earlier in Photon's ranking
-        _rankKey: null
-      };
-    });
-
-    // 3. Deduplicate by normalized name + country (keep the most important)
-    const dedup = new Map();
-    for (const c of mapped) {
-      const key = `${normalizeForMatch(c.name)}|${c.countryCode}|${normalizeForMatch(c.region)}`;
-      const existing = dedup.get(key);
-      if (!existing || (c._importance || 0) > (existing._importance || 0)) {
-        dedup.set(key, c);
-      }
-    }
-
-    // 4. Sort by rank against the query, then by OSM importance
-    const sorted = [...dedup.values()]
-      .map(c => ({ ...c, _rankKey: cityRank(c.name, q, c._importance) }))
-      .sort((a, b) => {
-        if (a._rankKey[0] !== b._rankKey[0]) return a._rankKey[0] - b._rankKey[0];
-        return a._rankKey[1] - b._rankKey[1];
-      })
-      .slice(0, 6)
-      .map(({ _importance, _rankKey, ...c }) => c); // strip internals
-
-    res.json(sorted);
+    const google = await searchCityGoogle(q, session);
+    res.json(google !== null ? google : await searchCityPhoton(q));
   } catch (error) {
     console.error('[Search] Error:', error.message);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// Resolve a Google Autocomplete prediction to coordinates. Called once when
+// the user picks a suggestion; with the same `session` token Google bills the
+// whole autocomplete session as this single Place Details request.
+app.get('/api/resolve-city', async (req, res) => {
+  try {
+    const { placeId, session } = req.query;
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!placeId || !/^[\w-]+$/.test(placeId)) {
+      return res.status(400).json({ error: 'placeId requerido' });
+    }
+    if (!apiKey) return res.status(503).json({ error: 'No disponible' });
+
+    const cacheKey = `cityresolve:${placeId}`;
+    const cached = cacheGet(cacheKey);
+    if (cached !== null) return res.json(cached);
+
+    if (!tryReserveBudget(COST_PER_CITY_RESOLVE_USD)) {
+      return budgetExceededResponse(res);
+    }
+
+    const sessionParam = session && /^[\w-]{8,64}$/.test(session)
+      ? `&sessiontoken=${session}` : '';
+    const url = `https://maps.googleapis.com/maps/api/place/details/json` +
+                `?place_id=${placeId}&fields=geometry/location${sessionParam}&key=${apiKey}`;
+    const data = await fetchExternal(url);
+    const loc = data?.result?.geometry?.location;
+    if (!Number.isFinite(loc?.lat) || !Number.isFinite(loc?.lng)) {
+      return res.status(404).json({ error: 'Ciudad no encontrada' });
+    }
+
+    const out = { lat: loc.lat, lng: loc.lng };
+    cacheSet(cacheKey, out);
+    res.json(out);
+  } catch (error) {
+    console.error('[Search] Resolve error:', error.message);
+    res.status(500).json({ error: 'Resolve failed' });
   }
 });
 

@@ -24,7 +24,7 @@ Required in `.env`:
 Optional:
 - `NEBIUS_API_BASE_URL` — defaults to `https://api.tokenfactory.nebius.com/v1/`
 - `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE` — enables Auth0 login (app works without these)
-- `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs and the Restaurantes tab; without it those degrade to Wikipedia images / 503
+- `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs, the Restaurantes tab, and Google-quality city autocomplete (typo-tolerant, alt names); without it those degrade to Wikipedia images / 503 / Photon autocomplete
 - `GOOGLE_PLACES_DAILY_BUDGET_USD` — daily in-memory spend cap for Google Places (default `6`)
 - `PORT` — defaults to `3000`
 
@@ -77,7 +77,8 @@ React 19 + Vite. Component-based with Context API for state management.
 | GET | `/api/auth-config` | No | Auth0 config for frontend |
 | GET | `/api/generate-trip` | No | Generate trip via Overpass + LLM |
 | GET | `/api/route` | No | Get route via OSRM |
-| GET | `/api/search-city` | No | Search cities via Photon (Komoot) |
+| GET | `/api/search-city` | No | City autocomplete via Google Places (fallback: Photon/Komoot) |
+| GET | `/api/resolve-city` | No | Resolve a Google autocomplete `placeId` to lat/lng |
 | POST | `/api/descriptions` | No | Backfill LLM descriptions for a fast deck |
 | GET | `/api/restaurants` | No | Nearby restaurants via Google Places |
 | GET | `/api/hiking-trails` | No | OSM hiking routes near a point |
