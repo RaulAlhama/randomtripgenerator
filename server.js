@@ -2036,7 +2036,15 @@ async function routeViaORS(coordsLngLat, mode) {
       {
         method: 'POST',
         headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coordinates: coordsLngLat }),
+        // radiuses -1 = unlimited snapping distance to the nearest routable
+        // way. ORS defaults to ~350m per point, which breaks driving routes
+        // that start on a plaza or pedestrian zone (e.g. Puerta del Sol):
+        // there's no drivable street within 350m, ORS errors out and we'd
+        // needlessly fall back to OSRM (which snaps without limit).
+        body: JSON.stringify({
+          coordinates: coordsLngLat,
+          radiuses: coordsLngLat.map(() => -1),
+        }),
       }
     );
     const feature = data?.features?.[0];
