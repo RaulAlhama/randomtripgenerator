@@ -2012,18 +2012,64 @@ app.post('/api/descriptions', async (req, res) => {
   }
 });
 
-// OSRM demo servers per transport mode. The classic demo
+// OpenRouteService profiles per transport mode. Primary router when
+// ORS_API_KEY is set: a keyed account with a real quota (2.000 req/día gratis)
+// and true foot/bike/car profiles, instead of community demo servers with no
+// SLA. The profile must match the mode: routing a walk with the car profile
+// follows one-way streets and multiplies a short stroll into many km.
+const ORS_PROFILES = {
+  driving: 'driving-car',
+  walking: 'foot-walking',
+  cycling: 'cycling-regular',
+};
+
+// Route via OpenRouteService. Returns the /api/route response shape, or null
+// on any failure (no key, quota exhausted, point too far from a road) so the
+// caller falls back to OSRM.
+async function routeViaORS(coordsLngLat, mode) {
+  const apiKey = process.env.ORS_API_KEY;
+  const profile = ORS_PROFILES[mode];
+  if (!apiKey || !profile) return null;
+  try {
+    const data = await fetchExternal(
+      `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coordinates: coordsLngLat }),
+      }
+    );
+    const feature = data?.features?.[0];
+    const summary = feature?.properties?.summary;
+    if (!feature?.geometry || !Number.isFinite(summary?.distance)) {
+      console.warn(`[Route] ORS ${profile} returned no route (${data?.error?.message || 'unexpected response'})`);
+      return null;
+    }
+    return {
+      geometry: feature.geometry,
+      distance: summary.distance,
+      duration: summary.duration,
+      legs: (feature.properties.segments || []).map(s => ({
+        distance: s.distance,
+        duration: s.duration,
+      })),
+    };
+  } catch (error) {
+    console.warn(`[Route] ORS ${profile} failed: ${error.message}`);
+    return null;
+  }
+}
+
+// Fallback OSRM demo servers per transport mode. The classic demo
 // (router.project-osrm.org) only loads the car profile; FOSSGIS runs sibling
 // instances with real foot/bike profiles — same API, same response shape.
-// The profile must match the mode: routing a walk with the car profile
-// follows one-way streets and multiplies a short stroll into many km.
 const OSRM_SERVERS = {
   driving: 'https://router.project-osrm.org/route/v1/driving',
   walking: 'https://routing.openstreetmap.de/routed-foot/route/v1/foot',
   cycling: 'https://routing.openstreetmap.de/routed-bike/route/v1/bike',
 };
 
-// Get route via OSRM
+// Get route via OpenRouteService, falling back to OSRM demos
 app.get('/api/route', async (req, res) => {
   try {
     const { start, waypoints, mode = 'driving' } = req.query;
@@ -2035,12 +2081,18 @@ app.get('/api/route', async (req, res) => {
     const startCoords = start.split(',').map(Number);
     const waypointList = waypoints.split(';').map(wp => wp.split(',').map(Number));
 
-    // OSRM format: lon,lat
-    let osrmCoords = `${startCoords[1]},${startCoords[0]}`;
-    waypointList.forEach(wp => {
-      osrmCoords += `;${wp[1]},${wp[0]}`;
-    });
+    // Routers take lon,lat
+    const coordsLngLat = [
+      [startCoords[1], startCoords[0]],
+      ...waypointList.map(wp => [wp[1], wp[0]]),
+    ];
 
+    const ors = await routeViaORS(coordsLngLat, ORS_PROFILES[mode] ? mode : 'driving');
+    if (ors) {
+      return res.json({ ...ors, mode });
+    }
+
+    const osrmCoords = coordsLngLat.map(c => c.join(',')).join(';');
     const suffix = '?overview=full&geometries=geojson';
     let profileUsed = OSRM_SERVERS[mode] ? mode : 'driving';
     let data = null;
