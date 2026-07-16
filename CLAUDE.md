@@ -26,6 +26,7 @@ Optional:
 - `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE` — enables Auth0 login (app works without these)
 - `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs, the Restaurantes tab, and Google-quality city autocomplete (typo-tolerant, alt names); without it those degrade to Wikipedia images / 503 / Photon autocomplete
 - `GOOGLE_PLACES_DAILY_BUDGET_USD` — daily in-memory spend cap for Google Places (default `6`)
+- `ORS_API_KEY` — OpenRouteService key (free tier: 2000 directions/day); makes it the primary router for `/api/route`. Without it, routing falls back to community OSRM demo servers (no SLA)
 - `PORT` — defaults to `3000`
 
 Client build-time (Vite, set in the build environment):
@@ -61,7 +62,7 @@ React 19 + Vite. Component-based with Context API for state management.
 4. Server calls **Nebius AI** for descriptions (or full route if no Overpass data)
 5. POIs sorted by nearest-neighbor algorithm, trimmed to fit max distance
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
-7. Frontend calculates route via `GET /api/route` → **OSRM**
+7. Frontend calculates route via `GET /api/route` → **OpenRouteService** (fallback: OSRM demos)
 8. Frontend fetches weather via **Open-Meteo** API (free, no key)
 9. Frontend renders on **Leaflet** map (react-leaflet)
 10. Trip auto-saved if user is authenticated
@@ -76,7 +77,7 @@ React 19 + Vite. Component-based with Context API for state management.
 |--------|------|------|---------|
 | GET | `/api/auth-config` | No | Auth0 config for frontend |
 | GET | `/api/generate-trip` | No | Generate trip via Overpass + LLM |
-| GET | `/api/route` | No | Get route via OSRM |
+| GET | `/api/route` | No | Get route via OpenRouteService (fallback: OSRM) |
 | GET | `/api/search-city` | No | City autocomplete via Google Places (fallback: Photon/Komoot) |
 | GET | `/api/resolve-city` | No | Resolve a Google autocomplete `placeId` to lat/lng |
 | POST | `/api/descriptions` | No | Backfill LLM descriptions for a fast deck |
