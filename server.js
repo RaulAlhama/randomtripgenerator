@@ -1485,6 +1485,15 @@ function cityRank(name, query, importance) {
   return [3, impBoost];
 }
 
+// Google `types=geocode` predictions we drop: streets, house addresses and
+// postal codes are noise in a "where do you want to explore" box. Everything
+// else (locality, sublocality, neighborhood, administrative areas) is a
+// valid trip origin.
+const NON_AREA_GEOCODE_TYPES = new Set([
+  'route', 'street_address', 'street_number', 'intersection',
+  'premise', 'subpremise', 'floor', 'room', 'postal_code', 'plus_code'
+]);
+
 // Search cities via Google Places Autocomplete. Google matches alt names
 // ("Ibiza" finds Eivissa and shows it as "Ibiza"), tolerates typos and ranks
 // by popularity — the quality users expect from address boxes in online shops.
@@ -1504,27 +1513,34 @@ async function searchCityGoogle(q, session) {
 
   const sessionParam = session && /^[\w-]{8,64}$/.test(session)
     ? `&sessiontoken=${session}` : '';
+  // types=geocode (not `(cities)`) so neighborhoods come back too — "barrio
+  // ibiza" should find Ibiza, Madrid, and "malasaña" isn't even a sublocality
+  // in Google's data (the `(regions)` collection misses it; only geocode's
+  // `neighborhood` type has it). Streets/addresses are filtered out below.
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-              `?input=${encodeURIComponent(q)}&types=(cities)&language=es${sessionParam}&key=${apiKey}`;
+              `?input=${encodeURIComponent(q)}&types=geocode&language=es${sessionParam}&key=${apiKey}`;
   const data = await fetchExternal(url).catch(() => null);
   if (!data || (data.status !== 'OK' && data.status !== 'ZERO_RESULTS')) {
     console.warn(`[Search] Google autocomplete failed (${data?.status || 'no response'}), falling back to Photon`);
     return null;
   }
 
-  const results = (data.predictions || []).slice(0, 6).map(p => {
-    const terms = (p.terms || []).map(t => t.value);
-    return {
-      name: p.structured_formatting?.main_text || terms[0] || p.description,
-      region: terms.length > 2 ? terms.slice(1, -1).join(', ') : '',
-      country: terms.length > 1 ? terms[terms.length - 1] : '',
-      countryCode: '',
-      displayName: p.description,
-      placeId: p.place_id,
-      lat: null,
-      lng: null
-    };
-  });
+  const results = (data.predictions || [])
+    .filter(p => !(p.types || []).some(t => NON_AREA_GEOCODE_TYPES.has(t)))
+    .slice(0, 6)
+    .map(p => {
+      const terms = (p.terms || []).map(t => t.value);
+      return {
+        name: p.structured_formatting?.main_text || terms[0] || p.description,
+        region: terms.length > 2 ? terms.slice(1, -1).join(', ') : '',
+        country: terms.length > 1 ? terms[terms.length - 1] : '',
+        countryCode: '',
+        displayName: p.description,
+        placeId: p.place_id,
+        lat: null,
+        lng: null
+      };
+    });
   cacheSet(cacheKey, results);
   return results;
 }
