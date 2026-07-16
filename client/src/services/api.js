@@ -48,8 +48,23 @@ export async function getRoute(start, waypoints, mode) {
   return response.json();
 }
 
-export async function searchCity(query) {
-  const response = await fetch(`/api/search-city?q=${encodeURIComponent(query)}`);
+export async function searchCity(query, sessionToken) {
+  const params = new URLSearchParams({ q: query });
+  if (sessionToken) params.set('session', sessionToken);
+  const response = await fetch(`/api/search-city?${params}`);
+  return response.json();
+}
+
+// Google Autocomplete suggestions come without coordinates; resolve the
+// selected one. Same sessionToken as the searches so Google bills one session.
+export async function resolveCity(placeId, sessionToken) {
+  const params = new URLSearchParams({ placeId });
+  if (sessionToken) params.set('session', sessionToken);
+  const response = await fetch(`/api/resolve-city?${params}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'No se pudo localizar la ciudad');
+  }
   return response.json();
 }
 
