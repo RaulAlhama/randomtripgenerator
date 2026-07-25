@@ -66,6 +66,7 @@ const COST_PER_TRIP_USD = 0.30;       // ~8 text searches + 8 photos
 const COST_PER_RESTAURANTS_USD = 0.15; // 1 nearby + up to 12 photos
 const COST_PER_CITY_AUTOCOMPLETE_USD = 0.003; // 1 Autocomplete request (per-request rate; free inside a session)
 const COST_PER_CITY_RESOLVE_USD = 0.017;      // 1 Place Details closing an autocomplete session
+const COST_PER_PLACE_IMAGE_USD = 0.04;        // 1 text search + 1 photo, per /api/place-image call
 
 let dailyCostUsd = 0;
 let budgetDayKey = new Date().toISOString().slice(0, 10);
@@ -1029,6 +1030,10 @@ function setCachedDescription(name, city, theme, description) {
 }
 
 // would be published permanently.
+// NOTE: no longer on the runtime request path — per-request descriptions now come
+// from Wikipedia extracts + templates (see buildDescriptions / resolveDescription).
+// Kept and exported only for the offline SEO page generator (scripts/generateSeoPages.js),
+// where richer LLM prose is quality-gated before publishing.
 async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
   try {
     const apiKey = process.env.NEBIUS_API_KEY;
@@ -1261,7 +1266,64 @@ function fallbackDescription(place, city) {
   return builder ? builder(c) : `Un lugar de interés de ${c} que merece una parada en la ruta.`;
 }
 
-// Main function: build route from real POIs + LLM descriptions
+// Resolve a promise but give up after `ms`, yielding `fallback` instead. Keeps a
+// slow external call (fetchExternal has no socket timeout) from stalling a batch
+// — the same guard fetchAllPOIImages already uses for images.
+function raceTimeout(promise, ms, fallback = null) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+// Trim a Wikipedia extract down to a short, card-sized blurb (1-2 sentences).
+// Deck cards are compact and offer a "Ver más", so keep the default tight.
+function trimExtract(extract) {
+  if (!extract) return null;
+  const clean = String(extract).replace(/\s+/g, ' ').trim();
+  if (clean.length < 15) return null;
+  const sentences = clean.match(/[^.!?]+[.!?]+/g);
+  let out = sentences ? sentences[0].trim() : clean;
+  if (sentences && out.length < 90 && sentences[1]) out += ' ' + sentences[1].trim();
+  if (out.length > 220) out = out.slice(0, 200).replace(/\s+\S*$/, '') + '…';
+  return out;
+}
+
+// Real, verified description straight from Wikipedia — for POIs that OSM tagged
+// with a wikipedia article. Reuses the same REST summary endpoint that sources
+// images (the extract ships in the same response), so it costs no API budget and
+// no LLM. Returns null when there's no wiki tag or the fetch fails.
+async function descriptionFromWikipedia(place) {
+  if (!place || !place.wikipedia) return null;
+  const parts = String(place.wikipedia).split(':');
+  const lang = parts.length > 1 ? parts[0] : 'es';
+  const title = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+  if (!title) return null;
+  try {
+    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const data = await fetchExternal(url);
+    return trimExtract(data && data.extract);
+  } catch (_) {
+    return null;
+  }
+}
+
+// A place's description without any LLM: verified Wikipedia extract when the POI
+// carries a wikipedia tag, per-type template otherwise. `fromWiki` lets callers
+// cache only genuine extracts (never the generic template).
+async function resolveDescription(place, city) {
+  const wiki = await raceTimeout(descriptionFromWikipedia(place), 4000);
+  if (wiki) return { text: wiki, fromWiki: true };
+  return { text: fallbackDescription(place, city), fromWiki: false };
+}
+
+// Descriptions for a batch of POIs, resolved in parallel. No LLM, no API cost.
+async function buildDescriptions(places, city) {
+  const resolved = await Promise.all(places.map((p) => resolveDescription(p, city)));
+  return resolved.map((r) => r.text);
+}
+
+// Main function: build route from real POIs + Wikipedia/template descriptions
 async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount, fast = false) {
   // In candidate mode the user curates the final list, so return more POIs and
   // skip the distance-trim loop below. In legacy mode (no candidateCount),
@@ -1325,12 +1387,12 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 
     console.log(`[Route] Using ${sorted.length} verified Overpass POIs (nearest-neighbor sorted)`);
 
-    // Resolve images + Google data always. The LLM descriptions are the slow
-    // part (~30s for a full pool), so in fast candidate mode we skip them here
-    // and let the client fill them in afterwards via /api/descriptions.
+    // Resolve descriptions (Wikipedia extract + templates, no LLM), images and
+    // Google data in parallel. In fast candidate mode we skip descriptions here
+    // so the deck appears instantly; the client backfills via /api/descriptions.
     const wantDescriptions = !(fast && isCandidateMode);
     const [descriptions, placesWithImages, googleData] = await Promise.all([
-      wantDescriptions ? getDescriptionsFromLLM(sorted, city, country, theme) : Promise.resolve(null),
+      wantDescriptions ? buildDescriptions(sorted, city) : Promise.resolve(null),
       fetchAllPOIImages(sorted, city),
       fetchAllPOIGoogleData(sorted, city)
     ]);
@@ -1338,13 +1400,6 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     const withImagesCount = placesWithImages.filter(p => p.imageUrl).length;
     const withGoogleCount = googleData.filter(Boolean).length;
     console.log(`[Route] Resolved images for ${withImagesCount}/${placesWithImages.length} POIs, Google data for ${withGoogleCount}/${placesWithImages.length}`);
-
-    // Prominent, greppable alert when the LLM produced no descriptions at all
-    // (most common cause: Nebius out of credit). Lets us spot it fast in logs
-    // instead of finding out from a user screenshot.
-    if (wantDescriptions && !descriptions) {
-      console.error(`[Nebius][ALERT] Sin descripciones de la IA para "${city}" — usando textos de reserva. Revisa el crédito/estado de Nebius.`);
-    }
 
     const places = placesWithImages.map((p, i) => {
       const g = googleData[i] || {};
@@ -1387,9 +1442,21 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     return { places, poiSource: 'overpass' };
   }
 
-  // Last resort: no Overpass data at all (very remote area) - use LLM but warn
-  console.log('[Route] No Overpass POIs found at any radius, falling back to LLM');
-  const llmPlaces = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
+  // Last resort: no Overpass data at all (very remote area). This is the ONLY
+  // remaining runtime use of the LLM, and it's optional — if NEBIUS_API_KEY is
+  // unset (or the call fails) we return no places and the caller responds 404
+  // instead of a 500, so removing the key is safe.
+  console.log('[Route] No Overpass POIs found at any radius, trying optional LLM fallback');
+  let llmPlaces = [];
+  try {
+    llmPlaces = await getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance);
+  } catch (e) {
+    console.warn('[Route] LLM fallback unavailable:', e.message);
+    return { places: [], poiSource: 'none' };
+  }
+  if (!Array.isArray(llmPlaces) || llmPlaces.length === 0) {
+    return { places: [], poiSource: 'none' };
+  }
   // LLM places have no wikipedia/wikidata tags — attempt Wikipedia + Google in parallel
   const [withImages, googleData] = await Promise.all([
     fetchAllPOIImages(llmPlaces, city),
@@ -1676,7 +1743,10 @@ app.get('/api/place-image', async (req, res) => {
   //    photo only when the matched place isn't a hospital/shop/hotel/etc.
   //    When the caller knows the POI's coordinates, the search is biased to
   //    them and far-away matches (same-named place across town) are rejected.
-  if (apiKey) {
+  // Google Places photos cost money and this endpoint is hit per card, so gate
+  // it on the shared daily budget. If the budget is spent we skip Google and use
+  // the free Wikipedia resolver below — an image request should degrade, not 429.
+  if (apiKey && tryReserveBudget(COST_PER_PLACE_IMAGE_USD)) {
     try {
       const query = encodeURIComponent(`${name} ${city || ''}`);
       const bias = hasCoords ? `&location=${latNum},${lngNum}&radius=2000` : '';
@@ -1964,7 +2034,7 @@ app.get('/api/generate-trip', async (req, res) => {
 // descriptions, then fetches them here in the background and merges them in.
 app.post('/api/descriptions', async (req, res) => {
   try {
-    const { places, city = '', country = '', theme = 'mixed' } = req.body || {};
+    const { places, city = '', theme = 'mixed' } = req.body || {};
     if (!Array.isArray(places) || places.length === 0) {
       return res.json({ descriptions: [] });
     }
@@ -1975,6 +2045,7 @@ app.post('/api/descriptions', async (req, res) => {
     const safe = places.slice(0, 12).map((p) => ({
       name: String(p?.name || '').slice(0, 120),
       type: String(p?.type || 'place').slice(0, 40),
+      wikipedia: p?.wikipedia ? String(p.wikipedia).slice(0, 200) : null,
     }));
 
     // Serve cached descriptions first; only ask the LLM for the misses.
@@ -1987,22 +2058,15 @@ app.post('/api/descriptions', async (req, res) => {
     });
 
     if (misses.length > 0) {
-      // Cautious mode: the model only has name + type here, so keep it from
-      // inventing specifics it can't verify.
-      const llm = await getDescriptionsFromLLM(
-        misses.map((m) => m.p),
-        safeCity,
-        String(country).slice(0, 80),
-        safeTheme,
-        { cautious: true }
-      );
-      misses.forEach((m, j) => {
-        const real = llm && llm[j];
-        descriptions[m.i] = real || fallbackDescription(m.p, safeCity);
-        // Only cache genuine LLM output — never the generic fallback, so a
-        // temporary LLM outage doesn't permanently poison the cache.
-        if (real) setCachedDescription(m.p.name, safeCity, safeTheme, real);
-      });
+      // No LLM: a verified Wikipedia extract for POIs that carry a wikipedia tag,
+      // per-type template otherwise. Resolved in parallel.
+      await Promise.all(misses.map(async (m) => {
+        const { text, fromWiki } = await resolveDescription(m.p, safeCity);
+        descriptions[m.i] = text;
+        // Only cache a genuine Wikipedia extract — never the generic template,
+        // so a place that later gains a wiki tag isn't stuck on boilerplate.
+        if (fromWiki) setCachedDescription(m.p.name, safeCity, safeTheme, text);
+      }));
     }
 
     res.json({ descriptions });
