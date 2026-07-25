@@ -980,7 +980,7 @@ function salvageDescriptionsArray(raw) {
 //   Gemini free tier example:
 //     LLM_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 //     LLM_API_KEY=<google-ai-studio-key>
-//     LLM_MODEL=gemini-2.5-flash
+//     LLM_MODEL=gemini-flash-latest   (alias; older ids like gemini-2.5-flash 404 for new keys)
 function llmConfig() {
   return {
     apiKey: process.env.LLM_API_KEY || process.env.NEBIUS_API_KEY,
@@ -995,7 +995,7 @@ function llmConfig() {
 // doesn't duplicate request plumbing.
 async function callLLMOnce(body, apiBaseUrl, apiKey) {
   const baseUrl = apiBaseUrl.replace(/\/+$/, '');
-  const response = await fetchExternal(`${baseUrl}/chat/completions`, {
+  let response = await fetchExternal(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1003,6 +1003,10 @@ async function callLLMOnce(body, apiBaseUrl, apiKey) {
     },
     body: JSON.stringify(body),
   });
+  // Some OpenAI-compatible endpoints (e.g. Gemini) return errors wrapped in an
+  // array — [{ "error": {...} }] — so unwrap before checking, otherwise a hard
+  // 404/429 gets silently swallowed as empty content instead of a clear error.
+  if (Array.isArray(response)) response = response[0] || {};
   if (response.error || response.detail) {
     const msg = response.error?.message || response.detail || JSON.stringify(response.error || response);
     throw new Error(`LLM API error: ${msg}`);
