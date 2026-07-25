@@ -1,4 +1,4 @@
-import { createContext, useReducer, useCallback, useContext } from 'react';
+import { createContext, useReducer, useCallback, useContext, useRef } from 'react';
 import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchPlaceDescriptions, createShareLink, fetchSharedTrip } from '../services/api';
 import { track } from '../services/analytics';
 import { saveTrip } from '../services/trips';
@@ -124,6 +124,7 @@ function tripReducer(state, action) {
     case CLOSE_TRIP:
       return {
         ...state,
+        isGenerating: false,
         currentTrip: null,
         routeGeometry: null,
         routeDistance: null,
@@ -230,6 +231,14 @@ export function TripProvider({ children }) {
   const { isAuthenticated, getAccessToken } = useAuth();
   const { showToast } = useToast();
 
+  // Cancellation: closing the overlay (closeTrip) must discard any in-flight
+  // generation so a cancelled search can't repopulate the deck when it finally
+  // resolves. genIdRef is a monotonic token — a run whose id no longer matches
+  // drops its result; genAbortRef aborts the fetch too, cancelling the backend
+  // work (Overpass/Google), not just the UI update.
+  const genIdRef = useRef(0);
+  const genAbortRef = useRef(null);
+
   const setSearchLocation = useCallback((location) => {
     dispatch({ type: SET_SEARCH_LOCATION, payload: location });
   }, []);
@@ -299,6 +308,14 @@ export function TripProvider({ children }) {
     const effectiveTransport = overrides.transport ?? state.selectedTransport;
     const effectiveRadius = overrides.radius ?? state.selectedRadius;
 
+    // Supersede any previous run and arm cancellation for this one, so closing
+    // the overlay mid-search discards the result instead of letting it appear.
+    if (genAbortRef.current) genAbortRef.current.abort();
+    const abortController = new AbortController();
+    genAbortRef.current = abortController;
+    const myGenId = ++genIdRef.current;
+    const cancelled = () => myGenId !== genIdRef.current;
+
     const sim = makeProgressSimulator();
 
     try {
@@ -335,10 +352,12 @@ export function TripProvider({ children }) {
         CANDIDATE_COUNT,
         location.name,
         location.country,
-        fast
+        fast,
+        abortController.signal
       );
 
       sim.stop();
+      if (cancelled()) return; // overlay was closed mid-search — drop the result
 
       if (!tripData.places || tripData.places.length === 0) {
         throw new Error('No se encontraron lugares para esta ubicación');
@@ -372,7 +391,7 @@ export function TripProvider({ children }) {
 
       // Fetch weather in the background.
       apiFetchWeather(location.lat, location.lng)
-        .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
+        .then(weatherData => { if (!cancelled()) dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }); })
         .catch(() => {});
 
       // Descriptions were skipped server-side for speed; backfill them now and
@@ -384,7 +403,7 @@ export function TripProvider({ children }) {
         effectiveTheme
       )
         .then(({ descriptions }) => {
-          if (!Array.isArray(descriptions)) return;
+          if (cancelled() || !Array.isArray(descriptions)) return;
           const map = {};
           candidates.forEach((p, i) => {
             if (descriptions[i]) map[poiKey(p)] = descriptions[i];
@@ -394,6 +413,7 @@ export function TripProvider({ children }) {
         .catch(() => {});
     } catch (error) {
       sim.stop();
+      if (error?.name === 'AbortError' || cancelled()) return; // cancelled — no error UI
       console.error('Error al generar candidatos:', error);
       const msg = error.message || 'Error al generar la ruta';
       dispatch({ type: SET_ERROR, payload: msg });
@@ -413,7 +433,7 @@ export function TripProvider({ children }) {
 
   // Internal: shared route-build logic used by buildRouteFromSelection.
   // Filters candidates by selection, fetches the OSRM route, transitions to 'route' stage.
-  async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin) {
+  async function buildRouteInternal(trip, candidates, selectedKeys, theme, transport, origin, cancelled = () => false) {
     const selectedPlaces = candidates.filter(p => selectedKeys.has(poiKey(p)));
     if (selectedPlaces.length < 2) {
       throw new Error('Selecciona al menos 2 sitios para crear la ruta');
@@ -421,6 +441,7 @@ export function TripProvider({ children }) {
 
     dispatch({ type: SET_STATUS, payload: 'Calculando la ruta en el mapa...' });
     const routeData = await fetchRouteData(origin.lat, origin.lng, selectedPlaces, transport);
+    if (cancelled()) return; // overlay closed while the route was being calculated
 
     const updatedTrip = {
       ...trip,
@@ -457,6 +478,8 @@ export function TripProvider({ children }) {
       showToast('Selecciona al menos 2 sitios para crear la ruta', 'error');
       return;
     }
+    const myGenId = genIdRef.current;
+    const cancelled = () => myGenId !== genIdRef.current;
     try {
       dispatch({ type: SET_GENERATING, payload: true });
       dispatch({ type: SET_PROGRESS, payload: 80 });
@@ -469,9 +492,11 @@ export function TripProvider({ children }) {
         state.selectedKeys,
         state.currentTrip.theme,
         state.currentTrip.transport,
-        origin
+        origin,
+        cancelled
       );
     } catch (error) {
+      if (cancelled()) return; // overlay closed — ignore
       console.error('Error al construir la ruta:', error);
       const msg = error.message || 'No se pudo calcular la ruta';
       showToast(msg, 'error');
@@ -493,6 +518,10 @@ export function TripProvider({ children }) {
   }, [state.candidates, state.currentTrip]);
 
   const closeTrip = useCallback(() => {
+    // Invalidate + abort any in-flight generation so a cancelled search can't
+    // repopulate the deck when its request finally resolves.
+    genIdRef.current++;
+    if (genAbortRef.current) { genAbortRef.current.abort(); genAbortRef.current = null; }
     dispatch({ type: CLOSE_TRIP });
   }, []);
 

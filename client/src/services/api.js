@@ -3,7 +3,7 @@ export async function fetchAuthConfig() {
   return response.json();
 }
 
-export async function generateTrip(lat, lng, theme, transport, radiusMeters, count, city, country, fast) {
+export async function generateTrip(lat, lng, theme, transport, radiusMeters, count, city, country, fast, signal) {
   const params = new URLSearchParams({
     lat: String(lat),
     lng: String(lng),
@@ -15,7 +15,7 @@ export async function generateTrip(lat, lng, theme, transport, radiusMeters, cou
   if (city) params.set('city', city);
   if (country) params.set('country', country);
   if (fast) params.set('fast', '1');
-  const response = await fetch(`/api/generate-trip?${params}`);
+  const response = await fetch(`/api/generate-trip?${params}`, signal ? { signal } : undefined);
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || 'Error al generar la ruta');
