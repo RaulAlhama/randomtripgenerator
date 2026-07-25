@@ -1030,10 +1030,11 @@ function setCachedDescription(name, city, theme, description) {
 }
 
 // would be published permanently.
-// NOTE: no longer on the runtime request path — per-request descriptions now come
-// from Wikipedia extracts + templates (see buildDescriptions / resolveDescription).
-// Kept and exported only for the offline SEO page generator (scripts/generateSeoPages.js),
-// where richer LLM prose is quality-gated before publishing.
+// On the request path this is the THIRD-tier description source (see
+// /api/descriptions): used only for POIs with no Wikipedia article, where a bare
+// per-type template reads as generic. Also used by the offline SEO page generator
+// (scripts/generateSeoPages.js). Returns null without a key, so callers must fall
+// back to a template and NEBIUS_API_KEY stays optional.
 async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
   try {
     const apiKey = process.env.NEBIUS_API_KEY;
@@ -2034,7 +2035,7 @@ app.get('/api/generate-trip', async (req, res) => {
 // descriptions, then fetches them here in the background and merges them in.
 app.post('/api/descriptions', async (req, res) => {
   try {
-    const { places, city = '', theme = 'mixed' } = req.body || {};
+    const { places, city = '', country = '', theme = 'mixed' } = req.body || {};
     if (!Array.isArray(places) || places.length === 0) {
       return res.json({ descriptions: [] });
     }
@@ -2048,25 +2049,50 @@ app.post('/api/descriptions', async (req, res) => {
       wikipedia: p?.wikipedia ? String(p.wikipedia).slice(0, 200) : null,
     }));
 
-    // Serve cached descriptions first; only ask the LLM for the misses.
+    // Three-tier description source, cheapest/most-trustworthy first:
+    //   1. cache  2. verified Wikipedia extract (wiki-tagged POIs, free)
+    //   3. LLM (cautious) for what's left — obscure POIs in small towns rarely
+    //      have a Wikipedia article, and the per-type template alone reads as
+    //      generic, so the LLM earns its keep here. Template only when the LLM
+    //      is unavailable (no key / outage), so the key stays optional.
     const descriptions = new Array(safe.length);
-    const misses = [];
+
+    const afterCache = [];
     safe.forEach((p, i) => {
       const cached = getCachedDescription(p.name, safeCity, safeTheme);
       if (cached !== undefined) descriptions[i] = cached;
-      else misses.push({ p, i });
+      else afterCache.push({ p, i });
     });
 
-    if (misses.length > 0) {
-      // No LLM: a verified Wikipedia extract for POIs that carry a wikipedia tag,
-      // per-type template otherwise. Resolved in parallel.
-      await Promise.all(misses.map(async (m) => {
-        const { text, fromWiki } = await resolveDescription(m.p, safeCity);
-        descriptions[m.i] = text;
-        // Only cache a genuine Wikipedia extract — never the generic template,
-        // so a place that later gains a wiki tag isn't stuck on boilerplate.
-        if (fromWiki) setCachedDescription(m.p.name, safeCity, safeTheme, text);
-      }));
+    // Tier 2: Wikipedia extract (parallel). Misses fall through to the LLM.
+    const needLLM = [];
+    await Promise.all(afterCache.map(async (m) => {
+      const wiki = await raceTimeout(descriptionFromWikipedia(m.p), 4000);
+      if (wiki) {
+        descriptions[m.i] = wiki;
+        setCachedDescription(m.p.name, safeCity, safeTheme, wiki);
+      } else {
+        needLLM.push(m);
+      }
+    }));
+
+    // Tier 3: LLM in cautious mode (it only has name + type here). Pad each
+    // index with the per-type template when the LLM has no key or returns short.
+    if (needLLM.length > 0) {
+      const llm = await getDescriptionsFromLLM(
+        needLLM.map((m) => m.p),
+        safeCity,
+        String(country).slice(0, 80),
+        safeTheme,
+        { cautious: true }
+      );
+      needLLM.forEach((m, j) => {
+        const real = llm && llm[j];
+        descriptions[m.i] = real || fallbackDescription(m.p, safeCity);
+        // Only cache genuine LLM output — never the generic template, so a
+        // temporary outage doesn't poison the cache.
+        if (real) setCachedDescription(m.p.name, safeCity, safeTheme, real);
+      });
     }
 
     res.json({ descriptions });
