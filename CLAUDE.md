@@ -18,11 +18,10 @@ Production: run `npm run client:build`, then `npm start`. Access via http://loca
 ## Environment Variables
 
 Required in `.env`:
-- `NEBIUS_API_KEY` — Nebius AI API key (OpenAI-compatible endpoint, model: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`)
 - `DATABASE_URL` — PostgreSQL connection string (e.g. `postgresql://user:pass@host/dbname`)
 
 Optional:
-- `NEBIUS_API_BASE_URL` — defaults to `https://api.tokenfactory.nebius.com/v1/`
+- `LLM_API_KEY`, `LLM_API_BASE_URL`, `LLM_MODEL` — any OpenAI-compatible chat-completions provider, used only to write place descriptions for POIs not covered by Wikipedia. Recommended: Google Gemini free tier (`LLM_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `LLM_MODEL=gemini-2.5-flash`). Descriptions resolve in tiers: cache → Wikipedia extract → LLM → varied per-type templates, so **without any LLM key the app still works** (templates only). Legacy `NEBIUS_API_KEY` / `NEBIUS_API_BASE_URL` are used as a fallback when the `LLM_*` vars are unset.
 - `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE` — enables Auth0 login (app works without these)
 - `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs, the Restaurantes tab, and Google-quality city autocomplete (typo-tolerant, alt names); without it those degrade to Wikipedia images / 503 / Photon autocomplete
 - `GOOGLE_PLACES_DAILY_BUDGET_USD` — daily in-memory spend cap for Google Places (default `6`)
@@ -59,7 +58,7 @@ React 19 + Vite. Component-based with Context API for state management.
 1. Frontend sends `GET /api/generate-trip?lat=&lng=&theme=&transport=&radius=`
 2. Server reverse-geocodes via **Nominatim** (OpenStreetMap) → city name
 3. Server fetches real POIs via **Overpass API** (OpenStreetMap)
-4. Server calls **Nebius AI** for descriptions (or full route if no Overpass data)
+4. Server adds descriptions in tiers: **Wikipedia extract → LLM (Gemini/Nebius, OpenAI-compatible) → varied templates** (or a full LLM route if no Overpass data)
 5. POIs sorted by nearest-neighbor algorithm, trimmed to fit max distance
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
 7. Frontend calculates route via `GET /api/route` → **OpenRouteService** (fallback: OSRM demos)
