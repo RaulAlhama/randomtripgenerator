@@ -378,7 +378,7 @@ export function TripProvider({ children }) {
       // Descriptions were skipped server-side for speed; backfill them now and
       // merge by poiKey when they arrive.
       fetchPlaceDescriptions(
-        candidates.map((p) => ({ name: p.name, type: p.type })),
+        candidates.map((p) => ({ name: p.name, type: p.type, wikipedia: p.wikipedia })),
         trip.city,
         trip.country,
         effectiveTheme

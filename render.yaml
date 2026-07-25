@@ -26,3 +26,8 @@ services:
         sync: false
       - key: AUTH0_AUDIENCE
         sync: false
+      # Umami analytics (cookieless). Read by Vite at BUILD time, so it must be
+      # present during `npm run build`. Paste the website id from cloud.umami.is
+      # in the Render dashboard; leave VITE_UMAMI_SRC unset unless self-hosting.
+      - key: VITE_UMAMI_WEBSITE_ID
+        sync: false
