@@ -974,10 +974,26 @@ function salvageDescriptionsArray(raw) {
   return out.length > 0 ? out : null;
 }
 
-// Call the Nebius chat-completions endpoint once and return the message
-// content string (empty string on error). Centralised so the retry wrapper
-// below doesn't duplicate request plumbing.
-async function callNebiusOnce(body, apiBaseUrl, apiKey) {
+// Resolve the LLM provider from env — provider-agnostic, any OpenAI-compatible
+// chat-completions endpoint (Nebius, Google Gemini, NVIDIA NIM, ...). LLM_* wins;
+// falls back to the legacy NEBIUS_* vars so existing deploys keep working.
+//   Gemini free tier example:
+//     LLM_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+//     LLM_API_KEY=<google-ai-studio-key>
+//     LLM_MODEL=gemini-2.5-flash
+function llmConfig() {
+  return {
+    apiKey: process.env.LLM_API_KEY || process.env.NEBIUS_API_KEY,
+    apiBaseUrl: process.env.LLM_API_BASE_URL || process.env.NEBIUS_API_BASE_URL
+      || 'https://api.tokenfactory.nebius.com/v1/',
+    model: process.env.LLM_MODEL || 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+  };
+}
+
+// Call an OpenAI-compatible chat-completions endpoint once and return the message
+// content string (empty string on error). Centralised so the retry wrapper below
+// doesn't duplicate request plumbing.
+async function callLLMOnce(body, apiBaseUrl, apiKey) {
   const baseUrl = apiBaseUrl.replace(/\/+$/, '');
   const response = await fetchExternal(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -989,7 +1005,7 @@ async function callNebiusOnce(body, apiBaseUrl, apiKey) {
   });
   if (response.error || response.detail) {
     const msg = response.error?.message || response.detail || JSON.stringify(response.error || response);
-    throw new Error(`Nebius API error: ${msg}`);
+    throw new Error(`LLM API error: ${msg}`);
   }
   return response.choices?.[0]?.message?.content || '';
 }
@@ -1037,11 +1053,10 @@ function setCachedDescription(name, city, theme, description) {
 // back to a template and NEBIUS_API_KEY stays optional.
 async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
   try {
-    const apiKey = process.env.NEBIUS_API_KEY;
-    const apiBaseUrl = process.env.NEBIUS_API_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/';
+    const { apiKey, apiBaseUrl, model } = llmConfig();
 
     if (!apiKey) {
-      console.warn('[Nebius] No API key, skipping descriptions');
+      console.warn('[LLM] No API key, skipping descriptions');
       return null;
     }
 
@@ -1065,7 +1080,7 @@ Ejemplo: {"descriptions": ["Estatua del siglo XIX dedicada al poeta, ubicada en 
 
 IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar. NO menciones barrios, distritos ni calles concretas: solo tienes el nombre y la ciudad, no puedes saber la zona con certeza y el mapa ya muestra donde esta. Centrate en QUE es el lugar y POR QUE merece la pena.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo y por que puede interesar, SIN inventar detalles especificos (fechas, premios, platos estrella, barrios, hitos del recorrido o lugares por los que pasa).' : ''}`;
 
-    console.log('[Nebius] Requesting descriptions for', places.length, 'places in', city);
+    console.log('[LLM] Requesting descriptions for', places.length, 'places in', city);
 
     // Nemotron burns completion tokens on hidden reasoning before emitting
     // the JSON; with 10 cards (and the longer cautious prompt) 3000 still
@@ -1073,7 +1088,7 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
     // bill — so keep it roomy. The retry asks for one short sentence per
     // place at low temperature, which shrinks both reasoning and output.
     const buildBody = (attempt) => ({
-      model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+      model,
       messages: [
         {
           role: 'system',
@@ -1094,16 +1109,16 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
     for (let attempt = 0; attempt < 2; attempt++) {
       let content = '';
       try {
-        content = await callNebiusOnce(buildBody(attempt), apiBaseUrl, apiKey);
+        content = await callLLMOnce(buildBody(attempt), apiBaseUrl, apiKey);
       } catch (e) {
-        console.error('[Nebius][ALERT] API error getting descriptions:', e.message);
+        console.error('[LLM][ALERT] API error getting descriptions:', e.message);
         if (/credit|balance|quota|insufficient|payment|402/i.test(String(e.message))) {
-          console.error('[Nebius][ALERT] Parece un problema de CRÉDITO/cuota en Nebius. Recarga saldo para restaurar las descripciones IA.');
+          console.error('[LLM][ALERT] Parece un problema de CRÉDITO/cuota del proveedor LLM. Revisa el saldo/límite para restaurar las descripciones.');
         }
         return null; // API-level failure — retrying in-request won't help
       }
       if (!content) {
-        console.error('[Nebius][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota en Nebius).');
+        console.error('[LLM][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota del proveedor LLM).');
         continue;
       }
 
@@ -1116,27 +1131,26 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
       if (descriptions && descriptions.length >= places.length) return descriptions;
       if (descriptions) {
         if (!best || descriptions.length > best.length) best = descriptions;
-        console.warn(`[Nebius] Truncated descriptions (${descriptions.length}/${places.length})${attempt === 0 ? ', retrying' : ''}`);
+        console.warn(`[LLM] Truncated descriptions (${descriptions.length}/${places.length})${attempt === 0 ? ', retrying' : ''}`);
       } else if (attempt === 0) {
-        console.warn('[Nebius] Invalid descriptions JSON, retrying with stricter prompt:', content.substring(0, 200));
+        console.warn('[LLM] Invalid descriptions JSON, retrying with stricter prompt:', content.substring(0, 200));
       }
     }
 
     if (best) return best;
-    console.error('[Nebius] No usable descriptions after retry');
+    console.error('[LLM] No usable descriptions after retry');
     return null;
   } catch (e) {
-    console.error('[Nebius] Failed to get descriptions:', e.message);
+    console.error('[LLM] Failed to get descriptions:', e.message);
     return null;
   }
 }
 
 // Fallback: Call Nebius API to get full tourist route (when Overpass has no data)
 async function getTouristRouteFromLLM(city, lat, lng, country, theme, transport, maxRouteDistance) {
-  const apiKey = process.env.NEBIUS_API_KEY;
-  const apiBaseUrl = process.env.NEBIUS_API_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/';
+  const { apiKey, apiBaseUrl, model } = llmConfig();
 
-  if (!apiKey) throw new Error('NEBIUS_API_KEY not configured');
+  if (!apiKey) throw new Error('LLM API key not configured');
 
   const themeDesc = THEME_PROMPTS[theme] || THEME_PROMPTS.monuments;
   const transportConf = TRANSPORT_CONFIG[transport] || TRANSPORT_CONFIG.driving;
@@ -1165,13 +1179,13 @@ Devuelve un objeto JSON con una clave "places" que contenga un array:
 
 IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}. Si no estas seguro de que un lugar existe, NO lo incluyas. NO incluyas restaurantes, cafes, bares, locales gastronomicos, teatros ni cines: esta ruta es para VER lugares de interes (cosas que enseñaria una oficina de turismo a alguien que tiene un dia para visitar la ciudad). La app tiene una pestaña aparte para restaurantes y los teatros solo merecen la pena si hay un espectaculo ese dia. En las descripciones NO menciones barrios, distritos ni calles concretas: centrate en QUE es el lugar y POR QUE merece la pena. Devuelve exactamente ${placeCount} lugares. Ordenalos para una ruta ${modeLabel}.`;
 
-  console.log('[Nebius] Fallback: requesting full route for:', city, '| theme:', theme, '| transport:', transport);
+  console.log('[LLM] Fallback: requesting full route for:', city, '| theme:', theme, '| transport:', transport);
 
   // Two attempts: first creative pass, then a stricter retry if the model
   // returns malformed JSON. Bumped max_tokens to avoid mid-array truncation
   // on longer routes.
   const buildBody = (attempt) => ({
-    model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+    model,
     messages: [
       {
         role: 'system',
@@ -1189,19 +1203,19 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
   let parsed = null;
   let lastContent = '';
   for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-    const content = await callNebiusOnce(buildBody(attempt), apiBaseUrl, apiKey);
+    const content = await callLLMOnce(buildBody(attempt), apiBaseUrl, apiKey);
     lastContent = content;
     if (!content) {
-      console.error('[Nebius] Empty response on attempt', attempt);
+      console.error('[LLM] Empty response on attempt', attempt);
       continue;
     }
     parsed = parseLLMJsonSafe(content);
     if (!parsed && attempt === 0) {
-      console.warn('[Nebius] Invalid JSON on first attempt, retrying with stricter prompt');
+      console.warn('[LLM] Invalid JSON on first attempt, retrying with stricter prompt');
     }
   }
   if (!parsed) {
-    console.error('[Nebius] Failed to parse JSON after retry:', lastContent.substring(0, 300));
+    console.error('[LLM] Failed to parse JSON after retry:', lastContent.substring(0, 300));
     throw new Error('LLM returned invalid JSON');
   }
 
@@ -1239,32 +1253,99 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
     return Math.sqrt(dlat * dlat + dlng * dlng) < 50;
   });
 
-  console.log('[Nebius] Parsed places count:', places.length);
+  console.log('[LLM] Parsed places count:', places.length);
   return places;
 }
 
-// Per-type fallback descriptions, used when the LLM is unavailable (e.g. Nebius
-// out of credit). Built from data we already have (type + city) at zero API cost,
-// so it still reads naturally instead of the generic "Lugar de interés en ...".
+// Per-type fallback descriptions: the base layer, used when the LLM is
+// unavailable (no key / outage) and as the always-on floor. Several variants per
+// type, picked deterministically from the place name, so the same place is stable
+// across requests but different places don't all read identically. Built from data
+// we already have (type + city) at zero API cost.
 const FALLBACK_DESC_BY_TYPE = {
-  monument: (c) => `Un monumento emblemático de ${c}; una parada que merece la pena en la ruta.`,
-  museum: (c) => `Un museo de ${c} ideal para descubrir su historia y su cultura.`,
-  viewpoint: (c) => `Un mirador de ${c} con bonitas vistas para detenerse un momento.`,
-  palace: (c) => `Un palacio histórico de ${c} que refleja su patrimonio arquitectónico.`,
-  historic: (c) => `Un rincón histórico de ${c}, con encanto y siglos de historia.`,
-  church: (c) => `Un templo de ${c} que destaca por su arquitectura y su valor histórico.`,
-  market: (c) => `Un mercado de ${c}, perfecto para descubrir el ambiente y los productos locales.`,
-  park: (c) => `Un parque de ${c} ideal para un paseo tranquilo al aire libre.`,
-  garden: (c) => `Un jardín de ${c} donde relajarse rodeado de naturaleza.`,
-  plaza: (c) => `Una plaza con encanto de ${c}, un buen punto para hacer una pausa.`,
-  theater: (c) => `Un teatro de ${c}, parte de su vida cultural.`,
-  restaurant: (c) => `Un local de ${c} bien valorado por los visitantes.`,
+  monument: [
+    (c) => `Un monumento emblemático de ${c}; una parada que merece la pena en la ruta.`,
+    (c) => `Uno de los hitos de ${c}, con carácter y siglos de historia a sus espaldas.`,
+    (c) => `Un punto con solera de ${c}, ideal para detenerse un momento y hacer una foto.`,
+  ],
+  museum: [
+    (c) => `Un museo de ${c} ideal para descubrir su historia y su cultura.`,
+    (c) => `Un espacio de ${c} donde asomarse a su arte y su memoria con calma.`,
+    (c) => `Una visita cultural de ${c}, perfecta para entender mejor la ciudad.`,
+  ],
+  viewpoint: [
+    (c) => `Un mirador de ${c} con bonitas vistas para detenerse un momento.`,
+    (c) => `Un balcón sobre ${c}: un buen sitio para respirar y mirar el paisaje.`,
+    (c) => `Un punto elevado de ${c} desde el que la ciudad se ve de otra manera.`,
+  ],
+  palace: [
+    (c) => `Un palacio histórico de ${c} que refleja su patrimonio arquitectónico.`,
+    (c) => `Una antigua residencia señorial de ${c}, con fachadas que invitan a mirar hacia arriba.`,
+    (c) => `Un edificio noble de ${c} que conserva el aire de otra época.`,
+  ],
+  historic: [
+    (c) => `Un rincón histórico de ${c}, con encanto y siglos de historia.`,
+    (c) => `Un lugar cargado de pasado en ${c}, de esos que cuentan cómo era la ciudad.`,
+    (c) => `Un enclave con historia de ${c}, agradable para pasear sin prisa.`,
+  ],
+  church: [
+    (c) => `Un templo de ${c} que destaca por su arquitectura y su valor histórico.`,
+    (c) => `Una iglesia de ${c} que merece un vistazo por dentro y por fuera.`,
+    (c) => `Un edificio religioso de ${c}, remanso de calma y buena arquitectura.`,
+  ],
+  market: [
+    (c) => `Un mercado de ${c}, perfecto para descubrir el ambiente y los productos locales.`,
+    (c) => `Un mercado de ${c} donde se palpa el pulso del día a día y se come bien.`,
+    (c) => `Un punto de ${c} lleno de vida, ideal para picar algo y ver producto local.`,
+  ],
+  park: [
+    (c) => `Un parque de ${c} ideal para un paseo tranquilo al aire libre.`,
+    (c) => `Una zona verde de ${c} para descansar las piernas y tomar aire.`,
+    (c) => `Un espacio al aire libre de ${c}, buen sitio para una pausa relajada.`,
+  ],
+  garden: [
+    (c) => `Un jardín de ${c} donde relajarse rodeado de naturaleza.`,
+    (c) => `Un jardín de ${c}, un respiro verde en mitad del recorrido.`,
+    (c) => `Un rincón ajardinado de ${c}, agradable para pasear con calma.`,
+  ],
+  plaza: [
+    (c) => `Una plaza con encanto de ${c}, un buen punto para hacer una pausa.`,
+    (c) => `Una plaza de ${c} donde sentarse un rato y ver pasar la ciudad.`,
+    (c) => `Un espacio abierto de ${c}, punto de encuentro y buena parada.`,
+  ],
+  theater: [
+    (c) => `Un teatro de ${c}, parte de su vida cultural.`,
+    (c) => `Un teatro de ${c} con historia sobre y bajo el escenario.`,
+    (c) => `Un espacio escénico de ${c}, testigo de su agenda cultural.`,
+  ],
+  restaurant: [
+    (c) => `Un local de ${c} bien valorado por los visitantes.`,
+    (c) => `Un sitio de ${c} para probar la cocina de la zona.`,
+    (c) => `Un local de ${c} donde hacer un alto y comer algo rico.`,
+  ],
 };
+
+const FALLBACK_DESC_GENERIC = [
+  (c) => `Un lugar de interés de ${c} que merece una parada en la ruta.`,
+  (c) => `Un rincón de ${c} que aporta su punto al recorrido.`,
+  (c) => `Un sitio de ${c} que vale un alto en el camino.`,
+];
+
+// Stable index from a string: the same name always maps to the same variant, so a
+// place's description doesn't flicker between requests, while different places
+// spread across the pool.
+function stableIndex(str, mod) {
+  let h = 0;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % mod;
+}
 
 function fallbackDescription(place, city) {
   const c = city && city !== 'la zona' ? city : 'la zona';
-  const builder = FALLBACK_DESC_BY_TYPE[place.type];
-  return builder ? builder(c) : `Un lugar de interés de ${c} que merece una parada en la ruta.`;
+  const pool = FALLBACK_DESC_BY_TYPE[place.type] || FALLBACK_DESC_GENERIC;
+  const key = String(place.name || place.type || 'x');
+  return pool[stableIndex(key, pool.length)](c);
 }
 
 // Resolve a promise but give up after `ms`, yielding `fallback` instead. Keeps a
@@ -1444,9 +1525,9 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
   }
 
   // Last resort: no Overpass data at all (very remote area). This is the ONLY
-  // remaining runtime use of the LLM, and it's optional — if NEBIUS_API_KEY is
-  // unset (or the call fails) we return no places and the caller responds 404
-  // instead of a 500, so removing the key is safe.
+  // remaining place the LLM invents places at runtime, and it's optional — if no
+  // LLM key is configured (or the call fails) we return no places and the caller
+  // responds 404 instead of a 500, so running without an LLM is safe.
   console.log('[Route] No Overpass POIs found at any radius, trying optional LLM fallback');
   let llmPlaces = [];
   try {
