@@ -70,9 +70,14 @@ export default function ExploreMap({
         zoomControl={false}
         style={{ width: '100%', height: '100%' }}
       >
+        {/* Single hostname is OSM's preferred scheme: the {s} subdomain aliases
+            (a/b/c) are deprecated — the modern server does HTTP/2 multiplexing, and
+            one host caches better. See operations.osmfoundation.org/policies/tiles.
+            maxZoom 19 is the highest zoom OSM renders; asking for more 404s. */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
         />
         <FitController origin={origin} places={places} stage={stage} />
 
