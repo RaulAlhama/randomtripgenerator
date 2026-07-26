@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 
 // Fill these in before treating the legal texts as final — they appear verbatim
 // in the Privacy/Terms modals, and a review notice is shown while they're unset.
-const LEGAL_OWNER = '[TU NOMBRE O RAZÓN SOCIAL]';
-const LEGAL_EMAIL = '[TU-EMAIL@DOMINIO]';
+const LEGAL_OWNER = 'Raúl García Alcaraz';
+const LEGAL_EMAIL = 'raulgar3600@gmail.com';
 const LEGAL_UPDATED = '26 de julio de 2026';
 const LEGAL_NEEDS_REVIEW = LEGAL_OWNER.startsWith('[') || LEGAL_EMAIL.startsWith('[');
 
