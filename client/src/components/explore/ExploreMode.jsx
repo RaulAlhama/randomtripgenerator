@@ -52,7 +52,7 @@ function CloseIcon() {
   );
 }
 
-export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null, sharedSlug = null }) {
+export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null, sharedSlug = null, preloaded = false }) {
   const {
     currentTrip,
     candidates,
@@ -109,6 +109,9 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
 
   const launch = useCallback(() => {
     clearError();
+    // Reopened from the "Rutas" tab: the route is already in trip state, so don't
+    // generate anything (which would also cost a Google Places call).
+    if (preloaded) return;
     // Opened from a share link: load that stored route instead of exploring.
     if (sharedSlug) {
       loadSharedTrip(sharedSlug);
@@ -130,7 +133,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
       return;
     }
     startCandidates(loc);
-  }, [clearError, initialLocation, sharedSlug, loadSharedTrip, initialView, startCandidates]);
+  }, [clearError, initialLocation, sharedSlug, loadSharedTrip, initialView, startCandidates, preloaded]);
 
   // Launch once on open.
   useEffect(() => {
@@ -141,8 +144,13 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
 
   // Restaurants: fetch once we know where the user is. Errors (e.g. Places
   // not configured) just leave an empty deck — the core flow keeps working.
+  // Reopening a saved route is meant to be free (it renders from the device with
+  // no API calls), and restaurants are a paid Google lookup — so in that case
+  // wait until the user actually opens the Restaurantes view. The strip in the
+  // route sheet hides itself while the list is empty.
   useEffect(() => {
     if (!origin || restaurants !== null) return;
+    if (preloaded && view !== 'restaurantes') return;
     fetchRestaurants(origin.lat, origin.lng, RESTAURANT_RADIUS_M)
       .then((data) => {
         setRestaurants(data.restaurants || []);
@@ -150,7 +158,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
         track('restaurants_loaded', { city: data.city || '', count: (data.restaurants || []).length });
       })
       .catch(() => setRestaurants([]));
-  }, [origin?.lat, origin?.lng, restaurants]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [origin?.lat, origin?.lng, restaurants, preloaded, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock background scroll while the overlay is open.
   useEffect(() => {
@@ -191,7 +199,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   // lazily — only then does the sightseeing pipeline (and its cost) run.
   const showSitios = () => {
     setView('sitios');
-    if (!candidates && !isGenerating && !sharedSlug) {
+    if (!candidates && !isGenerating && !sharedSlug && !preloaded) {
       startCandidates(initialLocation || urlLocationOverride() || localOrigin);
     }
   };
