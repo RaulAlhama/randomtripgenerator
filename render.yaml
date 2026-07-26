@@ -10,6 +10,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
+      # Owns the production row of api_spend. Local development shares this
+      # DATABASE_URL, so without a distinct scope a dev run would spend
+      # production's daily Google allowance (it did).
+      - key: API_SPEND_SCOPE
+        value: prod
       # LLM provider (OpenAI-compatible), used to describe POIs not in Wikipedia.
       # Set these to Google Gemini's free tier (LLM_MODEL=gemini-flash-latest). If the
       # LLM_* vars are unset, the legacy NEBIUS_* vars below are used as fallback.
