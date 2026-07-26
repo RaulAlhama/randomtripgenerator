@@ -12,10 +12,3 @@ export const INSPIRATION_EXAMPLES = [
   { city: 'Malaga', lat: 36.7213, lng: -4.4214, theme: 'classic', transport: 'walking', radius: 2, tagline: 'Málaga imprescindible', photo: '1512753360435-329c4535a9a7', photoBy: 'Willian Justen de Vasconcellos' },
 ];
 
-export const themeLabelsCarousel = {
-  monuments: 'Monumentos',
-  historical: 'Histórica',
-  cultural: 'Cultural',
-  classic: 'Clásico',
-  surprise: 'Sorpresa',
-};
