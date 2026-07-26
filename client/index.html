@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Generador de rutas turísticas con IA en cualquier ciudad — RandomTrip</title>
-  <meta name="description" content="Genera rutas turísticas o encuentra senderos cerca de ti en cualquier ciudad del mundo. Itinerarios personalizados con IA y datos abiertos, en segundos. Gratis y sin registro." />
+  <meta name="description" content="Descubre qué ver cerca de ti y genera una ruta a pie por lugares reales en cualquier ciudad del mundo, en segundos. Con fotos, valoraciones y los restaurantes mejor valorados. Gratis y sin registro." />
   <meta name="theme-color" content="#3f6a64" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
-  <meta name="keywords" content="generador de rutas turísticas, qué visitar, ruta turística, planificador de viajes, itinerarios con IA, senderos cercanos, generador de itinerarios, ruta a pie, ruta en bicicleta, qué hacer en" />
+  <meta name="keywords" content="qué ver cerca de mí, generador de rutas turísticas, qué visitar, ruta turística a pie, itinerario a pie, qué hacer en, restaurantes cerca" />
   <meta name="author" content="RandomTrip" />
   <link rel="canonical" href="https://randomtripgenerator.com/" />
 
@@ -16,7 +16,7 @@
 
   <!-- Open Graph -->
   <meta property="og:title" content="Generador de rutas turísticas con IA — RandomTrip" />
-  <meta property="og:description" content="Descubre qué visitar en cualquier ciudad del mundo. Rutas turísticas e itinerarios personalizados con IA. Senderos cercanos. Gratis y sin registro." />
+  <meta property="og:description" content="Descubre qué visitar en cualquier ciudad del mundo: una ruta a pie por lugares reales, con fotos y valoraciones. Gratis y sin registro." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://randomtripgenerator.com/" />
   <meta property="og:site_name" content="RandomTrip" />
@@ -37,7 +37,7 @@
     "name": "RandomTrip",
     "alternateName": "Random Trip Generator",
     "url": "https://randomtripgenerator.com/",
-    "description": "Genera rutas turísticas o encuentra senderos cerca de ti en cualquier ciudad del mundo. Itinerarios personalizados con IA y datos abiertos, en segundos.",
+    "description": "Genera una ruta a pie por lugares reales cerca de ti, en cualquier ciudad del mundo y en segundos, con fotos, valoraciones y horarios.",
     "applicationCategory": "TravelApplication",
     "operatingSystem": "Any",
     "browserRequirements": "Requires modern browser with JavaScript",
@@ -49,9 +49,10 @@
       "priceCurrency": "EUR"
     },
     "featureList": [
-      "Generador de rutas turísticas personalizadas",
-      "Búsqueda de senderos cercanos",
-      "Mejores restaurantes por zona",
+      "Rutas a pie por lugares reales de OpenStreetMap",
+      "Fotos, valoraciones y horarios de cada lugar",
+      "Restaurantes mejor valorados de la zona",
+      "Meteorología del destino en vivo",
       "Cualquier ciudad del mundo",
       "Sin necesidad de registro"
     ]
@@ -78,15 +79,15 @@
         "name": "¿Cómo funciona el generador de rutas?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Eliges tu punto de partida (tu ubicación o cualquier ciudad), seleccionas la temática y el radio de exploración, y RandomTrip genera al instante una ruta con monumentos, miradores, plazas y rincones con encanto, ordenados para recorrerlos a pie, en bici o en coche."
+          "text": "Eliges tu punto de partida (tu ubicación o cualquier ciudad) y RandomTrip te muestra los lugares reales de alrededor uno a uno: quitas los que no te encajen y creas la ruta con los que quedan. La traza a pie sobre el mapa, ordenada para recorrerla sin dar vueltas, y puedes abrirla en Google Maps para empezar a andar."
         }
       },
       {
         "@type": "Question",
-        "name": "¿Puedo encontrar senderos de montaña cercanos?",
+        "name": "¿Qué información trae cada lugar?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Sí. La pestaña de senderos busca rutas de senderismo reales cerca de la ubicación que elijas, con su distancia, dificultad y tipo de recorrido, y las dibuja sobre el mapa."
+          "text": "Cada parada incluye una foto, su distancia desde tu punto de partida, la valoración y los horarios cuando están disponibles, y una descripción breve de qué es el lugar y por qué merece la pena. Los lugares salen de OpenStreetMap, así que son reales y no inventados."
         }
       },
       {
@@ -138,27 +139,28 @@
        real app's value proposition. -->
   <div id="root">
     <div id="seo-prerender">
-      <h1>Generador de rutas turísticas con IA en cualquier ciudad</h1>
+      <h1>Generador de rutas turísticas a pie en cualquier ciudad</h1>
       <p>
-        RandomTrip crea <strong>rutas turísticas personalizadas</strong> en cualquier ciudad
+        RandomTrip crea <strong>rutas turísticas a pie</strong> en cualquier ciudad
         del mundo en segundos. Dinos desde dónde quieres explorar y descubre qué visitar:
         monumentos, miradores, plazas históricas y rincones con encanto, ordenados en un
-        itinerario para recorrer a pie, en bici o en coche. Gratis y sin registro.
+        itinerario para recorrer andando. Gratis y sin registro.
       </p>
 
       <h2>Qué puedes hacer con RandomTrip</h2>
       <ul>
-        <li><strong>Generar rutas turísticas:</strong> itinerarios con lugares reales y descripciones escritas por IA.</li>
-        <li><strong>Encontrar senderos cercanos:</strong> rutas de senderismo cerca de ti, con distancia y dificultad, dibujadas sobre el mapa.</li>
+        <li><strong>Generar rutas a pie:</strong> itinerarios con lugares reales de OpenStreetMap, no inventados.</li>
+        <li><strong>Ver fotos, valoraciones y horarios</strong> de cada parada, con su distancia desde tu punto de partida.</li>
         <li><strong>Descubrir los mejores restaurantes:</strong> los sitios mejor valorados de la zona que elijas.</li>
         <li><strong>Consultar la meteorología</strong> en vivo de tu destino antes de salir.</li>
+        <li><strong>Abrir la ruta en Google Maps</strong> para empezar a andar, o compartirla con un enlace.</li>
       </ul>
 
       <h2>Cómo funciona</h2>
       <p>
-        Elige tu punto de partida —tu ubicación o cualquier ciudad—, selecciona la temática
-        de la ruta y el radio de exploración, y RandomTrip genera al instante un itinerario
-        personalizado. Cada parada incluye una descripción, foto e información práctica para
+        Elige tu punto de partida —tu ubicación o cualquier ciudad— y RandomTrip te muestra
+        los lugares de alrededor uno a uno: quitas los que no te encajen y creas la ruta con
+        los que quedan. Cada parada incluye una descripción, foto e información práctica para
         que aproveches al máximo tu visita.
       </p>
 
@@ -193,7 +195,7 @@
       <h2>Preguntas frecuentes</h2>
       <p><strong>¿Es gratis?</strong> Sí, RandomTrip es totalmente gratuito y no necesitas registrarte para generar rutas.</p>
       <p><strong>¿En qué ciudades funciona?</strong> En cualquier ciudad del mundo: usa datos abiertos de OpenStreetMap, disponibles globalmente.</p>
-      <p><strong>¿Puedo buscar rutas de montaña?</strong> Sí, la pestaña de senderos encuentra rutas de senderismo reales cerca de la ubicación que elijas.</p>
+      <p><strong>¿Qué trae cada parada?</strong> Una foto, la distancia desde tu punto de partida, la valoración y los horarios cuando están disponibles, y una descripción de qué es el lugar.</p>
 
       <p><noscript>Necesitas activar JavaScript para usar la aplicación interactiva.</noscript></p>
     </div>
