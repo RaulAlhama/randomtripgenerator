@@ -4,6 +4,7 @@ import { track } from '../services/analytics';
 import { saveTrip } from '../services/trips';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { useRoutes } from './RoutesContext';
 import { WEATHER_CODES } from '../constants/weather';
 
 // Action types
@@ -230,6 +231,7 @@ export function TripProvider({ children }) {
   const [state, dispatch] = useReducer(tripReducer, initialState);
   const { isAuthenticated, getAccessToken } = useAuth();
   const { showToast } = useToast();
+  const { saveRoute } = useRoutes();
 
   // Cancellation: closing the overlay (closeTrip) must discard any in-flight
   // generation so a cancelled search can't repopulate the deck when it finally
@@ -457,6 +459,14 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_STATUS, payload: null });
     dispatch({ type: SET_GENERATING, payload: false });
 
+    // Keep every built route on the device, for signed-in and anonymous users
+    // alike. Storing the geometry too means reopening it later costs no API call.
+    saveRoute(updatedTrip, {
+      distance: routeData.distance,
+      duration: routeData.duration,
+      geometry: routeData.geometry,
+    });
+
     track('route_created', {
       city: trip.city,
       stops: selectedPlaces.length,
@@ -516,6 +526,69 @@ export function TripProvider({ children }) {
     dispatch({ type: SET_ROUTE, payload: { geometry: null, distance: null, duration: null } });
     dispatch({ type: SET_STAGE, payload: 'candidates' });
   }, [state.candidates, state.currentTrip]);
+
+  // Reopen a route saved on this device. When the stored copy has its geometry
+  // (the normal case) this renders immediately with zero network calls — no
+  // Google Places, no routing quota. Only a route saved before geometry existed,
+  // or one recovered after a storage-quota trim, needs to recompute the line.
+  const openSavedRoute = useCallback(async (route) => {
+    if (!route || !Array.isArray(route.places) || route.places.length < 2) return;
+    const places = route.places;
+    const origin = { lat: route.origin_lat, lng: route.origin_lng };
+    const transport = route.transport || 'walking';
+
+    genIdRef.current++; // supersede anything in flight
+    if (genAbortRef.current) { genAbortRef.current.abort(); genAbortRef.current = null; }
+    const myGenId = genIdRef.current;
+    const cancelled = () => myGenId !== genIdRef.current;
+
+    const trip = {
+      city: route.city || 'la zona',
+      country: route.country || '',
+      places,
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      theme: 'mixed',
+      transport,
+      shareSlug: route.shareSlug || null,
+      route_distance: route.distance ?? null,
+      route_duration: route.duration ?? null,
+      savedRouteId: route.id,
+    };
+
+    dispatch({ type: SET_ERROR, payload: null });
+    dispatch({ type: SET_CANDIDATES, payload: places });
+    dispatch({ type: SET_SELECTED_KEYS, payload: new Set(places.map(poiKey)) });
+    dispatch({ type: SET_TRIP, payload: trip });
+    dispatch({
+      type: SET_ROUTE,
+      payload: {
+        geometry: route.geometry || null,
+        distance: route.distance ?? null,
+        duration: route.duration ?? null,
+      },
+    });
+    dispatch({ type: SET_STAGE, payload: 'route' });
+    dispatch({ type: SET_PROGRESS, payload: 100 });
+    dispatch({ type: SET_STATUS, payload: null });
+    dispatch({ type: SET_GENERATING, payload: false });
+
+    apiFetchWeather(origin.lat, origin.lng)
+      .then((w) => { if (!cancelled()) dispatch({ type: SET_WEATHER, payload: parseWeather(w) }); })
+      .catch(() => {});
+
+    if (!route.geometry) {
+      try {
+        const routeData = await fetchRouteData(origin.lat, origin.lng, places, transport);
+        if (cancelled()) return;
+        dispatch({ type: SET_ROUTE, payload: routeData });
+        dispatch({
+          type: SET_TRIP,
+          payload: { ...trip, route_distance: routeData.distance, route_duration: routeData.duration },
+        });
+      } catch (_) { /* the stops and map still render without the line */ }
+    }
+  }, []);
 
   const closeTrip = useCallback(() => {
     // Invalidate + abort any in-flight generation so a cancelled search can't
@@ -655,6 +728,7 @@ export function TripProvider({ children }) {
     closeTrip,
     shareTrip,
     loadSharedTrip,
+    openSavedRoute,
     clearError,
   };
 

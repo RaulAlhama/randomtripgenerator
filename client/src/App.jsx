@@ -5,6 +5,8 @@ import { TripProvider } from './context/TripContext';
 import { useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SavedProvider, useSaved } from './context/SavedContext';
+import { RoutesProvider } from './context/RoutesContext';
+import { useTrip } from './context/TripContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
@@ -12,7 +14,7 @@ import BottomNav from './components/layout/BottomNav';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
-import MyTrips from './components/trips/MyTrips';
+import SavedRoutes from './components/trips/SavedRoutes';
 import SavedView from './components/saved/SavedView';
 import ProfileView from './components/profile/ProfileView';
 import Toast from './components/ui/Toast';
@@ -26,30 +28,10 @@ function sharedSlugFromPath() {
   return m ? m[1] : null;
 }
 
-// "Rutas" tab: saved trips for logged-in users; otherwise a friendly empty
-// state that points back to exploring (MyTrips renders null when not authed).
-function RoutesTab({ onExplore }) {
-  const { authEnabled, isAuthenticated } = useAuth();
-  if (authEnabled && isAuthenticated) return <MyTrips />;
-  return (
-    <section className="saved-view">
-      <h2 className="saved-view-title">Tus rutas</h2>
-      <div className="saved-empty">
-        <div className="saved-empty-icon" aria-hidden="true">🧭</div>
-        <p className="saved-empty-title">Aún no has creado ninguna ruta</p>
-        <p className="saved-empty-sub">
-          Genera una ruta a pie con los mejores sitios a tu alrededor y aparecerá aquí.
-        </p>
-        <button type="button" className="btn btn-primary" onClick={() => onExplore('sitios')}>
-          Generar mi ruta
-        </button>
-      </div>
-    </section>
-  );
-}
 
 function AppShell() {
   const { saved } = useSaved();
+  const { openSavedRoute } = useTrip();
   // null = closed; otherwise { view, location, radiusKm, sharedSlug } for the
   // deck overlay. A /r/:slug URL opens the shared route directly on load.
   const [explore, setExplore] = useState(() => {
@@ -71,6 +53,14 @@ function AppShell() {
     setExplore(null);
   };
 
+  // Reopen a route from the "Rutas" tab: load it into trip state first, then show
+  // the overlay with `preloaded` so it renders that route instead of generating
+  // a new one.
+  const openSavedRouteInOverlay = (route) => {
+    openSavedRoute(route);
+    setExplore({ view: 'sitios', location: null, radiusKm: null, preloaded: true });
+  };
+
   return (
     <div className="container has-bottom-nav">
       <Header />
@@ -85,7 +75,9 @@ function AppShell() {
 
         {tab === 'rutas' && (
           <div className="tab-view">
-            <RoutesTab onExplore={openExplore} />
+            <ErrorBoundary>
+              <SavedRoutes onOpenRoute={openSavedRouteInOverlay} onExplore={openExplore} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -116,6 +108,7 @@ function AppShell() {
             initialLocation={explore.location}
             initialRadiusKm={explore.radiusKm}
             sharedSlug={explore.sharedSlug || null}
+            preloaded={explore.preloaded || false}
             onClose={closeExplore}
           />
         </ErrorBoundary>
@@ -130,12 +123,15 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <TripProvider>
-              <SavedProvider>
-                <AppShell />
-                <Toast />
-              </SavedProvider>
-            </TripProvider>
+            {/* RoutesProvider wraps TripProvider: building a route saves it. */}
+            <RoutesProvider>
+              <TripProvider>
+                <SavedProvider>
+                  <AppShell />
+                  <Toast />
+                </SavedProvider>
+              </TripProvider>
+            </RoutesProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
