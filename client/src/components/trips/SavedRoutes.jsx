@@ -57,7 +57,7 @@ function fromServerTrip(t) {
 // work offline); when signed in, server routes from other devices are merged in.
 export default function SavedRoutes({ onOpenRoute, onExplore }) {
   const { routes, removeRoute, markSynced } = useRoutes();
-  const { authEnabled, isAuthenticated, getAccessToken } = useAuth();
+  const { authEnabled, isAuthenticated, getAccessToken, user } = useAuth();
   const { showToast } = useToast();
   const [remote, setRemote] = useState([]);
 
@@ -77,10 +77,18 @@ export default function SavedRoutes({ onOpenRoute, onExplore }) {
   }, [isAuthenticated, getAccessToken]);
 
   // Push local routes up the first time the user signs in, so creating an account
-  // never loses what they already built. Only routes with no server id are sent.
+  // never loses what they already built.
+  //
+  // Only routes this account may claim are eligible: ones built while signed out
+  // (no ownerId) or already bound to this account. On a shared browser the earlier
+  // version uploaded whatever was on the device to whoever signed in next, handing
+  // one person's routes — and the coordinates they were standing at — to another
+  // person's account, permanently and across their devices.
   useEffect(() => {
     if (!isAuthenticated) return;
-    const pending = routes.filter((r) => !r.syncedId);
+    const owner = user?.sub || null;
+    if (!owner) return;
+    const pending = routes.filter((r) => !r.syncedId && (!r.ownerId || r.ownerId === owner));
     if (pending.length === 0) return;
     let cancelled = false;
     (async () => {
@@ -101,14 +109,15 @@ export default function SavedRoutes({ onOpenRoute, onExplore }) {
               route_distance: r.distance,
               route_duration: r.duration,
             }, token);
-            if (!cancelled) markSynced(r.id, saved?.id ?? true);
+            // Bind it to this account so no other account can ever claim it.
+            if (!cancelled) markSynced(r.id, saved?.id ?? true, owner);
           } catch (_) { /* retry on a later mount */ }
         }
       } catch (_) { /* ignore */ }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, routes.length]);
+  }, [isAuthenticated, user?.sub, routes.length]);
 
   const handleDelete = useCallback(async (route) => {
     if (route.remote) {
