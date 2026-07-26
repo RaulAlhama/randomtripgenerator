@@ -1584,10 +1584,14 @@ main {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
-  max-width: 520px;
+  max-width: 620px;
   width: 100%;
   animation: card-in 250ms var(--ease);
   overflow: hidden;
+  /* Legal texts are long: cap the dialog and scroll the body, never the page. */
+  display: flex;
+  flex-direction: column;
+  max-height: min(85vh, 780px);
 }
 
 .legal-modal-header {
@@ -1612,35 +1616,76 @@ main {
 
 .legal-modal-body {
   padding: 1.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.legal-wip {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.legal-wip-badge {
-  display: inline-flex;
-  align-self: flex-start;
-  padding: 0.3rem 0.85rem;
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-radius: var(--radius-pill);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.legal-wip p {
+/* ----- Legal documents (Privacy / Terms) ----- */
+.legal-doc {
   font-size: 0.9rem;
+  line-height: 1.65;
   color: var(--text-secondary);
-  line-height: 1.6;
 }
 
-.legal-wip p strong {
+.legal-doc h3 {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 1.5rem 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.legal-doc h3:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.legal-doc p {
+  margin-bottom: 0.7rem;
+}
+
+.legal-doc ul {
+  margin: 0 0 0.85rem 1.15rem;
+  padding: 0;
+}
+
+.legal-doc li {
+  margin-bottom: 0.5rem;
+}
+
+.legal-doc strong {
   color: var(--text);
   font-weight: 600;
+}
+
+.legal-doc a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-doc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  background: var(--primary-soft);
+  border-radius: 4px;
+}
+
+.legal-doc-updated {
+  font-size: 0.8rem;
+  color: var(--text-tertiary, var(--text-secondary));
+  opacity: 0.85;
+}
+
+/* Shown only while the owner/contact placeholders are unfilled. */
+.legal-review-notice {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--primary-soft);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.85rem;
 }
 
 /* ========== HERO LAYOUT (2-column) ========== */
