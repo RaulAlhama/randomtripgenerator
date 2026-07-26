@@ -468,9 +468,31 @@ function imageCacheKey(place, city) {
 }
 
 // Strategy 1: Wikipedia page summary via explicit title
+// Wikipedia language codes are short ASCII, optionally with a script/region
+// suffix (es, en, zh-hans, pt-br). The value comes from an OSM `wikipedia` tag
+// formatted "lang:Title" — and a client can supply that tag verbatim through
+// POST /api/descriptions. Interpolating it straight into the URL was an SSRF: a
+// '#' inside it ends the authority, so "attacker.example#:T" made the request go
+// to attacker.example instead of Wikipedia. Validate, then re-parse to be sure
+// nothing moved the host.
+const WIKI_LANG_RE = /^[a-z]{2,8}(-[a-z0-9]{2,8})?$/i;
+
+function wikipediaSummaryUrl(lang, title) {
+  if (!title || !WIKI_LANG_RE.test(String(lang || ''))) return null;
+  const url = `https://${String(lang).toLowerCase()}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.wikipedia.org')) return null;
+    return parsed.toString();
+  } catch (_) {
+    return null;
+  }
+}
+
 async function imageFromWikipediaTitle(title, lang = 'es') {
   try {
-    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const url = wikipediaSummaryUrl(lang, title);
+    if (!url) return null;
     const data = await fetchExternal(url);
     return data?.thumbnail?.source || data?.originalimage?.source || null;
   } catch (_) {
@@ -1546,8 +1568,11 @@ async function descriptionFromWikipedia(place) {
   const lang = parts.length > 1 ? parts[0] : 'es';
   const title = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
   if (!title) return null;
+  // Validated builder: the tag is client-supplied via POST /api/descriptions, and
+  // the language segment used to land in the URL's host position (SSRF).
+  const url = wikipediaSummaryUrl(lang, title);
+  if (!url) return null;
   try {
-    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
     const data = await fetchExternal(url);
     return trimExtract(data && data.extract);
   } catch (_) {
