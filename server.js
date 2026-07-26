@@ -104,15 +104,24 @@ const COST_PER_PLACE_IMAGE_USD = 0.04;        // 1 text search + 1 photo, per /a
 let dailyCostUsd = 0;
 let budgetDayKey = new Date().toISOString().slice(0, 10);
 
+// Which row this deployment owns. Local development shares the production
+// DATABASE_URL, so without a scope a dev run silently eats production's daily
+// allowance (observed: local tests pushed the shared row to $2.78 and helped
+// lock production out). Render sets API_SPEND_SCOPE=prod.
+const API_SPEND_SCOPE = process.env.API_SPEND_SCOPE || 'local';
+
 // Seed the counter from the DB at boot so a restart doesn't hand out a fresh
 // allowance. Failure is non-fatal: we start at 0 and still enforce the cap for
 // this process, which is the old behaviour.
 async function loadBudgetFromDb() {
   try {
-    const { rows } = await query('SELECT spend_usd FROM api_spend WHERE day = $1', [budgetDayKey]);
+    const { rows } = await query(
+      'SELECT spend_usd FROM api_spend WHERE day = $1 AND scope = $2',
+      [budgetDayKey, API_SPEND_SCOPE]
+    );
     if (rows.length) {
       dailyCostUsd = parseFloat(rows[0].spend_usd) || 0;
-      console.log(`[Budget] Restored $${dailyCostUsd.toFixed(2)} already spent on ${budgetDayKey}`);
+      console.log(`[Budget] Restored $${dailyCostUsd.toFixed(2)} already spent on ${budgetDayKey} (scope: ${API_SPEND_SCOPE})`);
     }
   } catch (e) {
     console.warn('[Budget] Could not restore daily spend, starting at $0:', e.message);
@@ -120,27 +129,58 @@ async function loadBudgetFromDb() {
 }
 
 // Write-through, fire-and-forget: the reservation decision is already made, so a
-// slow or failing DB must never delay or break a user's request.
+// slow or failing DB must never delay or break a user's request. A dropped write
+// (Neon's free tier autosuspends, so a cold write can fail) would leave the
+// in-memory counter ahead of the persisted truth — reconcile() below repairs that
+// instead of locking the app out for the rest of the day.
 function persistBudget(day, amountUsd) {
   query(
-    `INSERT INTO api_spend (day, spend_usd, updated_at)
-     VALUES ($1, $2, CURRENT_TIMESTAMP)
-     ON CONFLICT (day) DO UPDATE
+    `INSERT INTO api_spend (day, scope, spend_usd, updated_at)
+     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+     ON CONFLICT (day, scope) DO UPDATE
        SET spend_usd = api_spend.spend_usd + EXCLUDED.spend_usd,
            updated_at = CURRENT_TIMESTAMP`,
-    [day, amountUsd]
+    [day, API_SPEND_SCOPE, amountUsd]
   ).catch((e) => console.warn('[Budget] Persist failed:', e.message));
 }
 
-function tryReserveBudget(estimatedUsd) {
+// Re-read the persisted total and adopt it when it is lower than what this process
+// believes. Runs only when a request is about to be refused, so the cap can't get
+// stuck above the real spend: exactly the failure seen in production, where memory
+// said ~$5.8 while the database said $2.97 and Google had billed nothing.
+let reconcilingBudget = null;
+function reconcileBudget() {
+  if (reconcilingBudget) return reconcilingBudget;
+  reconcilingBudget = query(
+    'SELECT spend_usd FROM api_spend WHERE day = $1 AND scope = $2',
+    [budgetDayKey, API_SPEND_SCOPE]
+  ).then(({ rows }) => {
+    const persisted = rows.length ? parseFloat(rows[0].spend_usd) || 0 : 0;
+    if (persisted < dailyCostUsd - 0.001) {
+      console.warn(`[Budget] Drift repaired — memory $${dailyCostUsd.toFixed(2)} → persisted $${persisted.toFixed(2)} for ${budgetDayKey}`);
+      dailyCostUsd = persisted;
+    }
+  }).catch((e) => {
+    console.warn('[Budget] Reconcile failed:', e.message);
+  }).finally(() => { reconcilingBudget = null; });
+  return reconcilingBudget;
+}
+
+function rollDayIfNeeded() {
   const today = new Date().toISOString().slice(0, 10);
   if (today !== budgetDayKey) {
     console.log(`[Budget] Reset: previous day spent $${dailyCostUsd.toFixed(2)}`);
     dailyCostUsd = 0;
     budgetDayKey = today;
   }
+}
+
+// Synchronous reservation used on the request path.
+function tryReserveBudget(estimatedUsd) {
+  rollDayIfNeeded();
   if (dailyCostUsd + estimatedUsd > DAILY_BUDGET_USD) {
     console.warn(`[Budget] EXCEEDED — at $${dailyCostUsd.toFixed(2)}/$${DAILY_BUDGET_USD} for ${budgetDayKey}, rejecting request (+$${estimatedUsd.toFixed(2)})`);
+    reconcileBudget(); // repair drift so the next request isn't refused too
     return false;
   }
   dailyCostUsd += estimatedUsd;
@@ -150,6 +190,25 @@ function tryReserveBudget(estimatedUsd) {
     console.warn(`[Budget] ${pct.toFixed(0)}% used — $${dailyCostUsd.toFixed(2)}/$${DAILY_BUDGET_USD} on ${budgetDayKey}`);
   }
   return true;
+}
+
+// Same check, but reconciles first so a single dropped write can't refuse a
+// request. Used where the caller can afford one await before deciding.
+async function tryReserveBudgetChecked(estimatedUsd) {
+  rollDayIfNeeded();
+  if (dailyCostUsd + estimatedUsd > DAILY_BUDGET_USD) {
+    await reconcileBudget();
+  }
+  return tryReserveBudget(estimatedUsd);
+}
+
+// Give back a reservation that was never spent — the paid call didn't happen (a
+// Wikipedia fallback, a missing key) or the request failed before using it.
+// Without this the counter only ever grows and drifts above real spend.
+function releaseBudget(estimatedUsd) {
+  if (!(estimatedUsd > 0)) return;
+  dailyCostUsd = Math.max(0, dailyCostUsd - estimatedUsd);
+  persistBudget(budgetDayKey, -estimatedUsd);
 }
 
 function budgetExceededResponse(res) {
@@ -1512,7 +1571,9 @@ async function buildDescriptions(places, city) {
 }
 
 // Main function: build route from real POIs + Wikipedia/template descriptions
-async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount, fast = false) {
+// useGoogle=false: the daily Google budget is spent, so skip its (paid) photos,
+// ratings and hours and serve the trip from OSM + Wikipedia only.
+async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, maxRouteDistance, candidateCount, fast = false, useGoogle = true) {
   // In candidate mode the user curates the final list, so return more POIs and
   // skip the distance-trim loop below. In legacy mode (no candidateCount),
   // pick a tight set sized to the radius.
@@ -1582,7 +1643,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
     const [descriptions, placesWithImages, googleData] = await Promise.all([
       wantDescriptions ? buildDescriptions(sorted, city) : Promise.resolve(null),
       fetchAllPOIImages(sorted, city),
-      fetchAllPOIGoogleData(sorted, city)
+      useGoogle ? fetchAllPOIGoogleData(sorted, city) : Promise.resolve([])
     ]);
 
     const withImagesCount = placesWithImages.filter(p => p.imageUrl).length;
@@ -1648,7 +1709,7 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
   // LLM places have no wikipedia/wikidata tags — attempt Wikipedia + Google in parallel
   const [withImages, googleData] = await Promise.all([
     fetchAllPOIImages(llmPlaces, city),
-    fetchAllPOIGoogleData(llmPlaces, city)
+    useGoogle ? fetchAllPOIGoogleData(llmPlaces, city) : Promise.resolve([])
   ]);
   const places = withImages.map((p, i) => {
     const g = googleData[i] || {};
@@ -1887,7 +1948,7 @@ app.get('/api/resolve-city', async (req, res) => {
     const cached = cacheGet(cacheKey);
     if (cached !== null) return res.json(cached);
 
-    if (!tryReserveBudget(COST_PER_CITY_RESOLVE_USD)) {
+    if (!await tryReserveBudgetChecked(COST_PER_CITY_RESOLVE_USD)) {
       return budgetExceededResponse(res);
     }
 
@@ -1935,6 +1996,11 @@ app.get('/api/place-image', async (req, res) => {
   // it on the shared daily budget. If the budget is spent we skip Google and use
   // the free Wikipedia resolver below — an image request should degrade, not 429.
   if (apiKey && tryReserveBudget(COST_PER_PLACE_IMAGE_USD)) {
+    // The reservation covers a text search + a photo. When we end up NOT using
+    // Google's photo (no match, wrong place type, too far away, or an error) the
+    // photo half was never billed, so give the reservation back instead of
+    // letting the counter drift above real spend.
+    let usedGoogle = false;
     try {
       const query = encodeURIComponent(`${name} ${city || ''}`);
       const bias = hasCoords ? `&location=${latNum},${lngNum}&radius=2000` : '';
@@ -1949,10 +2015,16 @@ app.get('/api/place-image', async (req, res) => {
       if (photoRef && typesOk && nearOk) {
         const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
         const cdnUrl = await followRedirect(photoApiUrl);
-        if (cdnUrl) return res.json({ url: cdnUrl, source: 'google' });
+        if (cdnUrl) {
+          usedGoogle = true;
+          return res.json({ url: cdnUrl, source: 'google' });
+        }
       }
     } catch (e) {
       console.error('[Places] Google error:', e.message);
+    } finally {
+      // Keep only the text-search share of the estimate when the photo was unused.
+      if (!usedGoogle) releaseBudget(COST_PER_PLACE_IMAGE_USD - 0.032);
     }
   }
 
@@ -2159,10 +2231,16 @@ app.get('/api/generate-trip', async (req, res) => {
     const VALID_TRANSPORTS = ['driving', 'walking', 'cycling'];
     const safeTheme = VALID_THEMES.includes(theme) ? theme : 'mixed';
 
-    // Reserve daily Google Places budget (only if the API key is configured,
-    // since otherwise generate-trip falls back to Wikipedia which is free).
-    if (process.env.GOOGLE_PLACES_API_KEY && !tryReserveBudget(COST_PER_TRIP_USD)) {
-      return budgetExceededResponse(res);
+    // Reserve daily Google Places budget. Running out must DEGRADE, not break:
+    // the places themselves come from Overpass and images from Wikipedia, both
+    // free, so a trip is still perfectly usable without Google's photos, ratings
+    // and hours. Refusing the request outright made the whole app unusable for
+    // the rest of the day over a self-imposed estimate — with Google having
+    // billed nothing.
+    const useGoogle = Boolean(process.env.GOOGLE_PLACES_API_KEY)
+      && await tryReserveBudgetChecked(COST_PER_TRIP_USD);
+    if (process.env.GOOGLE_PLACES_API_KEY && !useGoogle) {
+      console.warn('[Budget] Daily cap reached — serving this trip without Google data (OSM + Wikipedia only)');
     }
     const safeTransport = VALID_TRANSPORTS.includes(transport) ? transport : 'driving';
 
@@ -2196,7 +2274,7 @@ app.get('/api/generate-trip', async (req, res) => {
     // seconds; the client backfills them via POST /api/descriptions.
     const fast = req.query.fast === '1';
     const { places, poiSource } = await buildRoute(
-      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance, candidateCount, fast
+      locationInfo.city, latNum, lngNum, locationInfo.country, safeTheme, safeTransport, realPOIs, maxRouteDistance, candidateCount, fast, useGoogle
     );
 
     if (!places || places.length === 0) {
@@ -2447,7 +2525,10 @@ app.get('/api/restaurants', async (req, res) => {
       return res.json(cached);
     }
 
-    if (!tryReserveBudget(COST_PER_RESTAURANTS_USD)) {
+    // Restaurants genuinely need Google (there's no free substitute for ratings
+    // and photos here), so this one still refuses — but only after reconciling,
+    // so a dropped write can't lock the feature out for the rest of the day.
+    if (!await tryReserveBudgetChecked(COST_PER_RESTAURANTS_USD)) {
       return budgetExceededResponse(res);
     }
 
