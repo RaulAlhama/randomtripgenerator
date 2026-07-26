@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { useAuth } from './AuthContext';
 
 // Built routes live in localStorage so the app keeps them for EVERYONE, with no
 // sign-up — same promise as SavedContext favourites. Before this, a route was
@@ -33,11 +34,28 @@ function loadRoutes() {
 }
 
 export function RoutesProvider({ children }) {
-  const [routes, setRoutes] = useState(loadRoutes);
+  const [allRoutes, setAllRoutes] = useState(loadRoutes);
+  const { user } = useAuth();
+  // Auth0 `sub`, which is also the user_id the backend stores. null = built while
+  // signed out.
+  const currentOwner = user?.sub || null;
+  const setRoutes = setAllRoutes;
+
+  // What the current identity may see. A route built while signed out (ownerId
+  // null) belongs to the device and stays visible; a route built under an account
+  // is only shown to that account. Without this, a second person signing in on a
+  // shared browser saw — and silently uploaded — the previous person's routes,
+  // which carry the coordinates they were standing at.
+  const routes = useMemo(
+    () => allRoutes.filter((r) => !r.ownerId || r.ownerId === currentOwner),
+    [allRoutes, currentOwner]
+  );
 
   useEffect(() => {
+    // Always persist the FULL list, not the filtered view, so signing out doesn't
+    // destroy another account's saved routes.
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(routes));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(allRoutes));
     } catch (_) {
       // Quota exceeded or private mode: keep the in-memory list working rather
       // than breaking the tab. Geometry is the bulky part, so drop it and retry
@@ -45,11 +63,11 @@ export function RoutesProvider({ children }) {
       try {
         window.localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify(routes.map((r) => ({ ...r, geometry: null })))
+          JSON.stringify(allRoutes.map((r) => ({ ...r, geometry: null })))
         );
       } catch (_) { /* give up silently */ }
     }
-  }, [routes]);
+  }, [allRoutes]);
 
   // Called automatically whenever a route is built. `trip` is the TripContext
   // shape; we keep only what's needed to render it again.
@@ -69,27 +87,37 @@ export function RoutesProvider({ children }) {
       shareSlug: trip.shareSlug || null,
       createdAt: Date.now(),
       syncedId: null,
+      // Who built it: the signed-in account, or null when signed out. Gates both
+      // visibility and what may be uploaded to an account.
+      ownerId: currentOwner,
     };
     const sig = routeSignature(entry);
     setRoutes((prev) => {
-      const existing = prev.find((r) => routeSignature(r) === sig);
+      // Only collapse against a route this identity can see, so two accounts on
+      // one device don't overwrite each other's copy of the same city walk.
+      const visible = (r) => !r.ownerId || r.ownerId === currentOwner;
+      const existing = prev.find((r) => visible(r) && routeSignature(r) === sig);
       // Rebuilt the same route: refresh it in place (keeping any server id) and
       // move it to the top instead of adding a duplicate.
-      const kept = prev.filter((r) => routeSignature(r) !== sig);
+      const kept = prev.filter((r) => r !== existing);
       const merged = existing
         ? { ...entry, id: existing.id, syncedId: existing.syncedId, shareSlug: entry.shareSlug || existing.shareSlug }
         : entry;
       return [merged, ...kept].slice(0, MAX_ROUTES);
     });
     return entry;
-  }, []);
+  }, [currentOwner]);
 
   const removeRoute = useCallback((id) => {
     setRoutes((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
-  const markSynced = useCallback((id, syncedId) => {
-    setRoutes((prev) => prev.map((r) => (r.id === id ? { ...r, syncedId } : r)));
+  // On a successful upload, record the server id AND bind the route to the
+  // account that now holds it, so it is never offered to a different account.
+  const markSynced = useCallback((id, syncedId, ownerId) => {
+    setRoutes((prev) => prev.map((r) => (
+      r.id === id ? { ...r, syncedId, ownerId: ownerId ?? r.ownerId ?? null } : r
+    )));
   }, []);
 
   const setShareSlug = useCallback((id, slug) => {
