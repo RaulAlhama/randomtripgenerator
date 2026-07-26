@@ -86,6 +86,17 @@ async function initDatabase() {
       )
     `);
 
+    // Daily spend on paid third-party APIs (Google Places), keyed by UTC day.
+    // Persisted because the in-process counter resets on every deploy/restart,
+    // which turned the daily cap into "cap per uptime segment".
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS api_spend (
+        day DATE PRIMARY KEY,
+        spend_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('Database connected and initialized');
   } finally {
     client.release();
