@@ -14,8 +14,38 @@ const { CITIES, CITY_BY_SLUG } = require('./cityData');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Render (and most PaaS) put the app behind a reverse proxy, so req.ip is the
+// proxy's address unless we trust it. Without this every visitor shares a single
+// rate-limit bucket: a handful of concurrent users would 429 each other, and a
+// single abuser couldn't be isolated. '1' = trust exactly one proxy hop, which is
+// Render's setup — never `true`, which would let a client spoof X-Forwarded-For.
+app.set('trust proxy', 1);
+
+// CORS: the SPA is served from this same origin (and Vite proxies /api in dev),
+// so no site legitimately needs cross-origin access. Restricting it stops other
+// websites from calling this API from a browser and burning the Google Places
+// budget. Requests with no Origin (curl, server-to-server, health checks) are
+// allowed — CORS is a browser control, so rate limiting and the daily budget cap
+// remain the real defence against scripted abuse.
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',').map((o) => o.trim()).filter(Boolean);
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://randomtripgenerator.com',
+  'https://www.randomtripgenerator.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+const allowedOrigins = CORS_ALLOWED_ORIGINS.length ? CORS_ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;
+
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    // Reflect the origin only when allowed. Signalling `false` (instead of an
+    // Error) omits the Access-Control-Allow-Origin header, so the browser blocks
+    // the response while the server answers normally — no 500s filling the logs.
+    callback(null, !origin || allowedOrigins.includes(origin));
+  },
+}));
 app.use(compression());
 app.use(express.json());
 
@@ -58,9 +88,12 @@ app.use('/api/generate-trip', generateLimiter);
 app.use('/api/restaurants', restaurantsLimiter);
 
 // ========== GOOGLE PLACES DAILY BUDGET ==========
-// In-memory cost counter shared by /api/generate-trip and /api/restaurants.
-// Resets at UTC midnight. Estimated costs are conservative (worst-case Google
-// Places API pricing) so we'd rather block early than overshoot.
+// Cost counter shared by every endpoint that spends on Google Places. Kept in
+// memory for a fast, synchronous decision on the request path, but seeded from
+// (and written through to) the api_spend table — otherwise every deploy reset it
+// to zero and the "daily" cap was really a cap per uptime segment. Resets at UTC
+// midnight. Estimated costs are conservative (worst-case Google Places pricing)
+// so we'd rather block early than overshoot.
 const DAILY_BUDGET_USD = parseFloat(process.env.GOOGLE_PLACES_DAILY_BUDGET_USD || '6');
 const COST_PER_TRIP_USD = 0.30;       // ~8 text searches + 8 photos
 const COST_PER_RESTAURANTS_USD = 0.15; // 1 nearby + up to 12 photos
@@ -70,6 +103,34 @@ const COST_PER_PLACE_IMAGE_USD = 0.04;        // 1 text search + 1 photo, per /a
 
 let dailyCostUsd = 0;
 let budgetDayKey = new Date().toISOString().slice(0, 10);
+
+// Seed the counter from the DB at boot so a restart doesn't hand out a fresh
+// allowance. Failure is non-fatal: we start at 0 and still enforce the cap for
+// this process, which is the old behaviour.
+async function loadBudgetFromDb() {
+  try {
+    const { rows } = await query('SELECT spend_usd FROM api_spend WHERE day = $1', [budgetDayKey]);
+    if (rows.length) {
+      dailyCostUsd = parseFloat(rows[0].spend_usd) || 0;
+      console.log(`[Budget] Restored $${dailyCostUsd.toFixed(2)} already spent on ${budgetDayKey}`);
+    }
+  } catch (e) {
+    console.warn('[Budget] Could not restore daily spend, starting at $0:', e.message);
+  }
+}
+
+// Write-through, fire-and-forget: the reservation decision is already made, so a
+// slow or failing DB must never delay or break a user's request.
+function persistBudget(day, amountUsd) {
+  query(
+    `INSERT INTO api_spend (day, spend_usd, updated_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (day) DO UPDATE
+       SET spend_usd = api_spend.spend_usd + EXCLUDED.spend_usd,
+           updated_at = CURRENT_TIMESTAMP`,
+    [day, amountUsd]
+  ).catch((e) => console.warn('[Budget] Persist failed:', e.message));
+}
 
 function tryReserveBudget(estimatedUsd) {
   const today = new Date().toISOString().slice(0, 10);
@@ -83,6 +144,7 @@ function tryReserveBudget(estimatedUsd) {
     return false;
   }
   dailyCostUsd += estimatedUsd;
+  persistBudget(budgetDayKey, estimatedUsd);
   const pct = (dailyCostUsd / DAILY_BUDGET_USD) * 100;
   if (pct >= 80) {
     console.warn(`[Budget] ${pct.toFixed(0)}% used — $${dailyCostUsd.toFixed(2)}/$${DAILY_BUDGET_USD} on ${budgetDayKey}`);
@@ -194,6 +256,13 @@ const VARIETY_SEEDS = [
   'Selecciona lugares que un viajero curioso recordaria años despues.'
 ];
 
+// Default per-request ceiling for outbound calls. Without a timeout a hung
+// upstream (Overpass, Nominatim, an LLM provider) holds the socket — and the
+// user's request — open indefinitely. Callers that need longer (LLM generation)
+// pass options.timeoutMs.
+const EXTERNAL_TIMEOUT_MS = 8000;
+const EXTERNAL_MAX_BYTES = 8 * 1024 * 1024; // don't buffer an unbounded response
+
 // Helper function to fetch from external APIs
 function fetchExternal(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -203,18 +272,48 @@ function fetchExternal(url, options = {}) {
     if (!options.headers['User-Agent']) {
       options.headers['User-Agent'] = 'RandomTripGenerator/1.0';
     }
-    const request = protocol.request(url, options, (res) => {
+    // timeoutMs is ours, not a http.request option — strip it before passing on.
+    const { timeoutMs, ...requestOptions } = options;
+    const limitMs = timeoutMs || EXTERNAL_TIMEOUT_MS;
+
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(arg);
+    };
+
+    const request = protocol.request(url, requestOptions, (res) => {
       let data = '';
-      res.on('data', chunk => data += chunk);
+      let bytes = 0;
+      res.on('data', (chunk) => {
+        bytes += chunk.length;
+        if (bytes > EXTERNAL_MAX_BYTES) {
+          request.destroy();
+          finish(reject, new Error(`Respuesta demasiado grande de ${url}`));
+          return;
+        }
+        data += chunk;
+      });
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          finish(resolve, JSON.parse(data));
         } catch (e) {
-          resolve(data);
+          finish(resolve, data);
         }
       });
+      res.on('error', (e) => finish(reject, e));
     });
-    request.on('error', reject);
+
+    // Guard the whole exchange (connect + headers + body), which request.setTimeout
+    // alone does not do — it only covers socket inactivity.
+    const timer = setTimeout(() => {
+      request.destroy();
+      finish(reject, new Error(`Timeout (${limitMs}ms) llamando a ${url.split('?')[0]}`));
+    }, limitMs);
+
+    request.on('error', (e) => finish(reject, e));
     if (options.body) {
       request.write(options.body);
     }
@@ -1002,6 +1101,9 @@ async function callLLMOnce(body, apiBaseUrl, apiKey) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    // Generation is slower than a normal API call, but still bounded — a stuck
+    // provider must not hold the request open forever.
+    timeoutMs: 45000,
   });
   // Some OpenAI-compatible endpoints (e.g. Gemini) return errors wrapped in an
   // array — [{ "error": {...} }] — so unwrap before checking, otherwise a hard
@@ -2894,6 +2996,7 @@ app.get('*', (req, res) => {
 // Start server
 async function startServer() {
   await initDatabase();
+  await loadBudgetFromDb();
 
   // The SEO page builders inject metadata into index.html via regex
   // replacement. If the head markup changes shape, replacements silently
