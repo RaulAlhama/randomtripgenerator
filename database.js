@@ -86,15 +86,26 @@ async function initDatabase() {
       )
     `);
 
-    // Daily spend on paid third-party APIs (Google Places), keyed by UTC day.
-    // Persisted because the in-process counter resets on every deploy/restart,
-    // which turned the daily cap into "cap per uptime segment".
+    // Daily spend on paid third-party APIs (Google Places), keyed by UTC day and
+    // scope. Persisted because the in-process counter resets on every
+    // deploy/restart, which turned the daily cap into "cap per uptime segment".
+    // `scope` separates deployments that share one database: local development
+    // uses the production DATABASE_URL, so without it a dev run spends
+    // production's daily allowance.
     await client.query(`
       CREATE TABLE IF NOT EXISTS api_spend (
-        day DATE PRIMARY KEY,
+        day DATE NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'prod',
         spend_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Migrate the original single-column-PK version of this table in place.
+    await client.query(`ALTER TABLE api_spend ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'prod'`);
+    await client.query(`ALTER TABLE api_spend DROP CONSTRAINT IF EXISTS api_spend_pkey`);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS api_spend_day_scope_key ON api_spend(day, scope)
     `);
 
     console.log('Database connected and initialized');
