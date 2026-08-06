@@ -1465,9 +1465,9 @@ La descripcion debe explicar QUE es el lugar y POR QUE merece la pena visitarlo.
 ${placeList}
 
 Devuelve un JSON con una clave "descriptions" que sea un array de strings, una descripcion por lugar, en el MISMO ORDEN que la lista anterior.
-Ejemplo: {"descriptions": ["Estatua del siglo XIX dedicada al poeta, ubicada en un rincón tranquilo del Retiro.", "Mercado historico con los mejores productos frescos de la ciudad.", ...]}
+Ejemplo: {"descriptions": ["Mercado cubierto de producto fresco, con puestos y barras donde comer de pie.", "Parque urbano amplio, buen sitio para descansar a mitad del recorrido.", ...]}
 
-IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar. NO menciones barrios, distritos ni calles concretas: solo tienes el nombre y la ciudad, no puedes saber la zona con certeza y el mapa ya muestra donde esta. Centrate en QUE es el lugar y POR QUE merece la pena.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo y por que puede interesar, SIN inventar detalles especificos (fechas, premios, platos estrella, barrios, hitos del recorrido o lugares por los que pasa).' : ''}`;
+IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar concreto. NO uses descripciones genericas. No empieces la descripcion repitiendo el nombre del lugar. NO menciones barrios, distritos ni calles concretas: solo tienes el nombre y la ciudad, no puedes saber la zona con certeza y el mapa ya muestra donde esta. NO indiques el SIGLO, el año de construccion ni el ESTILO arquitectonico (barroco, neoclasico, art deco, modernista, gotico, renacentista...): son los datos que mas se inventan y quedan publicados como si fueran ciertos. NO nombres ninguna otra ciudad, pueblo, provincia ni monumento que no sea el lugar descrito. Centrate en QUE es el lugar y POR QUE merece la pena.${options.cautious ? '\nPRUDENCIA: si no conoces datos concretos y verificables de un lugar, describe su tipo y por que puede interesar, SIN inventar detalles especificos (fechas, siglos, estilos arquitectonicos, premios, platos estrella, barrios, hitos del recorrido o lugares por los que pasa).' : ''}`;
 
     console.log('[LLM] Requesting descriptions for', places.length, 'places in', city);
 
@@ -3395,4 +3395,8 @@ module.exports = {
   fetchExternal,
   parseLLMJsonSafe,
   salvageDescriptionsArray,
+  // The SEO generator needs the same provider plumbing the app uses, instead of
+  // reading NEBIUS_API_KEY on its own and pinning a model by hand.
+  llmConfig,
+  callLLMOnce,
 };

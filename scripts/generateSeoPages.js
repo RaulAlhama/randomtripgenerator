@@ -18,6 +18,7 @@ const { initDatabase, query, getPool } = require('../database');
 const { CITIES } = require('../cityData');
 const {
   PAGE_TYPES,
+  sanitizeItems,
   validatePage,
 } = require('../seoPages');
 const {
@@ -28,8 +29,9 @@ const {
   estimateRouteDistance,
   getDescriptionsFromLLM,
   fetchAllPOIImages,
-  fetchExternal,
   parseLLMJsonSafe,
+  llmConfig,
+  callLLMOnce,
 } = require('../server');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -63,26 +65,36 @@ const INTRO_BRIEFS = {
     `una ruta a pie de unas 2 horas por el centro de ${city.name} (${city.region})`,
   gastro: (city) =>
     `una ruta gastronómica a pie por ${city.name} (${city.region}): mercados, bares y locales con historia`,
+  // Not "señalizadas": that claim was ours, not the data's. OSM route=hiking
+  // relations are usually signposted but nothing here proves it.
   senderos: (city) =>
-    `las rutas de senderismo señalizadas que rodean ${city.name} (${city.region})`,
+    `las rutas de senderismo que rodean ${city.name} (${city.region})`,
 };
 
 async function getSeoIntroFromLLM(pageType, city, itemNames) {
-  const apiKey = process.env.NEBIUS_API_KEY;
-  if (!apiKey) return null;
-  const apiBaseUrl = (process.env.NEBIUS_API_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/').replace(/\/+$/, '');
+  // Uses the app's configured provider (llmConfig), not NEBIUS_API_KEY read
+  // directly with the model pinned by hand. That older shape was a silent
+  // landmine: the runtime moved to LLM_* (Gemini) while this still asked Nebius,
+  // so the day that key lapses every page fails validation with `llm_failed`
+  // and nothing says why.
+  const { apiKey, apiBaseUrl, model } = llmConfig();
+  if (!apiKey) {
+    console.error('[Intro] Sin clave de LLM (LLM_API_KEY o NEBIUS_API_KEY): la página se rechazará por llm_failed.');
+    return null;
+  }
 
   const prompt = `Escribe el párrafo de apertura (2-3 frases, EN ESPAÑOL) de una página web sobre ${INTRO_BRIEFS[pageType](city)}.
 Debe mencionar ${city.name} y citar de forma natural 2 o 3 de estos lugares reales: ${itemNames.slice(0, 5).join(', ')}.
 Tono informativo y cercano, sin exclamaciones ni clichés de folleto turístico ("joya escondida", "rincón mágico", etc.).
+NO inventes datos que no puedas verificar: ni siglos, ni años, ni estilos arquitectónicos, ni barrios o calles concretas, ni distancias, ni otras ciudades o monumentos que no estén en la lista.
+NO digas por dónde empieza, por dónde termina ni en qué orden se recorren: esa lista no va en orden y cualquier afirmación sobre el recorrido sería falsa.
+NO afirmes que los senderos están señalizados, ni describas el terreno o el paisaje: no tienes ese dato.
 Devuelve un JSON: {"intro": "..."}`;
 
   try {
-    const response = await fetchExternal(`${apiBaseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+    const content = await callLLMOnce(
+      {
+        model,
         messages: [
           { role: 'system', content: 'Eres un redactor de guías de viaje. Responde con JSON valido. Texto en español.' },
           { role: 'user', content: prompt },
@@ -91,17 +103,20 @@ Devuelve un JSON: {"intro": "..."}`;
         // Nemotron burns completion tokens on hidden reasoning; leave room.
         max_tokens: 1500,
         response_format: { type: 'json_object' },
-      }),
-    });
-    if (response.error || response.detail) {
-      console.error('[Intro] Nebius error:', response.error?.message || response.detail);
+      },
+      apiBaseUrl,
+      apiKey
+    );
+    if (!content) {
+      console.error('[Intro] Respuesta vacía del proveedor LLM.');
       return null;
     }
-    const content = response.choices?.[0]?.message?.content || '';
     const parsed = parseLLMJsonSafe(content);
     return parsed && typeof parsed.intro === 'string' ? parsed.intro.trim() : null;
   } catch (e) {
-    console.error('[Intro] Failed:', e.message);
+    // callLLMOnce throws with the provider's own message, which is what tells
+    // you "quota exceeded" apart from "wrong model id".
+    console.error('[Intro] Falló la llamada al LLM:', e.message);
     return null;
   }
 }
@@ -116,27 +131,65 @@ Devuelve un JSON: {"intro": "..."}`;
 // POIs and the app's randomized selectPOIsForTheme buried Plaza Mayor under
 // minor memorials). A Wikipedia article is the strongest free notability
 // signal OSM carries; major building types break the ties.
-function pickNotable(pois, count) {
+// MAX_PER_TYPE exists because pure scoring produced monotonous pages: Toledo's
+// walk came out as six churches and a chapel out of eight stops. Ranking alone
+// can't fix that — a city with forty churches will always have churches at the
+// top — so the pick is capped per type and topped up afterwards if the cap left
+// it short.
+const MAX_PER_TYPE = 3;
+
+function pickNotable(pois, count, maxPerType = MAX_PER_TYPE) {
   const TYPE_SCORE = {
     palace: 3, castle: 3, museum: 3, church: 2, historic: 2, market: 2,
     viewpoint: 2, plaza: 2, park: 2, monument: 1, garden: 1,
   };
-  return [...pois]
+  const scored = [...pois]
     .map((p) => ({ p, s: (p.wikipedia ? 4 : p.wikidata ? 1 : 0) + (TYPE_SCORE[p.type] || 1) }))
-    .sort((a, b) => b.s - a.s)
-    .slice(0, count)
-    .map((x) => x.p);
+    .sort((a, b) => b.s - a.s);
+
+  const perType = new Map();
+  const picked = [];
+  for (const { p } of scored) {
+    if (picked.length >= count) break;
+    const t = p.type || 'other';
+    if ((perType.get(t) || 0) >= maxPerType) continue;
+    perType.set(t, (perType.get(t) || 0) + 1);
+    picked.push(p);
+  }
+  // Small towns may not have enough variety to fill the pool under the cap. Top
+  // up only to the slack a page actually needs (5 to publish, a couple spare),
+  // not all the way to `count` — padding back to a full pool with the same type
+  // undid the cap entirely and the page came out monotonous anyway.
+  const MIN_POOL = 7;
+  if (picked.length < Math.min(count, MIN_POOL)) {
+    for (const { p } of scored) {
+      if (picked.length >= Math.min(count, MIN_POOL)) break;
+      if (!picked.includes(p)) picked.push(p);
+    }
+  }
+  return picked;
 }
+
+// A page needs 5 stops to publish, and the quality gates drop the ones whose
+// description guessed something. Describing a wider pool costs tokens on one
+// call, not extra calls, and it's what stops a single bad description from
+// taking the whole page below the minimum.
+const POOL_SIZE = 12;
 
 async function buildWalkContent(city) {
   const pois = await getOverpassPOIs(city.lat, city.lng, 1200);
   await sleep(SLEEP_BETWEEN_CALLS);
 
-  let selected = sortByProximity(pickNotable(pois, 8), city.lat, city.lng);
-  // ~2h walking with stops ≈ 6 km of street distance (straight-line × 1.4).
-  while (selected.length > 5 && estimateRouteDistance(selected, city.lat, city.lng) * 1.4 > 6000) {
-    selected = selected.slice(0, -1);
-  }
+  // notabilityRank is carried through so fitWalkBudget can keep the LANDMARKS
+  // when it trims. Without it the trim kept whatever was nearest the centroid,
+  // which is how a "que ver en Toledo" page ended up as six minor churches with
+  // no cathedral: pickNotable ranked them correctly and then the proximity sort
+  // plus a plain slice threw that ranking away.
+  const notable = pickNotable(pois, POOL_SIZE).map((p, i) => ({ ...p, notabilityRank: i }));
+  // Trimmed to the ~2h budget later, once the gates have had their say —
+  // dropping a stop for a bad description and THEN fitting the route gives a
+  // better page than fitting first and being left short.
+  const selected = sortByProximity(notable, city.lat, city.lng);
 
   // cautious: even with notability ranking some stops are lesser-known —
   // better a sober description than an invented fact set in stone.
@@ -152,6 +205,8 @@ async function buildWalkContent(city) {
     description: (descriptions && descriptions[i]) || '',
     imageUrl: p.imageUrl || null,
     wikipedia: p.wikipedia || null,
+    // fetchAllPOIImages rebuilds the objects, so carry this over explicitly.
+    notabilityRank: selected[i]?.notabilityRank ?? i,
   }));
   return {
     items,
@@ -160,12 +215,31 @@ async function buildWalkContent(city) {
   };
 }
 
+// ~2h walking with stops ≈ 6 km of street distance (straight-line × 1.4). Run
+// AFTER the gates, so the surviving stops are the ones that get fitted.
+function fitWalkBudget(items, city, maxStops = 8, budgetM = 6000) {
+  // Choose WHICH stops by notability, then order them by proximity so the walk
+  // still flows, then drop from the far end until it fits the time budget.
+  const byNotability = [...items].sort(
+    (a, b) => (a.notabilityRank ?? 99) - (b.notabilityRank ?? 99)
+  ).slice(0, maxStops);
+  let kept = sortByProximity(byNotability, city.lat, city.lng);
+  while (kept.length > 5 && estimateRouteDistance(kept, city.lat, city.lng) * 1.4 > budgetM) {
+    kept = kept.slice(0, -1);
+  }
+  return {
+    // notabilityRank is a working field, not page content.
+    items: kept.map(({ notabilityRank, ...rest }) => rest),
+    totalDistanceM: Math.round(estimateRouteDistance(kept, city.lat, city.lng) * 1.4),
+  };
+}
+
 async function buildGastroContent(city) {
   const pois = await getOverpassFoodPOIs(city.lat, city.lng, 1500);
   await sleep(SLEEP_BETWEEN_CALLS);
 
   // getOverpassFoodPOIs already ranks markets first, then cuisine-tagged venues.
-  const selected = sortByProximity(pois.slice(0, 8), city.lat, city.lng);
+  const selected = sortByProximity(pois.slice(0, POOL_SIZE), city.lat, city.lng);
   // cautious: the model doesn't actually know most local bars — don't let it
   // invent signature dishes or awards that end up published.
   const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'food', { cautious: true });
@@ -224,6 +298,9 @@ async function buildTrailsContent(city) {
       ref: t.ref || null,
       roundtrip: Boolean(t.roundtrip),
       description,
+      // Who wrote it. The unverifiable-claim gates in validatePage only police
+      // the model: a human mapper naming a hamlet or dating a chapel is fine.
+      descSource: osmDesc ? 'osm' : 'llm',
     };
   });
   return {
@@ -348,8 +425,34 @@ async function main() {
 
       try {
         const built = await CONTENT_BUILDERS[pageType](city);
-        items = built.items;
         totalDistanceM = built.totalDistanceM;
+
+        // Drop the stops we can't publish (a guessed neighbourhood, an invented
+        // century, a description contradicting the OSM data, the same place
+        // twice) BEFORE asking for the intro, so the intro never names a stop
+        // that isn't on the page. The builders over-fetch precisely so there's
+        // room to lose a few here.
+        const sanitized = sanitizeItems(pageType, built.items, city.name);
+        items = sanitized.items;
+        if (sanitized.dropped.length) {
+          console.log(
+            `[gates] descartados ${sanitized.dropped.length}/${built.items.length}: ` +
+              sanitized.dropped.map((d) => `${d.name} (${d.reason})`).join(', ')
+          );
+        }
+
+        // Only now, with the surviving stops known, fit the walk to its 2h claim.
+        if (pageType === 'paseo-2h') {
+          const fitted = fitWalkBudget(items, city);
+          if (fitted.items.length !== items.length) {
+            console.log(`[ruta] recortada a ${fitted.items.length} paradas para caber en ~2 h`);
+          }
+          items = fitted.items;
+          totalDistanceM = fitted.totalDistanceM;
+        } else if (pageType === 'gastro') {
+          items = items.slice(0, 8);
+          totalDistanceM = Math.round(estimateRouteDistance(items, city.lat, city.lng) * 1.4);
+        }
 
         // Don't spend an intro call on pages that already failed on content.
         let llmOk = built.llmOk;
@@ -382,7 +485,8 @@ async function main() {
         consecutiveLLMFailures += 1;
         if (consecutiveLLMFailures >= MAX_CONSECUTIVE_LLM_FAILURES) {
           console.error(
-            `\n⚠ ${MAX_CONSECUTIVE_LLM_FAILURES} fallos de LLM seguidos — Nebius parece sin crédito o caído. ` +
+            `\n⚠ ${MAX_CONSECUTIVE_LLM_FAILURES} fallos de LLM seguidos — el proveedor configurado ` +
+              '(LLM_API_KEY, o NEBIUS_API_KEY como fallback) parece sin cuota o caído; el mensaje de error de arriba lo dice. ' +
               'Abortando para no quemar cuota de Overpass. Vuelve a ejecutar más tarde: las páginas rechazadas se reintentan solas.'
           );
           results.push({ ciudad: city.slug, tipo: pageType, estado: 'abort', motivo: reason, items: items.length });
@@ -405,8 +509,21 @@ async function main() {
         totalDistanceM,
       };
 
+      // Never take a live page down to record a failure. upsertPage replaces the
+      // row wholesale and server.js only serves status='published', so writing a
+      // rejection over a published page would 404 a URL that was fine a minute
+      // earlier — on a --force rerun that could be a dozen live URLs at once.
+      const wouldUnpublish = status === 'rejected' && prior?.status === 'published';
+
       if (DRY_RUN) {
         console.log(`[dry-run] ${status}${reason ? ` (${reason})` : ''} — ${items.length} items, intro ${intro ? intro.length : 0} chars`);
+        // A dry run exists to be read: show the text the gates judged, so a
+        // rejection can be understood without a second run.
+        if (intro) console.log(`  intro: ${intro}`);
+        items.forEach((it) => console.log(`  · ${it.name}: ${it.description}`));
+        if (wouldUnpublish) console.log('  (en real no se escribiría: se conservaría la versión publicada y la URL seguiría viva)');
+      } else if (wouldUnpublish) {
+        console.log(`✗ rechazada (${reason}) — se CONSERVA la versión publicada anterior, la URL sigue viva`);
       } else {
         await upsertPage(row);
         console.log(`${status === 'published' ? '✓ publicada' : `✗ rechazada (${reason})`} — ${items.length} items`);
