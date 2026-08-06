@@ -26,6 +26,12 @@ const MERGE_DESCRIPTIONS = 'MERGE_DESCRIPTIONS';
 
 const CANDIDATE_COUNT = 10;
 
+// The server bounds its own upstream work (Overpass failover is capped, then
+// images and Google data resolve), but a stalled network or a proxy that never
+// closes the socket can still leave the deck spinning forever. Cap it here too
+// and say what happened, instead of spinning until the user gives up.
+const GENERATE_TIMEOUT_MS = 25000;
+
 // Stable identity for a POI across selection toggles
 function poiKey(p) {
   return `${p.name}|${p.lat}|${p.lng}`;
@@ -150,7 +156,7 @@ const TripContext = createContext(null);
 export function getUserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Tu navegador no soporta geolocalizacion'));
+      reject(new Error('Tu navegador no soporta geolocalización'));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -162,7 +168,7 @@ export function getUserLocation() {
       },
       () => {
         reject(
-          new Error('No se pudo obtener tu ubicacion. Permite el acceso o busca una ciudad.')
+          new Error('No se pudo obtener tu ubicación. Permite el acceso o busca una ciudad.')
         );
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -318,6 +324,14 @@ export function TripProvider({ children }) {
     const myGenId = ++genIdRef.current;
     const cancelled = () => myGenId !== genIdRef.current;
 
+    // Distinguished from a user cancellation: both surface as AbortError, but a
+    // timeout deserves an explanation and a closing overlay does not.
+    let timedOut = false;
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      abortController.abort();
+    }, GENERATE_TIMEOUT_MS);
+
     const sim = makeProgressSimulator();
 
     try {
@@ -415,14 +429,20 @@ export function TripProvider({ children }) {
         .catch(() => {});
     } catch (error) {
       sim.stop();
-      if (error?.name === 'AbortError' || cancelled()) return; // cancelled — no error UI
-      console.error('Error al generar candidatos:', error);
-      const msg = error.message || 'Error al generar la ruta';
+      // Checked before the AbortError branch: a timeout aborts the same
+      // controller a cancellation does, but it must not fail silently.
+      if (!timedOut && (error?.name === 'AbortError' || cancelled())) return;
+      const msg = timedOut
+        ? 'La búsqueda está tardando demasiado. Puede ser cosa de la conexión: vuelve a intentarlo.'
+        : (error.message || 'No hemos podido generar la ruta. Vuelve a intentarlo.');
+      if (!timedOut) console.error('Error al generar candidatos:', error);
       dispatch({ type: SET_ERROR, payload: msg });
       dispatch({ type: SET_STATUS, payload: null });
       dispatch({ type: SET_GENERATING, payload: false });
       dispatch({ type: SET_PROGRESS, payload: 0 });
       showToast(msg, 'error');
+    } finally {
+      clearTimeout(timeoutTimer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

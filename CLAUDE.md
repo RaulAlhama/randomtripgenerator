@@ -26,6 +26,14 @@ Optional:
 - `GOOGLE_PLACES_API_KEY` — enables Google photos/ratings/hours on POIs, the Restaurantes tab, and Google-quality city autocomplete (typo-tolerant, alt names); without it those degrade to Wikipedia images / 503 / Photon autocomplete
 - `GOOGLE_PLACES_DAILY_BUDGET_USD` — daily in-memory spend cap for Google Places (default `6`)
 - `ORS_API_KEY` — OpenRouteService key (free tier: 2000 directions/day); makes it the primary router for `/api/route`. Without it, routing falls back to community OSRM demo servers (no SLA)
+- `OVERPASS_ENDPOINTS` — comma-separated Overpass instances in order of preference. Default:
+  the main instance plus `overpass.openstreetmap.fr` as the hedge (measured 0.9–1.7s on the
+  real POI query vs 2.8–8s and frequent 429s on the main one, which allows only 2 concurrent
+  slots per IP — and Render's egress IP is shared)
+- `CORS_ALLOWED_ORIGINS` — comma-separated allowed origins; unset means production + localhost
+- `API_SPEND_SCOPE` — which `api_spend` row this process owns. **Set it to `local` when
+  running locally**: the local `.env` points at the production database, so without it a dev
+  run spends production's daily Google allowance
 - `PORT` — defaults to `3000`
 
 Client build-time (Vite, set in the build environment):
@@ -41,14 +49,26 @@ Express backend (`server.js`) + React frontend (`client/`) built with Vite.
 ### Frontend (client/src/)
 React 19 + Vite. Component-based with Context API for state management.
 
-**Key directories:**
-- `context/` — AuthContext, TripContext, ToastContext (global state)
-- `components/hero/` — LocationPicker, ThemeSelector, TransportSelector, DistanceSlider
-- `components/trip/` — MapView (react-leaflet), PlacesPanel, WeatherWidget, RouteOverlay
+**Key directories** (verified against the tree — the UI is the explore deck, not the
+original planner form; there is no `components/trip/`, no theme or transport selector, and
+no `constants/themes`):
+- `context/` — TripContext (generation + route pipeline), RoutesContext (local-first saved
+  routes), SavedContext, AuthContext, ThemeContext, ToastContext
+- `components/explore/` — **the main interface**: ExploreMode (the overlay that owns the
+  flow), ExploreDeck (full-screen swipeable cards), DeckPlaceCard, DeckRestaurantCard,
+  ExploreMap, ExploreSheet (bottom sheet for the built route), RestaurantStrip, SaveHeart,
+  ActivityPromo
+- `components/hero/` — Hero (single CTA + "Restaurantes cerca" shortcut), CitySearch,
+  CityPlanner, DistanceSlider, transportIcons
+- `components/layout/` — Header, Footer (also holds the Privacy/Terms modals), BottomNav,
+  TrustBand, Logo
+- `components/saved/`, `components/trips/`, `components/profile/` — SavedView, SavedRoutes,
+  ProfileView
 - `components/carousel/` — InspirationCarousel (auto-scrolling infinite loop)
-- `components/trips/` — MyTrips, TripCard (saved trips CRUD)
-- `constants/` — themes, transport, weather codes, inspiration examples, POI types
-- `services/` — api.js (all fetch calls), trips.js (auth'd CRUD)
+- `components/ui/` — Toast, Icon, ThemeToggle, ErrorBoundary
+- `constants/` — transport, weather codes, inspiration examples, POI types
+- `services/` — api.js (all fetch calls), trips.js (auth'd CRUD), analytics.js (Umami),
+  affiliates.js
 
 ### Backend (server.js)
 - Serves `client/dist/` (React build) if it exists, otherwise falls back to `public/`
@@ -57,7 +77,16 @@ React 19 + Vite. Component-based with Context API for state management.
 ### Request flow for trip generation
 1. Frontend sends `GET /api/generate-trip?lat=&lng=&theme=&transport=&radius=`
 2. Server reverse-geocodes via **Nominatim** (OpenStreetMap) → city name
-3. Server fetches real POIs via **Overpass API** (OpenStreetMap)
+3. Server fetches real POIs via **Overpass API** (OpenStreetMap) through `overpassQuery`,
+   a hedged request across several instances (`OVERPASS_ENDPOINTS`): it fires the first and,
+   if that hasn't answered in 2.5s, starts the next one alongside it and takes whichever
+   replies. Two rules this code exists to enforce: `[timeout:N]` inside the query must stay
+   GENEROUS (it's the point at which Overpass aborts our query and returns 504 — a low value
+   manufactures the failure it looks like it prevents), and an upstream failure must never
+   be flattened into an empty POI list. It throws `OverpassUnavailableError`, the handler
+   answers 503, and stale cached POIs (6h TTL, 24h stale window) are served while an
+   instance is down. Returning `[]` on failure is what made the app serve LLM-invented
+   places for Madrid.
 4. Server adds descriptions in tiers: **Wikipedia extract → LLM (Gemini/Nebius, OpenAI-compatible) → varied templates** (or a full LLM route if no Overpass data)
 5. POIs sorted by nearest-neighbor algorithm, trimmed to fit max distance
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
@@ -74,6 +103,7 @@ React 19 + Vite. Component-based with Context API for state management.
 ### API endpoints
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
+| GET | `/api/health` | No | Liveness probe (Render healthcheck) |
 | GET | `/api/auth-config` | No | Auth0 config for frontend |
 | GET | `/api/generate-trip` | No | Generate trip via Overpass + LLM |
 | GET | `/api/route` | No | Get route via OpenRouteService (fallback: OSRM) |

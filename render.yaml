@@ -36,8 +36,9 @@ services:
         sync: false
       - key: AUTH0_CLIENT_ID
         sync: false
-      - key: AUTH0_CLIENT_SECRET
-        sync: false
+      # No AUTH0_CLIENT_SECRET: the SPA uses PKCE and the API validates JWTs
+      # against Auth0's JWKS, so nothing here ever reads a client secret.
+      # Provisioning one only created a secret to leak.
       - key: AUTH0_AUDIENCE
         sync: false
       # Umami analytics (cookieless). Read by Vite at BUILD time, so it must be

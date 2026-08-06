@@ -1,7 +1,27 @@
 {
   "name": "randomtripgenerator",
   "version": "1.0.1",
-  "description": "Generate random trip destinations with geolocation and AI-powered suggestions",
+  "private": true,
+  "description": "Walking routes through real OpenStreetMap places, in any city, in seconds. Express + React.",
+  "keywords": [
+    "openstreetmap",
+    "overpass",
+    "walking-routes",
+    "travel",
+    "express",
+    "react",
+    "leaflet"
+  ],
+  "homepage": "https://randomtripgenerator.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RaulAlhama/randomtripgenerator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RaulAlhama/randomtripgenerator/issues"
+  },
+  "author": "Raúl García Alcaraz",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
