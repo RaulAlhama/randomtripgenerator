@@ -1,6 +1,11 @@
 node_modules/
 .env
-trips.db
+# Any local database file. trips.db was a leftover from the SQLite era and was
+# committed before this rule existed, so it shipped in a public repo with real
+# Auth0 subject ids in it.
+*.db
+*.sqlite
+*.sqlite3
 client/node_modules/
 client/dist/
 .playwright-mcp/
