@@ -21,13 +21,19 @@
   <meta property="og:url" content="https://randomtripgenerator.com/" />
   <meta property="og:site_name" content="RandomTrip" />
   <meta property="og:locale" content="es_ES" />
-  <meta property="og:image" content="https://randomtripgenerator.com/icons/logo.png" />
+  <!-- 1200x630 social card. This used to point at the 512x512 logo, which every
+       network rendered as a cropped thumbnail instead of a wide card. -->
+  <meta property="og:image" content="https://randomtripgenerator.com/icons/og-default.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="RandomTrip — rutas a pie por lugares reales, en segundos." />
 
-  <!-- Twitter Card -->
+  <!-- Twitter Card. title/description are rewritten per page by applyMetaTags,
+       so a shared city page doesn't announce the homepage. -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Generador de rutas turísticas con IA — RandomTrip" />
   <meta name="twitter:description" content="Rutas e itinerarios personalizados en cualquier ciudad. Gratis y sin registro." />
-  <meta name="twitter:image" content="https://randomtripgenerator.com/icons/logo.png" />
+  <meta name="twitter:image" content="https://randomtripgenerator.com/icons/og-default.png" />
 
   <!-- Structured data (JSON-LD): tells Google this is a free web app -->
   <script type="application/ld+json">

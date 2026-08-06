@@ -1,0 +1,34 @@
+Copyright (c) 2026 Raúl García Alcaraz
+
+All rights reserved.
+
+This repository is published so that the source can be read, reviewed and
+discussed. That is the only permission granted. You may view the code and
+quote short excerpts for commentary or review.
+
+Without prior written permission from the copyright holder you may not copy,
+modify, merge, publish, distribute, sublicense, sell, or host this software or
+substantial portions of it, nor create derivative works from it.
+
+This matches the terms published at https://randomtripgenerator.com, which
+state that the name, design and code of RandomTrip belong to its owner.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Third-party data and services used by this software carry their own terms:
+
+- OpenStreetMap data (via the Overpass API) is © OpenStreetMap contributors,
+  licensed under the Open Database License (ODbL).
+- Wikipedia and Wikimedia Commons content is licensed under CC BY-SA.
+- Google Places content is subject to the Google Maps Platform Terms of
+  Service, which restrict caching and redistribution.
+- OpenRouteService, Open-Meteo, Nominatim and the public Overpass instances
+  each have their own usage policies and rate limits.

@@ -244,6 +244,10 @@ function buildVariantHtml(indexHtml, city, page, links) {
   html = html.replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="${url}" />`);
   html = html.replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`);
   html = html.replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+  // Twitter prefers its own tags over og:*, so without these a shared variant
+  // page announced the homepage headline.
+  html = html.replace(/<meta name="twitter:title" content="[^"]*"\s*\/>/, `<meta name="twitter:title" content="${escapeHtml(title)}" />`);
+  html = html.replace(/<meta name="twitter:description" content="[^"]*"\s*\/>/, `<meta name="twitter:description" content="${escapeHtml(desc)}" />`);
 
   const breadcrumb = {
     '@context': 'https://schema.org',
@@ -289,6 +293,8 @@ function assertIndexPatterns(indexHtml) {
     ['og:url', /<meta property="og:url" content="[^"]*"\s*\/>/],
     ['og:title', /<meta property="og:title" content="[^"]*"\s*\/>/],
     ['og:description', /<meta property="og:description" content="[^"]*"\s*\/>/],
+    ['twitter:title', /<meta name="twitter:title" content="[^"]*"\s*\/>/],
+    ['twitter:description', /<meta name="twitter:description" content="[^"]*"\s*\/>/],
     ['seo-prerender block', /<div id="seo-prerender">[\s\S]*?<\/div>/],
     ['head close', /<\/head>/],
   ];

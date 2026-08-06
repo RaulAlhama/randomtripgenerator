@@ -229,6 +229,11 @@ app.use(express.static(fs.existsSync(clientDist) ? clientDist : publicDir, {
   setHeaders(res, filePath) {
     if (/[\\/]assets[\\/]/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/[\\/]icons[\\/]/.test(filePath)) {
+      // Stable but unhashed names, so cache for a week rather than forever —
+      // long enough to stop refetching the logo, short enough that replacing
+      // the social card propagates without renaming it.
+      res.setHeader('Cache-Control', 'public, max-age=604800');
     } else if (/sw\.js$/.test(filePath)) {
       // A cached service worker keeps controlling the page after a deploy.
       res.setHeader('Cache-Control', 'no-cache');
@@ -3193,6 +3198,8 @@ function buildCityHtml(city, publishedList = []) {
   html = html.replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="${url}" />`);
   html = html.replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`);
   html = html.replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+  html = html.replace(/<meta name="twitter:title" content="[^"]*"\s*\/>/, `<meta name="twitter:title" content="${escapeHtml(title)}" />`);
+  html = html.replace(/<meta name="twitter:description" content="[^"]*"\s*\/>/, `<meta name="twitter:description" content="${escapeHtml(desc)}" />`);
 
   const breadcrumb = {
     '@context': 'https://schema.org',
@@ -3259,7 +3266,12 @@ function applyMetaTags(html, { title, desc, url }) {
     .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="${url}" />`)
     .replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="${url}" />`)
     .replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`)
-    .replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+    .replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`)
+    // Twitter reads its own tags and ignores og:* when they're present, so
+    // leaving these at the template values made every shared page announce the
+    // homepage.
+    .replace(/<meta name="twitter:title" content="[^"]*"\s*\/>/, `<meta name="twitter:title" content="${escapeHtml(title)}" />`)
+    .replace(/<meta name="twitter:description" content="[^"]*"\s*\/>/, `<meta name="twitter:description" content="${escapeHtml(desc)}" />`);
 }
 
 // Shared route pages: the same SPA, but with the share's own title/description
