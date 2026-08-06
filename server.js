@@ -71,7 +71,7 @@ const restaurantsLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Has hecho muchas busquedas, espera un momento' }
+  message: { error: 'Has hecho muchas búsquedas seguidas, espera un momento' }
 });
 
 // Creating share links writes rows without auth, so keep it tight.
@@ -213,14 +213,30 @@ function releaseBudget(estimatedUsd) {
 
 function budgetExceededResponse(res) {
   return res.status(429).json({
-    error: 'Hemos alcanzado el limite diario gratuito. Vuelve a intentarlo manana.'
+    error: 'Hemos alcanzado el límite diario gratuito. Vuelve a intentarlo mañana.'
   });
 }
 
 // Serve React build if available, otherwise fall back to public/
 const clientDist = path.join(__dirname, 'client', 'dist');
 const publicDir = path.join(__dirname, 'public');
-app.use(express.static(fs.existsSync(clientDist) ? clientDist : publicDir));
+// Vite emits content-hashed filenames under /assets, so those can be cached
+// forever — a new deploy means new filenames. Everything else has to stay fresh
+// or a deploy never reaches people who already visited. With no options at all,
+// express.static sent `max-age=0` for everything, so even immutable bundles
+// revalidated against the origin on every single page load.
+app.use(express.static(fs.existsSync(clientDist) ? clientDist : publicDir, {
+  setHeaders(res, filePath) {
+    if (/[\\/]assets[\\/]/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/sw\.js$/.test(filePath)) {
+      // A cached service worker keeps controlling the page after a deploy.
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  },
+}));
 
 // Optional Auth0 JWT validation
 let jwtCheck = null;
@@ -240,25 +256,46 @@ if (process.env.AUTH0_DOMAIN && process.env.AUTH0_AUDIENCE) {
 
 // ========== IN-MEMORY CACHE ==========
 const cache = new Map();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutos (por defecto)
+// OSM barely changes from one day to the next, and a cold Overpass call is the
+// slowest step of a trip, so POI data earns a far longer life than the default.
+const OSM_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas
+// Expired entries are kept this much longer so they can still be served when
+// the upstream that produced them is down. Slightly stale real places beat
+// both a failed request and invented ones.
+const CACHE_STALE_GRACE = 24 * 60 * 60 * 1000; // 24 horas
 
 function cacheGet(key) {
   const entry = cache.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.time > CACHE_TTL) {
+  const age = Date.now() - entry.time;
+  if (age > entry.ttl) {
+    // Not deleted on expiry: past its TTL it's no longer fresh enough to serve
+    // normally, but it's still a valid fallback while the upstream is failing.
+    if (age > entry.ttl + CACHE_STALE_GRACE) cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+// Deliberately ignores the TTL. Only for the "upstream is down" path.
+function cacheGetStale(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.time > entry.ttl + CACHE_STALE_GRACE) {
     cache.delete(key);
     return null;
   }
   return entry.data;
 }
 
-function cacheSet(key, data) {
+function cacheSet(key, data, ttlMs = CACHE_TTL) {
   // Limitar tamaño del caché (max 500 entradas)
   if (cache.size > 500) {
     const oldest = cache.keys().next().value;
     cache.delete(oldest);
   }
-  cache.set(key, { data, time: Date.now() });
+  cache.set(key, { data, time: Date.now(), ttl: ttlMs });
 }
 
 // Auth middleware for protected routes
@@ -331,8 +368,9 @@ function fetchExternal(url, options = {}) {
     if (!options.headers['User-Agent']) {
       options.headers['User-Agent'] = 'RandomTripGenerator/1.0';
     }
-    // timeoutMs is ours, not a http.request option — strip it before passing on.
-    const { timeoutMs, ...requestOptions } = options;
+    // timeoutMs and withStatus are ours, not http.request options — strip them
+    // before passing the rest on.
+    const { timeoutMs, withStatus, ...requestOptions } = options;
     const limitMs = timeoutMs || EXTERNAL_TIMEOUT_MS;
 
     let settled = false;
@@ -356,11 +394,17 @@ function fetchExternal(url, options = {}) {
         data += chunk;
       });
       res.on('end', () => {
+        let payload;
         try {
-          finish(resolve, JSON.parse(data));
+          payload = JSON.parse(data);
         } catch (e) {
-          finish(resolve, data);
+          payload = data;
         }
+        // Callers that must tell a 200 from a 429/504 opt in with withStatus.
+        // By default only the body is resolved, which is what the rest expect —
+        // and which is exactly how a rate-limit page used to be mistaken for
+        // a valid empty result.
+        finish(resolve, withStatus ? { status: res.statusCode, body: payload } : payload);
       });
       res.on('error', (e) => finish(reject, e));
     });
@@ -813,6 +857,149 @@ const OVERPASS_TYPE_MAP = {
   tower: 'viewpoint', bridge: 'monument'
 };
 
+// ========== OVERPASS TRANSPORT ==========
+// The public Overpass instances are free, unmetered and intermittently
+// overloaded: the main one answers in under two seconds or returns 429/504
+// depending on the minute. Two rules follow from that:
+//   1. Retry, and across instances — the same query is valid on any of them.
+//   2. An upstream failure must NEVER look like "this area has no places". It
+//      used to: the error was swallowed into an empty array, which sent
+//      buildRoute down the LLM path and served invented places for Madrid.
+// Ordered by preference, overridable with OVERPASS_ENDPOINTS (comma-separated).
+// The main instance goes first because it's the canonical, highest-capacity one,
+// but it enforces 2 concurrent slots PER IP — and Render's egress IP is shared,
+// so 429 is a routine answer there, not an edge case. The French instance is the
+// hedge: measured on the real POI query at a 667m radius it answered Madrid /
+// Barcelona / Sevilla / Zamora in 0.9-1.7s with element counts identical to the
+// main instance, while the main one ranged 2.8-8s and 429s.
+// Note: overpass.kumi.systems and overpass.private.coffee resolve to the same
+// host (193.219.97.30), so listing both would buy no independence — only kumi
+// is here, as a third opinion.
+const OVERPASS_ENDPOINTS = (process.env.OVERPASS_ENDPOINTS ||
+  'https://overpass-api.de/api/interpreter,https://overpass.openstreetmap.fr/api/interpreter,https://overpass.kumi.systems/api/interpreter'
+).split(',').map((s) => s.trim()).filter(Boolean);
+
+// Overpass's own budget for a query, in seconds, declared inside the query as
+// [timeout:N]. Counter-intuitively this must be GENEROUS: it is not a politeness
+// setting, it's the point at which Overpass aborts our query and its gateway
+// answers 504. Measured against overpass-api.de at a 667m radius: with
+// [timeout:5] every city returned 504 after ~8s; with [timeout:25] Madrid
+// answered in 2.8s with 280 elements. So a low value manufactures the very
+// failure it looks like it should prevent.
+const OVERPASS_QUERY_TIMEOUT_S = 25;
+
+// What WE are willing to wait for one instance. Successful answers were measured
+// between 2.8s and 11.2s on the same query depending on instance load.
+const OVERPASS_ATTEMPT_TIMEOUT_MS = 10000;
+// If the first instance hasn't answered by this point, start the next one
+// alongside it rather than waiting for the first to fail (see overpassQuery).
+// Tuned just above the hedge target's measured worst case (~1.7s), so a healthy
+// primary is never second-guessed but a sick one is bypassed quickly.
+const OVERPASS_HEDGE_AFTER_MS = 2500;
+// Hard cap on the whole chain, so a bad minute upstream can never turn into a
+// 40-second wait for the user.
+const OVERPASS_TOTAL_BUDGET_MS = 14000;
+
+class OverpassUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'OverpassUnavailableError';
+  }
+}
+
+// Runs one Overpass query as a HEDGED request: fire the first instance, and if
+// it hasn't answered within hedgeAfterMs, start the next one alongside it and
+// take whichever replies first. Plain sequential failover would add up the slow
+// attempts (waiting 10s to learn instance #1 is sick before even trying #2);
+// hedging pays for a second call only on the slow tail, which is where the
+// public instances actually hurt — the same query answers in 2.8s or 504s after
+// 8s depending on the minute. Resolves the parsed body; throws
+// OverpassUnavailableError when every instance failed or the budget ran out.
+function overpassQuery(query, opts = {}) {
+  const {
+    label = 'overpass',
+    attemptTimeoutMs = OVERPASS_ATTEMPT_TIMEOUT_MS,
+    totalBudgetMs = OVERPASS_TOTAL_BUDGET_MS,
+    hedgeAfterMs = OVERPASS_HEDGE_AFTER_MS,
+  } = opts;
+  const endpoints = OVERPASS_ENDPOINTS;
+  if (!endpoints.length) {
+    return Promise.reject(new OverpassUnavailableError('no hay instancias de Overpass configuradas'));
+  }
+
+  const started = Date.now();
+  const failures = [];
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let launched = 0;
+    let inFlight = 0;
+    let hedgeTimer = null;
+
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hedgeTimer);
+      fn(arg);
+    };
+
+    const giveUpIfDone = () => {
+      if (inFlight === 0 && launched >= endpoints.length) {
+        finish(reject, new OverpassUnavailableError(
+          `Overpass no disponible (${label}) tras ${failures.length} intento(s): ${failures.join(' | ')}`
+        ));
+      }
+    };
+
+    const launch = () => {
+      if (settled || launched >= endpoints.length) return;
+      const remaining = totalBudgetMs - (Date.now() - started);
+      if (remaining < 1500) { // not enough left to be worth a round trip
+        launched = endpoints.length;
+        giveUpIfDone();
+        return;
+      }
+      const endpoint = endpoints[launched++];
+      const host = endpoint.replace(/^https?:\/\//, '').split('/')[0];
+      inFlight++;
+
+      fetchExternal(`${endpoint}?data=${encodeURIComponent(query)}`, {
+        timeoutMs: Math.min(attemptTimeoutMs, remaining),
+        withStatus: true,
+      })
+        .then(({ status, body }) => {
+          // 429 (rate limited) and 504 (query aborted / instance overloaded)
+          // are the common ones, and both are worth trying somewhere else.
+          if (status !== 200) {
+            failures.push(`${host} HTTP ${status}`);
+            return;
+          }
+          if (!body || typeof body !== 'object' || !Array.isArray(body.elements)) {
+            failures.push(`${host} respuesta ilegible`);
+            return;
+          }
+          if (failures.length) {
+            console.warn(`[Overpass][${label}] Servido por ${host} tras ${failures.length} fallo(s): ${failures.join(', ')}`);
+          }
+          finish(resolve, body);
+        })
+        .catch((e) => { failures.push(`${host} ${e.message}`); })
+        .finally(() => {
+          inFlight--;
+          if (settled) return;
+          launch(); // this one is out of the running; bring the next one in
+          giveUpIfDone();
+        });
+
+      // Don't wait for this attempt to fail before trying the next instance.
+      clearTimeout(hedgeTimer);
+      hedgeTimer = setTimeout(() => { if (!settled) launch(); }, hedgeAfterMs);
+    };
+
+    launch();
+  });
+}
+
 // Get real POIs from OpenStreetMap via Overpass API
 async function getOverpassPOIs(lat, lng, radiusMeters) {
   // Caché por zona (~111m) y radio redondeado
@@ -826,7 +1013,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
   try {
     // For larger radii, use a simpler query to avoid timeouts
     const isLargeRadius = radiusMeters > 2000;
-    const timeout = isLargeRadius ? 25 : 15;
+    const timeout = OVERPASS_QUERY_TIMEOUT_S;
 
     // Sightseeing only: think "I'm here for one day, what should I see?"
     // Restaurants/cafes go in their own tab. Theaters/cinemas excluded because
@@ -863,10 +1050,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
       );out center body;`;
     }
 
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const data = await fetchExternal(url);
-
-    if (!data.elements) return [];
+    const data = await overpassQuery(query, { label: 'pois' });
 
     // Belt-and-braces: even though the queries above don't request these,
     // drop any that slip through tag mixing. Food types are owned by the
@@ -906,9 +1090,20 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
     });
 
     console.log(`[Overpass] Found ${unique.length} real POIs within ${radiusMeters}m`);
-    cacheSet(cacheKey, unique);
+    cacheSet(cacheKey, unique, OSM_CACHE_TTL);
     return unique;
   } catch (error) {
+    // An upstream failure is not "there is nothing here". Serve slightly stale
+    // real places if we have any; otherwise propagate, so the caller can say
+    // the map is unreachable instead of inventing a route.
+    if (error instanceof OverpassUnavailableError) {
+      const stale = cacheGetStale(cacheKey);
+      if (stale) {
+        console.warn(`[Overpass] Caído — sirviendo ${stale.length} POIs de caché rancio (${cacheKey})`);
+        return stale;
+      }
+      throw error;
+    }
     console.error('[Overpass] Error:', error.message);
     return [];
   }
@@ -936,9 +1131,9 @@ async function getOverpassFoodPOIs(lat, lng, radiusMeters) {
       way["shop"~"bakery|confectionery|deli|cheese|wine"]["name"](around:${radiusMeters},${lat},${lng});
     );out center body;`;
 
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const data = await fetchExternal(url);
-    if (!data.elements) return [];
+    // Offline SEO generation, not the request path, so it can wait far longer
+    // than the interactive queries.
+    const data = await overpassQuery(query, { label: 'food', attemptTimeoutMs: 30000, totalBudgetMs: 70000 });
 
     // Franchises have no place on a "ruta gastronómica" — a Foster's Hollywood
     // with a cuisine tag would otherwise outrank the no-tag local taberna.
@@ -977,7 +1172,7 @@ async function getOverpassFoodPOIs(lat, lng, radiusMeters) {
     });
 
     console.log(`[Overpass] Found ${unique.length} food POIs within ${radiusMeters}m`);
-    cacheSet(cacheKey, unique);
+    cacheSet(cacheKey, unique, OSM_CACHE_TTL);
     return unique;
   } catch (error) {
     console.error('[Overpass][food] Error:', error.message);
@@ -1173,7 +1368,7 @@ function llmConfig() {
 // Call an OpenAI-compatible chat-completions endpoint once and return the message
 // content string (empty string on error). Centralised so the retry wrapper below
 // doesn't duplicate request plumbing.
-async function callLLMOnce(body, apiBaseUrl, apiKey) {
+async function callLLMOnce(body, apiBaseUrl, apiKey, timeoutMs = 45000) {
   const baseUrl = apiBaseUrl.replace(/\/+$/, '');
   let response = await fetchExternal(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -1183,8 +1378,10 @@ async function callLLMOnce(body, apiBaseUrl, apiKey) {
     },
     body: JSON.stringify(body),
     // Generation is slower than a normal API call, but still bounded — a stuck
-    // provider must not hold the request open forever.
-    timeoutMs: 45000,
+    // provider must not hold the request open forever. The default suits the
+    // background description backfill; callers that block a user request pass
+    // something tighter.
+    timeoutMs,
   });
   // Some OpenAI-compatible endpoints (e.g. Gemini) return errors wrapped in an
   // array — [{ "error": {...} }] — so unwrap before checking, otherwise a hard
@@ -1390,7 +1587,11 @@ IMPORTANTE: Usa coordenadas REALES de lugares verificados que existan en ${city}
   let parsed = null;
   let lastContent = '';
   for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-    const content = await callLLMOnce(buildBody(attempt), apiBaseUrl, apiKey);
+    // This path blocks a user staring at a spinner (it only runs where Overpass
+    // genuinely has nothing), and two attempts at the 45s default meant a 90s
+    // ceiling for an answer that is often "no places here" anyway. Keep both
+    // attempts inside the client's own 25s cap.
+    const content = await callLLMOnce(buildBody(attempt), apiBaseUrl, apiKey, 8000);
     lastContent = content;
     if (!content) {
       console.error('[LLM] Empty response on attempt', attempt);
@@ -1628,7 +1829,14 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
 
     for (const fallbackR of fallbackRadii) {
       console.log(`[Route] Only ${pois.length} POIs, retrying with ${fallbackR}m radius`);
-      pois = await getOverpassPOIs(lat, lng, fallbackR);
+      try {
+        pois = await getOverpassPOIs(lat, lng, fallbackR);
+      } catch (e) {
+        // Widening is opportunistic: if Overpass went down mid-way, keep the
+        // POIs we already have rather than losing a route we could still build.
+        console.warn('[Route] Overpass no disponible al ampliar el radio:', e.message);
+        break;
+      }
       if (pois.length >= 3) break;
     }
   }
@@ -2134,11 +2342,13 @@ async function fetchHikingTrails(latNum, lngNum, radiusMeters) {
   // `out geom;` returns each relation with full member geometry plus tags —
   // we need both to render the polyline and label it.
   const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
-  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-  const data = await fetchExternal(url);
-
-  if (!data?.elements) {
-    console.warn('[Hiking] No elements in Overpass response');
+  // Heavy query, and its callers are the SEO generator and an endpoint with no
+  // UI client, so it gets a longer leash than the interactive path.
+  let data;
+  try {
+    data = await overpassQuery(query, { label: 'hiking', attemptTimeoutMs: 35000, totalBudgetMs: 80000 });
+  } catch (e) {
+    console.warn('[Hiking] Overpass no disponible:', e.message);
     return { trails: [], origin: { lat: latNum, lng: lngNum } };
   }
 
@@ -2289,10 +2499,27 @@ app.get('/api/generate-trip', async (req, res) => {
     const locationPromise = trimmedCity
       ? Promise.resolve({ city: trimmedCity, country: (countryParam || '').trim(), displayName: trimmedCity })
       : getCityFromCoords(latNum, lngNum);
-    const [locationInfo, realPOIs] = await Promise.all([
-      locationPromise,
-      getOverpassPOIs(latNum, lngNum, searchRadius)
-    ]);
+    let locationInfo;
+    let realPOIs;
+    try {
+      [locationInfo, realPOIs] = await Promise.all([
+        locationPromise,
+        getOverpassPOIs(latNum, lngNum, searchRadius)
+      ]);
+    } catch (error) {
+      // The map of places is unreachable. Say so. The alternative — what this
+      // used to do — was to fall through to the LLM route and present invented
+      // places as if they came from OpenStreetMap, in Madrid included.
+      if (error instanceof OverpassUnavailableError) {
+        if (useGoogle) releaseBudget(COST_PER_TRIP_USD);
+        console.error('[API]', error.message);
+        return res.status(503).json({
+          error: 'No hemos podido consultar el mapa de lugares. Suele ser cosa de un momento: vuelve a intentarlo.',
+          retryable: true
+        });
+      }
+      throw error;
+    }
     console.log('[API] Location:', locationInfo.city, locationInfo.country, '| Real POIs:', realPOIs.length);
 
     // fast=1: skip the slow LLM descriptions so the candidate deck appears in
@@ -2303,7 +2530,12 @@ app.get('/api/generate-trip', async (req, res) => {
     );
 
     if (!places || places.length === 0) {
-      return res.status(404).json({ error: 'No places found' });
+      // Nothing was found, so nothing paid for it: give the reservation back
+      // instead of charging the daily cap for an empty answer.
+      if (useGoogle) releaseBudget(COST_PER_TRIP_USD);
+      return res.status(404).json({
+        error: 'No hemos encontrado sitios que merezcan la pena por aquí. Prueba a ampliar la distancia o a buscar otro punto de partida.'
+      });
     }
 
     res.json({
@@ -2316,8 +2548,10 @@ app.get('/api/generate-trip', async (req, res) => {
       poiSource
     });
   } catch (error) {
-    console.error('Error generating trip:', error);
-    res.status(500).json({ error: 'Failed to generate trip: ' + error.message });
+    // Keep the detail in the logs. The client used to receive raw upstream URLs
+    // and timeout numbers, and show them in a toast.
+    console.error('[API] Error generating trip:', error);
+    res.status(500).json({ error: 'No hemos podido generar la ruta. Vuelve a intentarlo en un momento.' });
   }
 });
 
@@ -2530,7 +2764,7 @@ app.get('/api/restaurants', async (req, res) => {
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
     if (!apiKey) {
-      return res.status(503).json({ error: 'Google Places no esta configurado en el servidor' });
+      return res.status(503).json({ error: 'La búsqueda de restaurantes no está disponible ahora mismo' });
     }
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Coordinates required' });
@@ -2932,7 +3166,7 @@ ${variantSection}
       <p>
         RandomTrip crea un <strong>itinerario personalizado por ${escapeHtml(city.name)}</strong> en
         segundos: combina lugares reales de OpenStreetMap con descripciones escritas por
-        inteligencia artificial y los ordena para recorrerlos a pie, en bici o en coche.
+        inteligencia artificial y los ordena para recorrerlos a pie.
         Gratis y sin registro. <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
       </p>
 ${activitiesSection}

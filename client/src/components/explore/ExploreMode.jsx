@@ -86,6 +86,10 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   const [localOrigin, setLocalOrigin] = useState(null);
   const [restCity, setRestCity] = useState('');
   const [restError, setRestError] = useState(null);
+  // Bumped to re-run the restaurants effect after a failure: `restaurants` stays
+  // null on error, so without a changing dependency the effect never fires again
+  // and "Reintentar" would do nothing.
+  const [restRetry, setRestRetry] = useState(0);
   // A built-route stop reopened as a detail card (tap a number / map pin).
   const [cardStop, setCardStop] = useState(null);
   const launchedRef = useRef(false);
@@ -142,8 +146,11 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
     launch();
   }, [launch]);
 
-  // Restaurants: fetch once we know where the user is. Errors (e.g. Places
-  // not configured) just leave an empty deck — the core flow keeps working.
+  // Restaurants: fetch once we know where the user is. A failure is reported as
+  // a failure — it used to set an empty list, which made the UI say there were
+  // no well-rated restaurants nearby when the truth was that we never managed to
+  // ask (the daily Google cap answers 429 and a Places outage 502, both landing
+  // here). "No hay restaurantes" in the middle of Madrid is plainly false.
   // Reopening a saved route is meant to be free (it renders from the device with
   // no API calls), and restaurants are a paid Google lookup — so in that case
   // wait until the user actually opens the Restaurantes view. The strip in the
@@ -157,8 +164,18 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
         if (data.city) setRestCity(data.city);
         track('restaurants_loaded', { city: data.city || '', count: (data.restaurants || []).length });
       })
-      .catch(() => setRestaurants([]));
-  }, [origin?.lat, origin?.lng, restaurants, preloaded, view]); // eslint-disable-line react-hooks/exhaustive-deps
+      .catch((e) => {
+        setRestError(e?.message || 'No hemos podido consultar los restaurantes ahora mismo. Vuelve a intentarlo en un momento.');
+      });
+  }, [origin?.lat, origin?.lng, restaurants, preloaded, view, restRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Retry just the restaurants lookup. When there's no origin yet the failure was
+  // geolocation, and that needs the full launch path instead.
+  const retryRestaurants = useCallback(() => {
+    setRestError(null);
+    setRestaurants(null);
+    setRestRetry((n) => n + 1);
+  }, []);
 
   // Lock background scroll while the overlay is open.
   useEffect(() => {
@@ -434,7 +451,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
           <div className="xp-deck-msg">
             <div className="xp-boot-emoji" aria-hidden="true">📍</div>
             <p>{restError}</p>
-            <button type="button" className="xp-cta" onClick={launch}>Reintentar</button>
+            <button type="button" className="xp-cta" onClick={origin ? retryRestaurants : launch}>Reintentar</button>
           </div>
         ) : restaurants === null ? (
           <div className="xp-deck-msg"><div className="xp-radar xp-radar-sm" aria-hidden="true"><span /><span /><div className="xp-radar-dot" /></div><p>Buscando restaurantes cerca…</p></div>

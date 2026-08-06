@@ -59,7 +59,12 @@ const PAGE_TYPES = {
     title: (city) => `Senderos cerca de ${city.name}: rutas de senderismo señalizadas — RandomTrip`,
     metaDescription: (city, items) => {
       const top = items.slice(0, 2).map((i) => i.name).join(' y ');
-      return `${items.length} rutas de senderismo señalizadas cerca de ${city.name}, como ${top}. Con distancia, dificultad y descripción de cada sendero.`;
+      // Only promise difficulty when OSM actually tagged it. sac_scale is rare,
+      // and buildItemHtml omits it when missing, so this meta description used
+      // to advertise a field that appeared in the body of none of the pages.
+      const hasDifficulty = items.some((i) => i.sacScale && SAC_LABELS[i.sacScale]);
+      const fields = hasDifficulty ? 'distancia, dificultad y descripción' : 'distancia y descripción';
+      return `${items.length} rutas de senderismo señalizadas cerca de ${city.name}, como ${top}. Con ${fields} de cada sendero.`;
     },
     listHeading: (city) => `Rutas de senderismo cerca de ${city.name}`,
     linkLabel: (city) => `Senderos cerca de ${city.name}`,
@@ -149,6 +154,22 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
 // HTML builders — same index.html-injection technique as the /ciudad pages.
 // ---------------------------------------------------------------------------
 
+// "unas 2 horas" was hardcoded on every route page regardless of its length, so
+// a 1.2 km stroll and a 6 km walk made the same promise. Walking pace ~4.5 km/h
+// plus a short stop per stop, rounded to the half hour so it reads as an
+// estimate and not a timetable.
+function estimateWalkTime(distanceM, stopCount) {
+  const walkMin = ((distanceM / 1000) / 4.5) * 60;
+  const stopMin = Math.max(0, stopCount) * 8;
+  const hours = (walkMin + stopMin) / 60;
+  if (hours < 0.75) return 'unos 45 minutos';
+  const rounded = Math.round(hours * 2) / 2;
+  if (rounded === 1) return 'una hora';
+  if (rounded === 1.5) return 'una hora y media';
+  if (Number.isInteger(rounded)) return `unas ${rounded} horas`;
+  return `unas ${Math.floor(rounded)} horas y media`;
+}
+
 function buildItemHtml(pageType, item) {
   if (pageType === 'senderos') {
     const meta = [formatKm(item.distanceM)];
@@ -168,7 +189,7 @@ function buildVariantSeoBlock(city, page, links) {
 
   const distanceLine =
     page.page_type !== 'senderos' && page.total_distance_m
-      ? `\n      <p>Recorrido estimado: ${formatKm(page.total_distance_m)} a pie, unas 2 horas con paradas incluidas.</p>`
+      ? `\n      <p>Recorrido estimado: ${formatKm(page.total_distance_m)} a pie, ${estimateWalkTime(page.total_distance_m, items.length)} con paradas incluidas.</p>`
       : '';
 
   const cityLinks = [
@@ -196,7 +217,7 @@ ${itemsHtml}
       <h2>Genera tu propia ruta por ${escapeHtml(city.name)} con IA</h2>
       <p>
         Esta página recoge una selección fija. Si quieres un itinerario a tu medida —otro punto
-        de partida, otra temática u otra distancia—, RandomTrip lo genera en segundos con lugares
+        de partida u otra distancia—, RandomTrip lo genera en segundos con lugares
         reales de OpenStreetMap. Gratis y sin registro.
         <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
       </p>
