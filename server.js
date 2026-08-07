@@ -373,10 +373,11 @@ function fetchExternal(url, options = {}) {
     if (!options.headers['User-Agent']) {
       options.headers['User-Agent'] = 'RandomTripGenerator/1.0';
     }
-    // timeoutMs and withStatus are ours, not http.request options — strip them
-    // before passing the rest on.
-    const { timeoutMs, withStatus, ...requestOptions } = options;
+    // timeoutMs, withStatus and maxBytes are ours, not http.request options —
+    // strip them before passing the rest on.
+    const { timeoutMs, withStatus, maxBytes, ...requestOptions } = options;
     const limitMs = timeoutMs || EXTERNAL_TIMEOUT_MS;
+    const byteLimit = maxBytes || EXTERNAL_MAX_BYTES;
 
     let settled = false;
     const finish = (fn, arg) => {
@@ -391,9 +392,9 @@ function fetchExternal(url, options = {}) {
       let bytes = 0;
       res.on('data', (chunk) => {
         bytes += chunk.length;
-        if (bytes > EXTERNAL_MAX_BYTES) {
+        if (bytes > byteLimit) {
           request.destroy();
-          finish(reject, new Error(`Respuesta demasiado grande de ${url}`));
+          finish(reject, new Error(`Respuesta demasiado grande (>${Math.round(byteLimit / 1048576)}MB) de ${url.split('?')[0]}`));
           return;
         }
         data += chunk;
@@ -926,6 +927,7 @@ function overpassQuery(query, opts = {}) {
     attemptTimeoutMs = OVERPASS_ATTEMPT_TIMEOUT_MS,
     totalBudgetMs = OVERPASS_TOTAL_BUDGET_MS,
     hedgeAfterMs = OVERPASS_HEDGE_AFTER_MS,
+    maxBytes,
   } = opts;
   const endpoints = OVERPASS_ENDPOINTS;
   if (!endpoints.length) {
@@ -971,6 +973,7 @@ function overpassQuery(query, opts = {}) {
       fetchExternal(`${endpoint}?data=${encodeURIComponent(query)}`, {
         timeoutMs: Math.min(attemptTimeoutMs, remaining),
         withStatus: true,
+        maxBytes,
       })
         .then(({ status, body }) => {
           // 429 (rate limited) and 504 (query aborted / instance overloaded)
@@ -2397,10 +2400,18 @@ async function fetchHikingTrails(latNum, lngNum, radiusMeters) {
   // we need both to render the polyline and label it.
   const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
   // Heavy query, and its callers are the SEO generator and an endpoint with no
-  // UI client, so it gets a longer leash than the interactive path.
+  // UI client, so it gets a longer leash than the interactive path — including a
+  // bigger byte cap. `out geom;` returns every node of every way of every hiking
+  // relation, and around a mountainous city that is a lot: at a 25km radius
+  // Bilbao blew past the 8MB default on both instances, which failed the page.
   let data;
   try {
-    data = await overpassQuery(query, { label: 'hiking', attemptTimeoutMs: 35000, totalBudgetMs: 80000 });
+    data = await overpassQuery(query, {
+      label: 'hiking',
+      attemptTimeoutMs: 35000,
+      totalBudgetMs: 80000,
+      maxBytes: 48 * 1024 * 1024,
+    });
   } catch (e) {
     console.warn('[Hiking] Overpass no disponible:', e.message);
     return { trails: [], origin: { lat: latNum, lng: lngNum } };
