@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react'; // useMemo: HeroDeck y la variante
 import CityPlanner from './CityPlanner';
 
 // Real travel photography is the hero. Photos: Unsplash CDN (credited in footer).
@@ -63,8 +63,15 @@ export default function Hero({ onExplore }) {
   // landing presents a single action instead of a wall of controls.
   const [plannerOpen, setPlannerOpen] = useState(false);
 
+  // TEMPORAL: dos direcciones de diseño en paralelo para poder compararlas
+  // renderizadas (?hero=chapas). Se queda una y se borra la otra.
+  const variant = useMemo(() => {
+    const v = new URLSearchParams(window.location.search).get('hero');
+    return v === 'chapas' ? 'chapas' : 'sumario';
+  }, []);
+
   return (
-    <section className="hero">
+    <section className="hero" data-hero={variant}>
       <div className="hero-layout">
         <div className="hero-intro">
           <span className="hero-eyebrow">Cerca de ti · a pie</span>
@@ -84,20 +91,25 @@ export default function Hero({ onExplore }) {
         <div className="hero-actions">
           {/* Two jobs, equal billing: build a route OR find a place to eat. */}
           <div className="hero-cta-row">
+            {/* Los dos trabajos son el MISMO control con distinto contenido: el
+                relleno pino en uno y el borde de 2px en el otro contradecían
+                "mismo peso". El antetítulo dice de qué trabajo se trata. */}
             <button type="button" className="hero-cta" onClick={() => onExplore('sitios')}>
-              Generar mi ruta
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <span className="hero-cta-kicker">Ruta a pie</span>
+              <span className="hero-cta-label">Generar mi ruta</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M5 12h14M13 6l6 6-6 6" />
               </svg>
             </button>
 
             <button type="button" className="hero-cta hero-cta-alt" onClick={() => onExplore('restaurantes')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
                 <path d="M7 2v20" />
                 <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" />
               </svg>
-              Restaurantes cerca
+              <span className="hero-cta-kicker">Dónde comer</span>
+              <span className="hero-cta-label">Restaurantes cerca</span>
             </button>
           </div>
 
@@ -109,19 +121,21 @@ export default function Hero({ onExplore }) {
             type="button"
             className="planner-toggle"
             aria-expanded={plannerOpen}
+            aria-controls="hero-planner"
             onClick={() => setPlannerOpen((o) => !o)}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
             </svg>
-            Planificar otra ciudad
-            <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <em>¿Aún no estás allí?</em>
+            <span className="pt-label">Planificar otra ciudad</span>
+            <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
 
           {plannerOpen && (
-            <div className="search-form">
+            <div className="search-form" id="hero-planner">
               <CityPlanner
                 onPlan={(location, radiusKm) => onExplore('sitios', { location, radiusKm })}
               />

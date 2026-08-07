@@ -2473,3 +2473,193 @@ a.footer-link-btn { text-decoration: none; }
   border-color: var(--map-route);
   color: var(--map-route);
 }
+
+/* ==========================================================================
+   HERO: ACCIONES — dos direcciones en paralelo, TEMPORAL
+   Raúl rechazó dos veces la pila de tres pastillas y "los contenedores en forma
+   redonda". Ambas variantes se escriben con [data-hero="…"] .hero-actions (0,3,0)
+   para ganar a .hero-cta:hover (0,2,0), que si no sigue haciendo levitar el botón.
+   Se elige una y se borra la otra.
+   ========================================================================== */
+
+/* ---------- A) SUMARIO: el filete es el contenedor, no hay cápsula ---------- */
+[data-hero="sumario"] .hero-intro { align-items: flex-start; text-align: left; width: 100%; }
+[data-hero="sumario"] .hero-intro .subtitle { margin: 0 0 1.4rem; max-width: 46ch; }
+[data-hero="sumario"] .hero-actions {
+  display: block; width: 100%; max-width: 520px; text-align: left;
+  border-top: 1px solid var(--border);
+}
+[data-hero="sumario"] .hero-actions .hero-cta-row { display: block; max-width: none; gap: 0; }
+
+[data-hero="sumario"] .hero-actions .hero-cta {
+  display: grid; grid-template-columns: 1fr auto; align-items: end;
+  column-gap: 1rem; row-gap: 0.3rem;
+  width: 100%; max-width: none; padding: 1.05rem 0 1.15rem;
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0;
+  background: none; box-shadow: none; color: var(--text);
+  font-family: var(--font-sans); font-size: 1rem; font-weight: 400;
+  letter-spacing: normal; text-align: left; cursor: pointer; transition: none;
+}
+[data-hero="sumario"] .hero-actions .hero-cta-alt {
+  background: none; border: 0; border-bottom: 1px solid var(--border);
+  padding: 1.05rem 0 1.15rem; color: var(--text);
+}
+[data-hero="sumario"] .hero-actions .hero-cta:hover,
+[data-hero="sumario"] .hero-actions .hero-cta:active {
+  background: none; transform: none; box-shadow: none; color: var(--text);
+}
+[data-hero="sumario"] .hero-actions .hero-cta-kicker {
+  grid-column: 1; grid-row: 1;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+[data-hero="sumario"] .hero-actions .hero-cta-label {
+  grid-column: 1; grid-row: 2; justify-self: start;
+  font-family: var(--font-display); font-size: 1.65rem; line-height: 1.05;
+  font-weight: 600; font-variation-settings: "opsz" 40; letter-spacing: -0.015em;
+  /* 36px de pino en reposo (en móvil no hay hover), crece al pasar/enfocar */
+  background: linear-gradient(var(--brand-pine), var(--brand-pine)) 0 100% / 36px 2px no-repeat;
+  padding-bottom: 0.16em;
+  transition: background-size 260ms var(--ease);
+}
+[data-hero="sumario"] .hero-actions .hero-cta svg {
+  grid-column: 2; grid-row: 2; align-self: end; margin-bottom: 0.34rem;
+  width: 20px; height: 20px; color: var(--brand-pine);
+  transition: transform 200ms var(--ease);
+}
+[data-hero="sumario"] .hero-actions .hero-cta:hover .hero-cta-label,
+[data-hero="sumario"] .hero-actions .hero-cta:focus-visible .hero-cta-label { background-size: 100% 2px; }
+[data-hero="sumario"] .hero-actions .hero-cta:hover svg { transform: translateX(4px); }
+[data-hero="sumario"] .hero-actions .hero-cta-alt:hover svg { transform: none; }
+[data-hero="sumario"] .hero-actions .hero-cta:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 4px; }
+
+/* La línea de salto: otro eje (a la derecha), no otro rango en la misma pila */
+[data-hero="sumario"] .hero-actions .planner-toggle {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end;
+  gap: 0.45rem; width: 100%; min-height: 56px; margin: 0; padding: 1rem 0 0.35rem;
+  border: 0; border-radius: 0; background: none; box-shadow: none;
+  font-family: var(--font-sans); font-size: 0.78rem;
+  color: var(--brand-pine); text-align: right; cursor: pointer;
+}
+[data-hero="sumario"] .hero-actions .planner-toggle em {
+  font-family: var(--font-display); font-style: italic; font-size: 1rem;
+  font-weight: 500; color: var(--text-secondary);
+}
+[data-hero="sumario"] .hero-actions .planner-toggle .pt-label {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  border-bottom: 1px solid currentColor; padding-bottom: 2px;
+}
+[data-hero="sumario"] .hero-actions .planner-toggle svg:first-of-type {
+  width: 14px; height: 14px; align-self: center; color: var(--text-secondary);
+}
+[data-hero="sumario"] .hero-actions .planner-toggle:hover,
+[data-hero="sumario"] .hero-actions .planner-toggle:focus-visible { background: none; border: 0; }
+[data-hero="sumario"] .hero-actions .planner-toggle:hover .pt-label { border-bottom-width: 2px; }
+[data-hero="sumario"] .hero-actions .planner-toggle:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 4px; }
+
+[data-hero="sumario"] .hero-actions .search-form {
+  width: 100%; max-width: none; margin: 0; padding: 0;
+  background: none; border: 0; border-top: 1px solid var(--border);
+  border-radius: 0; box-shadow: none;
+}
+[data-hero="sumario"] .hero-actions .city-planner { padding: 1.05rem 0 0.25rem; }
+[data-hero="sumario"] .hero-actions .city-planner .city-planner-go { border-radius: 0; }
+
+[data-theme="dark"] [data-hero="sumario"] .hero-actions .hero-cta-label {
+  background-image: linear-gradient(var(--map-route), var(--map-route));
+}
+[data-theme="dark"] [data-hero="sumario"] .hero-actions .hero-cta svg,
+[data-theme="dark"] [data-hero="sumario"] .hero-actions .planner-toggle { color: var(--map-route); }
+
+@media (min-width: 901px) {
+  [data-hero="sumario"] .hero-actions { max-width: 480px; }
+  [data-hero="sumario"] .hero-actions .hero-cta { padding: 1.2rem 0 1.3rem; }
+  [data-hero="sumario"] .hero-actions .hero-cta-label { font-size: 1.95rem; }
+}
+
+/* ---------- B) CHAPA Y TROQUEL: dos superficies llenas, radio 4px ---------- */
+[data-hero="chapas"] {
+  --radius-plate: 4px;
+  --plate-a: #206858; --plate-a-hover: #1a5648; --plate-a-ink: #ffffff;
+  --plate-b: #d7e0dc; --plate-b-hover: #cbd7d2; --plate-b-ink: #1c5b4d;
+  --plate-edge: rgba(14, 30, 33, 0.10);
+  --die-cut: rgba(32, 104, 88, 0.30);
+}
+[data-theme="dark"] [data-hero="chapas"] {
+  --plate-a: #1c5f51; --plate-a-hover: #23705f; --plate-a-ink: #ffffff;
+  --plate-b: #1e2523; --plate-b-hover: #26302d; --plate-b-ink: #5fc6a4;
+  --plate-edge: rgba(255, 255, 255, 0.10);
+  --die-cut: rgba(150, 214, 192, 0.30);
+}
+[data-hero="chapas"] .hero-actions { display: block; width: 100%; max-width: 420px; }
+[data-hero="chapas"] .hero-actions .hero-cta-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: none;
+}
+[data-hero="chapas"] .hero-actions .hero-cta {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+  gap: 0.55rem; width: 100%; max-width: none; min-height: 104px; padding: 14px 15px;
+  border: 0; border-radius: var(--radius-plate);
+  background: var(--plate-a); color: var(--plate-a-ink);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  font-family: var(--font-display); font-size: 1.02rem; font-weight: 600;
+  font-variation-settings: "opsz" 24; line-height: 1.15; letter-spacing: -0.005em;
+  text-align: left; cursor: pointer; transition: background 160ms var(--ease);
+}
+[data-hero="chapas"] .hero-actions .hero-cta-alt {
+  background: var(--plate-b); color: var(--plate-b-ink); padding: 14px 15px; border-color: transparent;
+}
+[data-hero="chapas"] .hero-actions .hero-cta-kicker { display: none; }
+[data-hero="chapas"] .hero-actions .hero-cta svg { order: -1; width: 18px; height: 18px; opacity: 0.85; }
+[data-hero="chapas"] .hero-actions .hero-cta:hover {
+  background: var(--plate-a-hover); transform: none; box-shadow: inset 0 0 0 1px var(--plate-edge);
+}
+[data-hero="chapas"] .hero-actions .hero-cta-alt:hover { background: var(--plate-b-hover); color: var(--plate-b-ink); }
+[data-hero="chapas"] .hero-actions .hero-cta:active { transform: translateY(1px); }
+[data-hero="chapas"] .hero-actions .hero-cta:hover svg { transform: none; }
+[data-hero="chapas"] .hero-actions .hero-cta:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 3px; }
+
+/* El talón: ancho completo, otro registro, separado por un troquel */
+[data-hero="chapas"] .hero-actions .planner-toggle {
+  position: relative; display: flex; align-items: center; gap: 0.55rem;
+  width: 100%; min-height: 52px; margin: 16px 0 0; padding: 0 2px;
+  border: 0; border-radius: 0; background: none; box-shadow: none;
+  font-family: var(--font-sans); font-size: 0.76rem; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); cursor: pointer;
+}
+[data-hero="chapas"] .hero-actions .planner-toggle em { display: none; }
+[data-hero="chapas"] .hero-actions .planner-toggle::before {
+  content: ""; position: absolute; top: -8px; left: 0; right: 0; height: 1px;
+  background: repeating-linear-gradient(90deg, var(--die-cut) 0 4px, transparent 4px 9px);
+}
+[data-hero="chapas"] .hero-actions .planner-toggle svg:first-of-type { width: 15px; height: 15px; color: var(--brand-pine); }
+[data-hero="chapas"] .hero-actions .planner-toggle:hover,
+[data-hero="chapas"] .hero-actions .planner-toggle:focus-visible { background: none; border: 0; color: var(--brand-pine); }
+[data-hero="chapas"] .hero-actions .planner-toggle-chevron { margin-left: auto; }
+[data-theme="dark"] [data-hero="chapas"] .hero-actions .planner-toggle svg:first-of-type,
+[data-theme="dark"] [data-hero="chapas"] .hero-actions .planner-toggle:hover { color: var(--map-route); }
+
+[data-hero="chapas"] .hero-actions .search-form {
+  width: 100%; max-width: none; margin: 0.5rem 0 0;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-plate); box-shadow: none;
+}
+[data-hero="chapas"] .hero-actions .city-planner { padding: 1.1rem 1rem; }
+[data-hero="chapas"] .hero-actions .city-planner .city-planner-go { border-radius: var(--radius-plate); }
+
+@media (min-width: 901px) {
+  [data-hero="chapas"] .hero-actions { max-width: 460px; }
+  [data-hero="chapas"] .hero-actions .hero-cta { min-height: 112px; font-size: 1.08rem; }
+}
+@media (max-width: 359px) {
+  [data-hero="chapas"] .hero-actions .hero-cta-row { grid-template-columns: 1fr; }
+  [data-hero="chapas"] .hero-actions .hero-cta {
+    flex-direction: row; align-items: center; justify-content: flex-start;
+    gap: 0.7rem; min-height: 64px;
+  }
+  [data-hero="chapas"] .hero-actions .hero-cta svg { order: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-hero="sumario"] .hero-actions .hero-cta-label,
+  [data-hero="sumario"] .hero-actions .hero-cta svg { transition: none; }
+}
