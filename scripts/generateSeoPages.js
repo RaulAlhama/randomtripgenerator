@@ -30,7 +30,7 @@ const {
   getDescriptionsFromLLM,
   fetchAllPOIImages,
   parseLLMJsonSafe,
-  llmConfig,
+  llmCandidates,
   callLLMOnce,
 } = require('../server');
 
@@ -72,13 +72,13 @@ const INTRO_BRIEFS = {
 };
 
 async function getSeoIntroFromLLM(pageType, city, itemNames) {
-  // Uses the app's configured provider (llmConfig), not NEBIUS_API_KEY read
+  // Uses the app's configured providers (llmCandidates), not NEBIUS_API_KEY read
   // directly with the model pinned by hand. That older shape was a silent
   // landmine: the runtime moved to LLM_* (Gemini) while this still asked Nebius,
   // so the day that key lapses every page fails validation with `llm_failed`
   // and nothing says why.
-  const { apiKey, apiBaseUrl, model } = llmConfig();
-  if (!apiKey) {
+  const candidates = llmCandidates();
+  if (!candidates.length) {
     console.error('[Intro] Sin clave de LLM (LLM_API_KEY o NEBIUS_API_KEY): la página se rechazará por llm_failed.');
     return null;
   }
@@ -91,34 +91,37 @@ NO digas por dónde empieza, por dónde termina ni en qué orden se recorren: es
 NO afirmes que los senderos están señalizados, ni describas el terreno o el paisaje: no tienes ese dato.
 Devuelve un JSON: {"intro": "..."}`;
 
-  try {
-    const content = await callLLMOnce(
-      {
-        model,
-        messages: [
-          { role: 'system', content: 'Eres un redactor de guías de viaje. Responde con JSON valido. Texto en español.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.8,
-        // Nemotron burns completion tokens on hidden reasoning; leave room.
-        max_tokens: 1500,
-        response_format: { type: 'json_object' },
-      },
-      apiBaseUrl,
-      apiKey
-    );
-    if (!content) {
-      console.error('[Intro] Respuesta vacía del proveedor LLM.');
-      return null;
+  // Same fallback chain the descriptions use: a page rejected as `llm_failed`
+  // because one model ran out of daily quota is a page taken off the site.
+  for (const { apiKey, apiBaseUrl, model } of candidates) {
+    try {
+      const content = await callLLMOnce(
+        {
+          model,
+          messages: [
+            { role: 'system', content: 'Eres un redactor de guías de viaje. Responde con JSON valido. Texto en español.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.8,
+          // Nemotron burns completion tokens on hidden reasoning; leave room.
+          max_tokens: 1500,
+          response_format: { type: 'json_object' },
+        },
+        apiBaseUrl,
+        apiKey
+      );
+      const parsed = content ? parseLLMJsonSafe(content) : null;
+      if (parsed && typeof parsed.intro === 'string' && parsed.intro.trim()) {
+        return parsed.intro.trim();
+      }
+      console.error(`[Intro] Respuesta inservible de ${model}.`);
+    } catch (e) {
+      // callLLMOnce throws with the provider's own message, which is what tells
+      // "quota exceeded" apart from "wrong model id".
+      console.error(`[Intro] Falló ${model}:`, e.message);
     }
-    const parsed = parseLLMJsonSafe(content);
-    return parsed && typeof parsed.intro === 'string' ? parsed.intro.trim() : null;
-  } catch (e) {
-    // callLLMOnce throws with the provider's own message, which is what tells
-    // you "quota exceeded" apart from "wrong model id".
-    console.error('[Intro] Falló la llamada al LLM:', e.message);
-    return null;
   }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

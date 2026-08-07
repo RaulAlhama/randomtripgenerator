@@ -1370,6 +1370,40 @@ function llmConfig() {
   };
 }
 
+// A single model is a single point of failure for every description on the site,
+// and on Gemini's free tier the quota is PER MODEL. That bit us silently: the
+// recommended `gemini-flash-latest` alias moved onto gemini-3.6-flash, whose free
+// tier is 20 requests A DAY (the older Flash allowed far more), so descriptions
+// quietly fell back to templates after twenty decks. Alias drift is invisible;
+// running out is not, if there is somewhere else to go.
+//
+// Order: the configured model, then LLM_FALLBACK_MODELS on the same provider,
+// then the legacy Nebius provider when its key is present.
+function llmCandidates() {
+  const primary = llmConfig();
+  const candidates = [];
+  if (primary.apiKey) {
+    candidates.push(primary);
+    for (const model of (process.env.LLM_FALLBACK_MODELS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      if (model !== primary.model) candidates.push({ ...primary, model });
+    }
+  }
+  const nebiusKey = process.env.NEBIUS_API_KEY;
+  if (nebiusKey && nebiusKey !== primary.apiKey) {
+    candidates.push({
+      apiKey: nebiusKey,
+      apiBaseUrl: process.env.NEBIUS_API_BASE_URL || 'https://api.tokenfactory.nebius.com/v1/',
+      model: process.env.NEBIUS_MODEL || 'nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B',
+    });
+  }
+  return candidates;
+}
+
+// Errors where trying a different model or provider is the right move: quota
+// exhausted, rate limited, or the model retired. Anything else (a bad prompt, a
+// malformed request) would fail identically everywhere.
+const LLM_TRY_ELSEWHERE_RE = /quota|rate.?limit|429|resource.?exhausted|no longer available|not found|unsupported|insufficient|credit|balance|payment|402|50\d\b/i;
+
 // Call an OpenAI-compatible chat-completions endpoint once and return the message
 // content string (empty string on error). Centralised so the retry wrapper below
 // doesn't duplicate request plumbing.
@@ -1441,13 +1475,25 @@ function setCachedDescription(name, city, theme, description) {
 // (scripts/generateSeoPages.js). Returns null without a key, so callers must fall
 // back to a template and NEBIUS_API_KEY stays optional.
 async function getDescriptionsFromLLM(places, city, country, theme, options = {}) {
-  try {
-    const { apiKey, apiBaseUrl, model } = llmConfig();
+  const candidates = llmCandidates();
+  if (!candidates.length) {
+    console.warn('[LLM] No API key, skipping descriptions');
+    return null;
+  }
+  for (let i = 0; i < candidates.length; i++) {
+    const result = await describeWith(candidates[i], places, city, country, theme, options);
+    if (result.descriptions) return result.descriptions;
+    if (!result.tryElsewhere || i === candidates.length - 1) return null;
+    const next = candidates[i + 1];
+    console.warn(`[LLM] ${candidates[i].model} no disponible; probando ${next.model}`);
+  }
+  return null;
+}
 
-    if (!apiKey) {
-      console.warn('[LLM] No API key, skipping descriptions');
-      return null;
-    }
+// One provider/model attempt. Resolves { descriptions } on success, or
+// { tryElsewhere } when the failure is the kind another model could survive.
+async function describeWith({ apiKey, apiBaseUrl, model }, places, city, country, theme, options = {}) {
+  try {
 
     const themeDesc = THEME_PROMPTS[theme] || THEME_PROMPTS.monuments;
     const varietySeed = VARIETY_SEEDS[Math.floor(Math.random() * VARIETY_SEEDS.length)];
@@ -1500,11 +1546,13 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
       try {
         content = await callLLMOnce(buildBody(attempt), apiBaseUrl, apiKey);
       } catch (e) {
-        console.error('[LLM][ALERT] API error getting descriptions:', e.message);
-        if (/credit|balance|quota|insufficient|payment|402/i.test(String(e.message))) {
-          console.error('[LLM][ALERT] Parece un problema de CRÉDITO/cuota del proveedor LLM. Revisa el saldo/límite para restaurar las descripciones.');
+        console.error(`[LLM][ALERT] API error getting descriptions (${model}):`, e.message);
+        const tryElsewhere = LLM_TRY_ELSEWHERE_RE.test(String(e.message));
+        if (tryElsewhere) {
+          console.error('[LLM][ALERT] Cuota, límite o modelo retirado en este proveedor. Si no hay alternativa configurada (LLM_FALLBACK_MODELS o NEBIUS_API_KEY), las descripciones caerán a plantillas.');
         }
-        return null; // API-level failure — retrying in-request won't help
+        // Retrying the same model in-request won't help; another one might.
+        return { tryElsewhere };
       }
       if (!content) {
         console.error('[LLM][ALERT] Respuesta de descripciones vacía (posible falta de crédito/cuota del proveedor LLM).');
@@ -1517,7 +1565,7 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
         : salvageDescriptionsArray(content);
       if (!Array.isArray(descriptions) || descriptions.length === 0) descriptions = null;
 
-      if (descriptions && descriptions.length >= places.length) return descriptions;
+      if (descriptions && descriptions.length >= places.length) return { descriptions };
       if (descriptions) {
         if (!best || descriptions.length > best.length) best = descriptions;
         console.warn(`[LLM] Truncated descriptions (${descriptions.length}/${places.length})${attempt === 0 ? ', retrying' : ''}`);
@@ -1526,12 +1574,13 @@ IMPORTANTE: Cada descripcion debe ser informativa y especifica sobre ese lugar c
       }
     }
 
-    if (best) return best;
+    if (best) return { descriptions: best };
     console.error('[LLM] No usable descriptions after retry');
-    return null;
+    // Unparseable output is a model-quality problem, so another model is worth a go.
+    return { tryElsewhere: true };
   } catch (e) {
     console.error('[LLM] Failed to get descriptions:', e.message);
-    return null;
+    return {};
   }
 }
 
@@ -3398,5 +3447,6 @@ module.exports = {
   // The SEO generator needs the same provider plumbing the app uses, instead of
   // reading NEBIUS_API_KEY on its own and pinning a model by hand.
   llmConfig,
+  llmCandidates,
   callLLMOnce,
 };
