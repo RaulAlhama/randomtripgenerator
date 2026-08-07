@@ -79,7 +79,10 @@ function ReviewNotice() {
   );
 }
 
-function PrivacyDoc() {
+// Exported so /privacidad and /terminos can render the same text as a full page.
+// One source of truth: a second server-side copy is how legal pages end up
+// contradicting each other.
+export function PrivacyDoc() {
   return (
     <div className="legal-doc">
       <ReviewNotice />
@@ -174,7 +177,7 @@ function PrivacyDoc() {
   );
 }
 
-function TermsDoc() {
+export function TermsDoc() {
   return (
     <div className="legal-doc">
       <ReviewNotice />
@@ -245,6 +248,14 @@ export default function Footer() {
   const year = new Date().getFullYear();
   const [modal, setModal] = useState(null); // 'privacidad' | 'terminos' | null
 
+  // Left click opens the modal; anything else (new tab, new window, middle
+  // click) is left alone so the real URL still works.
+  const openLegal = (which) => (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    setModal(which);
+  };
+
   return (
     <>
       <footer className="footer">
@@ -268,8 +279,12 @@ export default function Footer() {
             </div>
             <div className="footer-links-group">
               <h4>Legal</h4>
-              <button className="footer-link-btn" onClick={() => setModal('privacidad')}>Privacidad</button>
-              <button className="footer-link-btn" onClick={() => setModal('terminos')}>Términos</button>
+              {/* Real hrefs, so the policy has an address that can be linked,
+                  copied and given to an affiliate signup form — and a modifier
+                  click or a crawler follows it. A plain left click still opens
+                  the modal, which is nicer than a full page load. */}
+              <a href="/privacidad" className="footer-link-btn" onClick={openLegal('privacidad')}>Privacidad</a>
+              <a href="/terminos" className="footer-link-btn" onClick={openLegal('terminos')}>Términos</a>
             </div>
           </div>
         </div>

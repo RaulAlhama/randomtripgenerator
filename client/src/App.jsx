@@ -14,6 +14,7 @@ import BottomNav from './components/layout/BottomNav';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
 import CityLanding from './components/hero/CityLanding';
+import LegalPage from './components/layout/LegalPage';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
 import SavedRoutes from './components/trips/SavedRoutes';
 import SavedView from './components/saved/SavedView';
@@ -39,6 +40,12 @@ function cityFromPage() {
   return c;
 }
 
+// /privacidad and /terminos: real URLs that render the legal document as a page.
+function legalFromPage() {
+  const l = window.__LEGAL__;
+  return l === 'privacidad' || l === 'terminos' ? l : null;
+}
+
 
 function AppShell() {
   const { saved } = useSaved();
@@ -54,6 +61,10 @@ function AppShell() {
   const exploreOpen = explore !== null;
   // Read once: the page identity doesn't change without a navigation.
   const [city] = useState(cityFromPage);
+  const [legal] = useState(legalFromPage);
+  // The server answers 404 for URLs that don't exist and flags it here, so the
+  // app says so instead of silently showing the homepage under a 404 status.
+  const [notFound] = useState(() => window.__NOTFOUND__ === true);
 
   const openExplore = (view, opts = {}) => {
     track('explore_opened', { view: view || 'sitios' });
@@ -78,13 +89,20 @@ function AppShell() {
     <div className="container has-bottom-nav">
       <Header />
       <main>
-        {tab === 'explorar' && (city ? (
+        {tab === 'explorar' && (legal ? (
+          <LegalPage which={legal} />
+        ) : city ? (
           <>
             <CityLanding city={city} onExplore={openExplore} />
             <TrustBand />
           </>
         ) : (
           <>
+            {notFound && (
+              <p className="notfound-notice" role="status">
+                Esa página no existe. Te dejamos en la portada.
+              </p>
+            )}
             <Hero onExplore={openExplore} />
             <TrustBand />
             <InspirationCarousel onExplore={openExplore} />

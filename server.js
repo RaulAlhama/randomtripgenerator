@@ -3339,6 +3339,36 @@ function applyMetaTags(html, { title, desc, url }) {
 // so a WhatsApp/Twitter preview says "Ruta a pie por Sevilla: 6 paradas"
 // instead of the generic homepage blurb. Unknown/expired slugs fall through to
 // the SPA, which shows its "ruta no disponible" state.
+// Privacy and Terms as real, linkable URLs. They were modals only, which meant
+// the policy had no address: it couldn't be linked from a post, and an affiliate
+// programme's signup form asks for a public privacy-policy URL.
+//
+// The legal TEXT stays in the client (Footer.jsx) as the single source of truth —
+// keeping a second server-side copy in sync is how legal pages end up
+// contradicting each other. The server supplies the metadata and tells the app
+// to render that document as a page instead of a modal.
+const LEGAL_PAGES = {
+  privacidad: {
+    title: 'Política de Privacidad — RandomTrip',
+    desc: 'Qué datos trata RandomTrip, con qué finalidad, qué terceros intervienen (Auth0, Google Places, Umami) y cómo ejercer tus derechos.',
+  },
+  terminos: {
+    title: 'Términos de Uso — RandomTrip',
+    desc: 'Condiciones de uso de RandomTrip: qué ofrece el servicio, tu responsabilidad al seguir una ruta a pie y los límites de responsabilidad.',
+  },
+};
+
+app.get(['/privacidad', '/terminos'], (req, res) => {
+  const key = req.path.replace(/^\//, '');
+  const def = LEGAL_PAGES[key];
+  const url = `${SITE_ORIGIN}/${key}`;
+  const html = applyMetaTags(readIndexHtml(), { title: def.title, desc: def.desc, url })
+    // The homepage's prerendered body is the wrong content for these pages.
+    .replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, '')
+    .replace('</head>', `<script>window.__LEGAL__=${JSON.stringify(key)};</script>\n</head>`);
+  res.type('html').send(html);
+});
+
 app.get('/r/:slug', async (req, res, next) => {
   const slug = String(req.params.slug || '');
   if (!SHARE_SLUG_RE.test(slug)) return next();
@@ -3350,7 +3380,13 @@ app.get('/r/:slug', async (req, res, next) => {
     const modeLabel = trip.transport === 'cycling' ? 'en bici' : trip.transport === 'driving' ? 'en coche' : 'a pie';
     const title = `Ruta ${modeLabel} por ${trip.city || 'la zona'}: ${stops.length} paradas — RandomTrip`;
     const desc = `Ruta compartida por ${trip.city || 'la zona'}${names ? `: ${names} y más` : ''}. Ábrela en el mapa y empieza a caminar.`;
-    res.type('html').send(applyMetaTags(readIndexHtml(), { title, desc, url: `${SITE_ORIGIN}/r/${slug}` }));
+    // Shared routes are for the person who received the link, not for search.
+    // They carry a self-referencing canonical and the homepage's prerendered
+    // body, so left indexable they compete with the pages that are meant to
+    // rank. `follow` keeps any link equity flowing to the home.
+    const html = applyMetaTags(readIndexHtml(), { title, desc, url: `${SITE_ORIGIN}/r/${slug}` })
+      .replace(/<meta name="robots" content="[^"]*"\s*\/>/, '<meta name="robots" content="noindex,follow" />');
+    res.type('html').send(html);
   } catch (err) {
     console.error('[share page] render failed:', err.message);
     next();
@@ -3366,6 +3402,8 @@ app.get('/sitemap.xml', async (req, res) => {
   const publishedList = await getPublishedListCached();
   const urls = [
     { loc: `${SITE_ORIGIN}/`, changefreq: 'weekly', priority: '1.0' },
+    { loc: `${SITE_ORIGIN}/privacidad`, changefreq: 'yearly', priority: '0.2' },
+    { loc: `${SITE_ORIGIN}/terminos`, changefreq: 'yearly', priority: '0.2' },
     ...CITIES.map((c) => ({
       loc: `${SITE_ORIGIN}/ciudad/${c.slug}`,
       changefreq: 'monthly',
@@ -3397,13 +3435,39 @@ ${urls
   res.type('application/xml').send(body);
 });
 
-// Serve SPA
-// SPA catch-all: serve React build or fallback to public
+// SPA catch-all. Every route the app actually understands is handled above, so
+// anything reaching here is a URL that doesn't exist — and answering 200 with the
+// homepage made it a soft 404: /ciudad/pepito, /ciudad/lisboa and /privacidad all
+// used to return the home with a canonical pointing at "/". Google can't classify
+// those, and they clutter the coverage report.
+//
+// The one legitimate case is a client-side route the server doesn't know about,
+// which today is only /r/<slug> — the share handler already answers for valid
+// slugs, so an expired one lands here and the app shows its "ruta no disponible"
+// state. That still isn't a page, so 404 is the honest answer there too.
+const SPA_OK_PATHS = new Set(['/']);
+
 app.get('*', (req, res) => {
   const indexPath = fs.existsSync(clientDist)
     ? path.join(clientDist, 'index.html')
     : path.join(publicDir, 'index.html');
-  res.sendFile(indexPath);
+  const known = SPA_OK_PATHS.has(req.path);
+  if (known) return res.sendFile(indexPath);
+
+  // 404 with the app shell so the visitor still gets a usable page, and a flag so
+  // it can say so instead of silently pretending to be the homepage.
+  let html;
+  try {
+    html = readIndexHtml();
+  } catch (e) {
+    return res.status(404).sendFile(indexPath);
+  }
+  html = html
+    .replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, '')
+    .replace(/<meta name="robots" content="[^"]*"\s*\/>/, '<meta name="robots" content="noindex,follow" />')
+    .replace(/<title>[\s\S]*?<\/title>/, '<title>Esta página no existe — RandomTrip</title>')
+    .replace('</head>', '<script>window.__NOTFOUND__=true;</script>\n</head>');
+  res.status(404).type('html').send(html);
 });
 
 // Start server

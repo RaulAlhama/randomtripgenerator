@@ -2361,3 +2361,46 @@ main {
 /* The pre-hydration block ends with a noscript line that is noise once the app
    is running. */
 .city-landing-content #seo-prerender noscript { display: none; }
+
+/* ========== LEGAL PAGES (/privacidad, /terminos) ==========
+   The same .legal-doc markup the modal uses, laid out as a page. */
+.legal-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 1rem;
+}
+
+.legal-page > h1 {
+  font-family: var(--font-display, inherit);
+  font-size: 1.7rem;
+  line-height: 1.2;
+  margin: 0 0 1.25rem;
+  color: var(--text);
+}
+
+.legal-page-back {
+  margin: 2rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.legal-page-back a {
+  color: var(--brand-pine);
+  font-weight: 600;
+  text-decoration: none;
+}
+[data-theme="dark"] .legal-page-back a { color: var(--map-route); }
+
+/* Footer legal links are anchors now, not buttons: keep them looking the same. */
+a.footer-link-btn { text-decoration: none; }
+
+/* Shown when the server answered 404 and dropped the visitor on the homepage. */
+.notfound-notice {
+  margin: 1rem 1.25rem 0;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  text-align: center;
+}
