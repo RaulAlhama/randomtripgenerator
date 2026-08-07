@@ -70,6 +70,18 @@ no `constants/themes`):
 - `services/` — api.js (all fetch calls), trips.js (auth'd CRUD), analytics.js (Umami),
   affiliates.js
 
+**Server-rendered content and `#root` (read before touching `client/index.html`):**
+`createRoot(document.getElementById('root'))` replaces everything inside `#root` on
+mount, so **anything that has to survive into the DOM Google indexes cannot live inside
+`#root`.** It used to: the `/ciudad/*` pre-rendered block was injected there, so the
+rendered DOM on all 48 city URLs was the homepage and the pages ranked for nothing for two
+months. The block now goes into `<div id="seo-content">`, a sibling of `#root` filled by
+`injectSeoContent()` (seoPages.js), and `CityLanding.jsx` adopts that markup into the React
+tree on mount and removes the original — so the human reads exactly what the crawler
+indexed, above the footer, with no second copy to keep in sync. The server also injects
+`window.__CITY__`, which is how `App.jsx` knows to render the city landing instead of the
+generic hero. `assertIndexPatterns()` guards the mount point at startup.
+
 ### Backend (server.js)
 - Serves `client/dist/` (React build) if it exists, otherwise falls back to `public/`
 - All API routes unchanged
