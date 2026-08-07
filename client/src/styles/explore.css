@@ -1326,25 +1326,36 @@
   }
 }
 
-/* Quiet disclosure for the full planner — keeps the landing to one action. */
+/* Third rung of the hero hierarchy: filled pill > outlined pill > this. It was a
+   borderless line of secondary-grey text and read as a footnote, which is wrong
+   for the one control that serves visitors who aren't where they want to walk.
+   Bordered and in the brand colour it's findable without competing. */
 .planner-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 18px;
-  padding: 8px 14px;
-  border: none;
+  gap: 8px;
+  margin: 2px 0 18px;
+  padding: 9px 16px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--brand-pine);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
 }
 
-.planner-toggle:hover { color: var(--text); background: var(--bg-subtle); }
+.planner-toggle:hover,
+.planner-toggle:focus-visible {
+  border-color: var(--brand-pine);
+  background: var(--primary-soft);
+}
+
+[data-theme="dark"] .planner-toggle { color: var(--map-route); }
+[data-theme="dark"] .planner-toggle:hover,
+[data-theme="dark"] .planner-toggle:focus-visible { border-color: var(--map-route); }
 
 .planner-toggle-chevron { transition: transform 200ms var(--ease); }
 .planner-toggle-chevron.is-open { transform: rotate(180deg); }
@@ -1357,10 +1368,22 @@
   padding: 1.25rem;
 }
 
-.city-planner-go {
+/* Inside the panel this IS the primary action, so it wears the same pine as the
+   hero CTA. It used to inherit .btn-primary's washed sage and ended up the
+   faintest thing on a screen full of stronger greens. */
+/* Two classes on purpose: index.css is imported after explore.css, so a single
+   .city-planner-go loses the cascade to .btn-primary and the button keeps its
+   washed sage. */
+.city-planner .city-planner-go {
   width: 100%;
   justify-content: center;
+  background: var(--brand-pine);
+  color: var(--brand-pine-ink);
+  border: none;
 }
+
+.city-planner .city-planner-go:hover:not(:disabled) { background: var(--brand-pine-hover); }
+.city-planner .city-planner-go:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {

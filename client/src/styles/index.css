@@ -102,21 +102,31 @@
 }
 
 [data-theme="dark"] {
-  --bg: #10161a;
-  --bg-elevated: #171f24;
-  --bg-muted: #1e272c;
-  --bg-card: #171f24;
-  --bg-subtle: rgba(210, 235, 235, 0.04);
-  --bg-glass: rgba(16, 22, 26, 0.72);
-  --bg-glass-strong: rgba(16, 22, 26, 0.92);
+  /* Neutral near-black, not navy. The old base was #10161a — a blue at hue 205°
+     — and the blue read louder than intended because the borders, veils and text
+     were all tinted the same way (rgba(210,235,240,…)), so every surface pushed
+     in the same direction. Neutralising the whole ladder, not just the base, is
+     what actually removes the cast.
+     Not pure #000: the interface depends on stacked surfaces (cards, the bottom
+     sheet, glass headers), and against pure black a card has to be LIGHTER than
+     the page while the shadow under it disappears, which flattens the depth. A
+     near-black keeps the ladder and lets the sage stay the only colour on
+     screen. */
+  --bg: #0a0a0b;
+  --bg-elevated: #141416;
+  --bg-muted: #1c1c1f;
+  --bg-card: #141416;
+  --bg-subtle: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(10, 10, 11, 0.72);
+  --bg-glass-strong: rgba(10, 10, 11, 0.93);
 
-  --text: #e6ecee;
-  --text-secondary: #aab9bf;
-  --text-muted: #74858c;
+  --text: #ededec;
+  --text-secondary: #b0b1b1;
+  --text-muted: #7d7d7f;
   --text-on-primary: #ffffff;
 
-  --border: rgba(210, 235, 240, 0.08);
-  --border-strong: rgba(210, 235, 240, 0.14);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
   --primary: #5e9189;
   --primary-hover: #6ea39a;
@@ -129,8 +139,8 @@
   --secondary-soft: rgba(94, 145, 137, 0.12);
   --secondary-soft-hover: rgba(94, 145, 137, 0.20);
 
-  --ink-soft: rgba(210, 235, 240, 0.06);
-  --ink-soft-strong: rgba(210, 235, 240, 0.11);
+  --ink-soft: rgba(255, 255, 255, 0.06);
+  --ink-soft-strong: rgba(255, 255, 255, 0.12);
   --success: #60b070;
   --warning: #d49050;
   --danger: #d65858;
@@ -1851,7 +1861,8 @@ main {
   gap: 4px;
   padding: 0.28rem 0.6rem;
   border-radius: var(--radius-pill);
-  background: rgba(16, 22, 26, 0.55);
+  /* Scrim over a photo: neutral, so it doesn't tint the image blue. */
+  background: rgba(10, 10, 11, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   font-size: 0.68rem;

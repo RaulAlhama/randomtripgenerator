@@ -101,13 +101,20 @@ export default function Hero({ onExplore }) {
             </button>
           </div>
 
+          {/* Not a lesser version of the buttons above — a different mode. Both
+              CTAs assume you're standing where you want to walk; someone
+              planning from the sofa can't use either, so this needs to be
+              findable rather than tucked away as a footnote. */}
           <button
             type="button"
             className="planner-toggle"
             aria-expanded={plannerOpen}
             onClick={() => setPlannerOpen((o) => !o)}
           >
-            ¿Prefieres planificar otra ciudad?
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+            </svg>
+            Planificar otra ciudad
             <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />
             </svg>
