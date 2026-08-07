@@ -82,20 +82,6 @@ export async function fetchRestaurants(lat, lng, radiusMeters) {
   return response.json();
 }
 
-export async function fetchHikingTrails(lat, lng, radiusMeters) {
-  const params = new URLSearchParams({
-    lat: String(lat),
-    lng: String(lng),
-    radius: String(radiusMeters),
-  });
-  const response = await fetch(`/api/hiking-trails?${params}`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'No se pudieron obtener los senderos');
-  }
-  return response.json();
-}
-
 // Create a public share link for a built route. Returns { slug }.
 export async function createShareLink(payload) {
   const response = await fetch('/api/share', {

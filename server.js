@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
@@ -36,6 +37,25 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:3000',
 ];
 const allowedOrigins = CORS_ALLOWED_ORIGINS.length ? CORS_ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;
+
+// Security headers. Production sent none at all and advertised the framework in
+// x-powered-by, which is the first thing any audit tool reports.
+//
+// Two of helmet's defaults are switched off deliberately, because both would
+// break the app rather than protect it:
+//   contentSecurityPolicy — helmet's default policy blocks everything this page
+//     legitimately loads (Google Fonts, Leaflet tiles from OSM, Google Places and
+//     Wikimedia photos, the Umami script, Unsplash hero images). A real policy
+//     means enumerating those hosts and re-checking them whenever one changes;
+//     worth doing, but not as a side effect of adding headers.
+//   crossOriginResourcePolicy — the default `same-origin` tells browsers not to
+//     let other sites embed our resources, and /icons/og-default.png exists
+//     precisely to be embedded by other sites.
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // Middleware
 app.use(cors({
@@ -219,13 +239,12 @@ function budgetExceededResponse(res) {
 
 // Serve React build if available, otherwise fall back to public/
 const clientDist = path.join(__dirname, 'client', 'dist');
-const publicDir = path.join(__dirname, 'public');
 // Vite emits content-hashed filenames under /assets, so those can be cached
 // forever — a new deploy means new filenames. Everything else has to stay fresh
 // or a deploy never reaches people who already visited. With no options at all,
 // express.static sent `max-age=0` for everything, so even immutable bundles
 // revalidated against the origin on every single page load.
-app.use(express.static(fs.existsSync(clientDist) ? clientDist : publicDir, {
+app.use(express.static(clientDist, {
   setHeaders(res, filePath) {
     if (/[\\/]assets[\\/]/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -2478,36 +2497,10 @@ async function fetchHikingTrails(latNum, lngNum, radiusMeters) {
 }
 
 // GET /api/hiking-trails — validation + caching around fetchHikingTrails.
-app.get('/api/hiking-trails', async (req, res) => {
-  try {
-    const { lat, lng, radius } = req.query;
-    if (!lat || !lng) return res.status(400).json({ error: 'Coordinates required' });
-
-    const latNum = parseFloat(lat);
-    const lngNum = parseFloat(lng);
-    if (isNaN(latNum) || isNaN(lngNum) || Math.abs(latNum) > 90 || Math.abs(lngNum) > 180) {
-      return res.status(400).json({ error: 'Invalid coordinates' });
-    }
-    // Hiking-search radius is much wider than the city-tourism radius — trails
-    // can easily start ~15 km outside town. Clamp to 25 km to keep Overpass
-    // response sizes sane.
-    const radiusMeters = Math.min(Math.max(parseInt(radius) || 15000, 2000), 25000);
-
-    const cacheKey = `hiking:${latNum.toFixed(3)},${lngNum.toFixed(3)},${radiusMeters}`;
-    const cached = cacheGet(cacheKey);
-    if (cached) {
-      console.log('[Hiking] Cache hit');
-      return res.json(cached);
-    }
-
-    const payload = await fetchHikingTrails(latNum, lngNum, radiusMeters);
-    cacheSet(cacheKey, payload);
-    res.json(payload);
-  } catch (error) {
-    console.error('[Hiking] Error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch hiking trails' });
-  }
-});
+// No /api/hiking-trails endpoint: the hiking tab was removed from the UI, and an
+// endpoint with no client was still answering the heaviest Overpass query on the
+// site to anyone who found it. fetchHikingTrails() stays — the SEO generator uses
+// it to build the /ciudad/*/senderos pages.
 
 // Generate trip
 app.get('/api/generate-trip', async (req, res) => {
@@ -2765,14 +2758,31 @@ app.get('/api/route', async (req, res) => {
       return res.status(400).json({ error: 'Start and waypoints required' });
     }
 
-    const startCoords = start.split(',').map(Number);
-    const waypointList = waypoints.split(';').map(wp => wp.split(',').map(Number));
+    // The only endpoint taking coordinates that validated none of them: NaN went
+    // straight through to the routers, and the waypoint list was unbounded, so a
+    // single request could ask for a route through thousands of points. Verified
+    // before this: 301 waypoints returned 200 with 49KB of geometry.
+    const parsePoint = (raw) => {
+      const parts = String(raw).split(',');
+      if (parts.length !== 2) return null;
+      const lat = Number(parts[0]);
+      const lng = Number(parts[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+      return [lng, lat]; // routers take lon,lat
+    };
 
-    // Routers take lon,lat
-    const coordsLngLat = [
-      [startCoords[1], startCoords[0]],
-      ...waypointList.map(wp => [wp[1], wp[0]]),
-    ];
+    const MAX_WAYPOINTS = 25; // the deck is capped at 12; this is generous
+    const rawWaypoints = String(waypoints).split(';').filter(Boolean);
+    if (rawWaypoints.length > MAX_WAYPOINTS) {
+      return res.status(400).json({ error: `Demasiadas paradas (máximo ${MAX_WAYPOINTS})` });
+    }
+
+    const points = [start, ...rawWaypoints].map(parsePoint);
+    if (points.some((p) => p === null)) {
+      return res.status(400).json({ error: 'Coordenadas no válidas' });
+    }
+    const coordsLngLat = points;
 
     const ors = await routeViaORS(coordsLngLat, ORS_PROFILES[mode] ? mode : 'driving');
     if (ors) {
@@ -3148,11 +3158,10 @@ async function getPublishedListCached() {
   }
 }
 
+const INDEX_HTML_PATH = path.join(clientDist, 'index.html');
+
 function readIndexHtml() {
-  const indexPath = fs.existsSync(clientDist)
-    ? path.join(clientDist, 'index.html')
-    : path.join(publicDir, 'index.html');
-  return fs.readFileSync(indexPath, 'utf8');
+  return fs.readFileSync(INDEX_HTML_PATH, 'utf8');
 }
 
 // Activities affiliate for the /ciudad pages. Same provider priority as the
@@ -3448,11 +3457,7 @@ ${urls
 const SPA_OK_PATHS = new Set(['/']);
 
 app.get('*', (req, res) => {
-  const indexPath = fs.existsSync(clientDist)
-    ? path.join(clientDist, 'index.html')
-    : path.join(publicDir, 'index.html');
-  const known = SPA_OK_PATHS.has(req.path);
-  if (known) return res.sendFile(indexPath);
+  if (SPA_OK_PATHS.has(req.path)) return res.sendFile(INDEX_HTML_PATH);
 
   // 404 with the app shell so the visitor still gets a usable page, and a flag so
   // it can say so instead of silently pretending to be the homepage.
@@ -3460,7 +3465,7 @@ app.get('*', (req, res) => {
   try {
     html = readIndexHtml();
   } catch (e) {
-    return res.status(404).sendFile(indexPath);
+    return res.status(404).type('text').send('Not found');
   }
   html = html
     .replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, '')
@@ -3472,6 +3477,16 @@ app.get('*', (req, res) => {
 
 // Start server
 async function startServer() {
+  // There is no fallback build any more. `public/` used to hold the pre-React app
+  // from March and was silently served whenever client/dist was missing, so a
+  // failed build looked like a working site five months out of date. Say it
+  // instead: `npm run build` is part of starting this app.
+  if (!fs.existsSync(INDEX_HTML_PATH)) {
+    console.error(`[FATAL] No existe ${INDEX_HTML_PATH}. Ejecuta \`npm run build\` antes de arrancar.`);
+    process.exitCode = 1;
+    return;
+  }
+
   await initDatabase();
   await loadBudgetFromDb();
 
