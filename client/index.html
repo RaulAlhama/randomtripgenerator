@@ -206,6 +206,17 @@
       <p><noscript>Necesitas activar JavaScript para usar la aplicación interactiva.</noscript></p>
     </div>
   </div>
+
+  <!-- Server-rendered content for /ciudad/* pages, and the reason it lives HERE
+       rather than inside #root: createRoot() replaces everything in #root on
+       mount, so the block above only ever reaches a crawler that doesn't run JS.
+       Google does run JS, which meant all 48 city URLs were indexing the
+       rendered homepage instead of their own unique text. Anything that has to
+       survive into the indexed DOM cannot live inside #root.
+       CityLanding adopts this into the React tree on mount so it ends up above
+       the footer instead of orphaned below it. Empty on the homepage. -->
+  <div id="seo-content"></div>
+
   <script type="module" src="/src/main.jsx"></script>
   <script>
     if ('serviceWorker' in navigator) {

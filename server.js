@@ -3126,6 +3126,7 @@ const {
   PAGE_TYPES,
   PAGE_TYPE_BY_URL_SLUG,
   buildVariantHtml,
+  injectSeoContent,
   assertIndexPatterns,
   getPublishedPage,
   listPublishedPages,
@@ -3274,7 +3275,7 @@ function buildCityHtml(city, publishedList = []) {
     `  <script type="application/ld+json">\n${JSON.stringify(breadcrumb)}\n  </script>\n</head>`
   );
 
-  html = html.replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, buildCitySeoBlock(city, publishedList));
+  html = injectSeoContent(html, buildCitySeoBlock(city, publishedList), city);
   return html;
 }
 

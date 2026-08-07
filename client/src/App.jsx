@@ -13,6 +13,7 @@ import Footer from './components/layout/Footer';
 import BottomNav from './components/layout/BottomNav';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
+import CityLanding from './components/hero/CityLanding';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
 import SavedRoutes from './components/trips/SavedRoutes';
 import SavedView from './components/saved/SavedView';
@@ -28,6 +29,16 @@ function sharedSlugFromPath() {
   return m ? m[1] : null;
 }
 
+// /ciudad/* pages: the server injects window.__CITY__ alongside the page's SEO
+// content. Without this the app booted its generic homepage on all 48 city URLs,
+// so someone who searched "qué visitar en Toledo" from their sofa landed on a
+// screen asking for their GPS position.
+function cityFromPage() {
+  const c = window.__CITY__;
+  if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number' || !c.name) return null;
+  return c;
+}
+
 
 function AppShell() {
   const { saved } = useSaved();
@@ -41,6 +52,8 @@ function AppShell() {
   // Which bottom-nav section is showing.
   const [tab, setTab] = useState('explorar');
   const exploreOpen = explore !== null;
+  // Read once: the page identity doesn't change without a navigation.
+  const [city] = useState(cityFromPage);
 
   const openExplore = (view, opts = {}) => {
     track('explore_opened', { view: view || 'sitios' });
@@ -65,13 +78,18 @@ function AppShell() {
     <div className="container has-bottom-nav">
       <Header />
       <main>
-        {tab === 'explorar' && (
+        {tab === 'explorar' && (city ? (
+          <>
+            <CityLanding city={city} onExplore={openExplore} />
+            <TrustBand />
+          </>
+        ) : (
           <>
             <Hero onExplore={openExplore} />
             <TrustBand />
             <InspirationCarousel onExplore={openExplore} />
           </>
-        )}
+        ))}
 
         {tab === 'rutas' && (
           <div className="tab-view">

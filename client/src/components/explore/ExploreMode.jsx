@@ -413,7 +413,12 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
           onIndexChange={setDeckIndex}
           header={
             <div className="xp-deck-header">
-              <span className="xp-deck-title">Cerca de ti{city ? ` · ${city}` : ''}</span>
+              {/* "Cerca de ti" is only true when the origin came from GPS. Opened
+                  from a /ciudad/* page or the planner, the visitor is somewhere
+                  else entirely and initialLocation says so. */}
+              <span className="xp-deck-title">
+                {initialLocation ? `Qué ver en ${city || 'la zona'}` : `Cerca de ti${city ? ` · ${city}` : ''}`}
+              </span>
               <span className="xp-deck-counter">{deckIndex + 1} / {candidates.length}</span>
             </div>
           }

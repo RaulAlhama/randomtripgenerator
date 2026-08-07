@@ -580,7 +580,7 @@ function buildVariantHtml(indexHtml, city, page, links) {
       `  <script type="application/ld+json">\n${JSON.stringify(itemList)}\n  </script>\n</head>`
   );
 
-  html = html.replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, buildVariantSeoBlock(city, page, links));
+  html = injectSeoContent(html, buildVariantSeoBlock(city, page, links), city);
   return html;
 }
 
@@ -588,6 +588,30 @@ function buildVariantHtml(indexHtml, city, page, links) {
 // If the head markup changes shape, replacements silently no-op and pages ship
 // with the homepage's title/canonical — a soft duplicate-content bug. Run this
 // at server startup and log loudly if anything stops matching.
+// Moves a page's SEO block out of #root and into #seo-content, and tells the
+// client which city the page is for.
+//
+// This is the fix for the bug that made the whole programmatic-SEO effort inert:
+// the block used to be injected INSIDE #root, and `createRoot(...).render(...)`
+// throws away whatever is in #root. Crawlers that execute JS — Google does —
+// therefore indexed the rendered homepage on every /ciudad/* URL, so 48 pages
+// with 300-500 unique words each looked like 48 copies of the home.
+function injectSeoContent(html, block, city) {
+  const payload = JSON.stringify({
+    slug: city.slug,
+    name: city.name,
+    lat: city.lat,
+    lng: city.lng,
+    country: 'España',
+  }).replace(/</g, '\\u003c'); // can't break out of the script tag
+  return html
+    // Drop the homepage block: this page has its own, and two elements with the
+    // same id would be invalid.
+    .replace(/<div id="seo-prerender">[\s\S]*?<\/div>/, '')
+    .replace('<div id="seo-content"></div>', `<div id="seo-content">${block}</div>`)
+    .replace('</head>', `<script>window.__CITY__=${payload};</script>\n</head>`);
+}
+
 function assertIndexPatterns(indexHtml) {
   const patterns = [
     ['title', /<title>[\s\S]*?<\/title>/],
@@ -599,6 +623,9 @@ function assertIndexPatterns(indexHtml) {
     ['twitter:title', /<meta name="twitter:title" content="[^"]*"\s*\/>/],
     ['twitter:description', /<meta name="twitter:description" content="[^"]*"\s*\/>/],
     ['seo-prerender block', /<div id="seo-prerender">[\s\S]*?<\/div>/],
+    // The mount point injectSeoContent fills. If a template change loses it, the
+    // city pages silently go back to indexing the homepage.
+    ['seo-content mount', /<div id="seo-content"><\/div>/],
     ['head close', /<\/head>/],
   ];
   return patterns.filter(([, re]) => !re.test(indexHtml)).map(([name]) => name);
@@ -655,6 +682,7 @@ module.exports = {
   PAGE_TYPE_BY_URL_SLUG,
   sanitizeItems,
   validatePage,
+  injectSeoContent,
   buildVariantHtml,
   buildVariantSeoBlock,
   assertIndexPatterns,
