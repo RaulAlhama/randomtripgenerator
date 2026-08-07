@@ -14,6 +14,7 @@ import BottomNav from './components/layout/BottomNav';
 import TrustBand from './components/layout/TrustBand';
 import Hero from './components/hero/Hero';
 import CityLanding from './components/hero/CityLanding';
+import CityLinks from './components/hero/CityLinks';
 import LegalPage from './components/layout/LegalPage';
 import InspirationCarousel from './components/carousel/InspirationCarousel';
 import SavedRoutes from './components/trips/SavedRoutes';
@@ -106,6 +107,7 @@ function AppShell() {
             <Hero onExplore={openExplore} />
             <TrustBand />
             <InspirationCarousel onExplore={openExplore} />
+            <CityLinks />
           </>
         ))}
 

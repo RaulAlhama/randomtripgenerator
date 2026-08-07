@@ -483,6 +483,51 @@ function normalizeText(s) {
 // Check whether a Wikipedia page title is a plausible match for the POI.
 // Accepts if: the title contains all significant words of the POI name,
 // OR the title contains the POI name AND mentions the city.
+// Words that say WHAT something is, not WHICH one it is. Two places sharing only
+// these are not the same place.
+const GENERIC_PLACE_WORDS = new Set([
+  'jardin', 'jardines', 'parque', 'iglesia', 'parroquia', 'ermita', 'basilica', 'catedral',
+  'museo', 'plaza', 'palacio', 'casa', 'castillo', 'torre', 'puente', 'fuente', 'mercado',
+  'monumento', 'estatua', 'busto', 'capilla', 'convento', 'monasterio', 'centro', 'teatro',
+  'banos', 'termas', 'edificio', 'mirador', 'sinagoga', 'muralla', 'puerta', 'paseo', 'calle',
+  'avenida', 'real', 'municipal', 'antiguo', 'antigua', 'exposicion', 'coleccion', 'memorial',
+]);
+const NAME_ARTICLES = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'a', 'al', 'san', 'santa', 'santo']);
+
+function nameTokens(str) {
+  return normalizeText(str)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(' ')
+    .filter((w) => w.length >= 3 && !NAME_ARTICLES.has(w));
+}
+
+// Does the place Google returned plausibly correspond to the POI we asked about?
+//
+// Google's Text Search never says "no match": it fuzzy-matches and returns the
+// closest thing it has. Searching "Jardín de los Patos, Alhama de Murcia"
+// returned "Jardín Del Dragón" — a different park 1km away — and since the only
+// guard was distance (2km, which inside a town accepts almost anything) the card
+// wore the Dragón's photo AND its 4.2 rating.
+//
+// The rule is one distinctive word in common, where "jardín", "iglesia", "museo"
+// and friends don't count as distinctive. Measured against 24 real OSM POIs in
+// Alhama de Murcia and Toledo: this accepts 23 and rejects exactly the one bad
+// match ("Fuente de los Caballitos" → "Mirador de La Muela"). Requiring ALL
+// significant words instead — the rule used for Wikipedia titles — accepted only
+// 11 of 24, throwing away good photos over harmless wording differences like
+// "Castillo de Alhama" → "Castillo de Alhama de Murcia".
+function googleNameMatchesPOI(poiName, googleName) {
+  const google = normalizeText(googleName);
+  const tokens = nameTokens(poiName);
+  if (!google || tokens.length === 0) return false;
+
+  const distinctive = tokens.filter((w) => !GENERIC_PLACE_WORDS.has(w));
+  if (distinctive.length > 0) return distinctive.some((w) => google.includes(w));
+  // The POI is named only with generic words ("Termas Romanas", "El Pósito"):
+  // nothing distinctive to key on, so require every word instead.
+  return tokens.every((w) => google.includes(w));
+}
+
 function titleMatchesPOI(title, poiName, city) {
   const t = normalizeText(title);
   const name = normalizeText(poiName);
@@ -753,6 +798,16 @@ async function fetchPOIGoogleData(place, city) {
     const gLoc = top.geometry?.location;
     if (hasCoords && gLoc && Number.isFinite(gLoc.lat) && Number.isFinite(gLoc.lng)
         && haversineMeters(place.lat, place.lng, gLoc.lat, gLoc.lng) > GOOGLE_MATCH_MAX_METERS) {
+      cacheSet(cacheKey, '__none__');
+      return null;
+    }
+
+    // Distance alone isn't enough. Inside a town everything is within 2km, so a
+    // fuzzy match on a name Google doesn't have sails through: "Jardín de los
+    // Patos" came back as "Jardín Del Dragón", and the card showed that park's
+    // photo and its rating. Wrong data presented confidently is worse than none.
+    if (!googleNameMatchesPOI(place.name, top.name)) {
+      console.log(`[Google] Descartado "${top.name}" para "${place.name}": el nombre no coincide`);
       cacheSet(cacheKey, '__none__');
       return null;
     }
@@ -2321,7 +2376,11 @@ app.get('/api/place-image', async (req, res) => {
         || haversineMeters(latNum, lngNum, gLoc.lat, gLoc.lng) <= GOOGLE_MATCH_MAX_METERS;
       const photoRef = top?.photos?.[0]?.photo_reference;
       const typesOk = isFood || !(top?.types || []).some((t) => NON_SIGHT_PHOTO_TYPES.has(t));
-      if (photoRef && typesOk && nearOk) {
+      // Same guard as fetchPOIGoogleData: near enough AND actually the same
+      // place by name. Distance alone lets a fuzzy match inside the same town
+      // through, which is how a park ended up wearing another park's photo.
+      const nameOk = top && googleNameMatchesPOI(name, top.name);
+      if (photoRef && typesOk && nearOk && nameOk) {
         const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
         const cdnUrl = await followRedirect(photoApiUrl);
         if (cdnUrl) {
@@ -3540,4 +3599,5 @@ module.exports = {
   llmConfig,
   llmCandidates,
   callLLMOnce,
+  googleNameMatchesPOI,
 };
