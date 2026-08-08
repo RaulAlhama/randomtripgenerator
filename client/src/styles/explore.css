@@ -815,11 +815,18 @@
 
 .xp-head-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: stretch;
 }
 
-.xp-head-actions .xp-cta { flex: 1; }
+/* The primary action takes a row of its own. With four controls in one row the
+   share button landed 82px past the right edge of a 375px phone: the ghost
+   buttons carry white-space: nowrap, so they can't shrink out of the way. */
+.xp-head-actions .xp-cta { flex: 1 1 100%; }
+.xp-head-actions .xp-ghost-btn { flex: 1 1 auto; min-height: 44px; }
+/* Icon-only share button: sizes to its icon instead of stretching to a third. */
+.xp-head-actions .xp-ghost-btn:last-child { flex: 0 0 auto; }
 
 /* ---------- Buttons ---------- */
 .xp-cta {
@@ -1396,14 +1403,169 @@
 .city-planner .city-planner-go:hover:not(:disabled) { background: var(--brand-pine-hover); }
 .city-planner .city-planner-go:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* ---------- Modo paseo ----------
+   Una columna con los extremos fijos y la ficha ocupando lo que sobra: el pie
+   nunca se va de la pantalla, porque en la calle es lo único que se toca. La
+   ficha es la misma DeckPlaceCard del mazo (height: 100%, la foto cede espacio),
+   así que el sitio se ve igual mientras lo eliges y mientras estás delante. */
+.xp-walk {
+  position: fixed;
+  inset: 0;
+  /* Por encima del overlay de exploración: es una pantalla, no un panel. */
+  z-index: 9600;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  animation: xp-fade-in 220ms var(--ease);
+}
+
+.xp-walk-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+}
+
+.xp-walk-progress { flex: 1 1 auto; min-width: 0; }
+
+.xp-walk-count {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Un filete que se llena. No lleva número: la cuenta ya está escrita arriba. */
+.xp-walk-bar {
+  display: block;
+  height: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.xp-walk-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--brand-pine);
+  transition: width 420ms var(--ease);
+}
+
+[data-theme="dark"] .xp-walk-bar > span { background: var(--map-route); }
+
+/* Reserva su alto siempre, para que la ficha no salte cuando aparece el aviso. */
+.xp-walk-live {
+  flex: none;
+  min-height: 1.4rem;
+  margin: 0;
+  padding: 2px 16px 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-style: italic;
+  text-align: center;
+  color: var(--brand-pine);
+}
+
+[data-theme="dark"] .xp-walk-live { color: var(--map-route); }
+
+.xp-walk-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 14px 12px;
+}
+
+.xp-walk-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+
+.xp-walk-status {
+  margin: 0;
+  min-height: 1.2em;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.xp-walk-status.is-near { color: var(--brand-pine); }
+[data-theme="dark"] .xp-walk-status.is-near { color: var(--map-route); }
+
+/* Iguales entre sí a propósito: "ya estoy aquí" y "saltar" son dos respuestas al
+   mismo momento, y darle más peso a una empujaría a marcar paradas sin verlas. */
+.xp-walk-secondary { display: flex; gap: 10px; }
+.xp-walk-secondary .xp-ghost-btn { flex: 1 1 0; min-height: 46px; }
+
+.xp-walk-done {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.xp-walk-done-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-pine);
+}
+
+[data-theme="dark"] .xp-walk-done-kicker { color: var(--map-route); }
+
+.xp-walk-done h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.xp-walk-done-note {
+  margin: 0 auto;
+  max-width: 34ch;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.xp-walk-done-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Pantallas cortas: el pie y la acción principal manda, el aviso se recorta. */
+@media (max-height: 700px) {
+  .xp-walk-top { padding-top: calc(6px + env(safe-area-inset-top)); }
+  .xp-walk-live { min-height: 0; font-size: 0.92rem; }
+  .xp-walk-card { padding: 6px 12px 8px; }
+  .xp-walk-done h2 { font-size: 1.6rem; }
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .xp-overlay,
   .xp-sheet,
   .xp-card.is-flash,
   .xp-user-dot span,
-  .xp-radar span {
+  .xp-radar span,
+  .xp-walk {
     animation: none;
     transition: none;
   }
+  .xp-walk-bar > span { transition: none; }
 }

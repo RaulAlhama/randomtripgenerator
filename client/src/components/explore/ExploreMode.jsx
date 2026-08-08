@@ -9,6 +9,8 @@ import DeckPlaceCard from './DeckPlaceCard';
 import DeckRestaurantCard from './DeckRestaurantCard';
 import RestaurantStrip from './RestaurantStrip';
 import ActivityPromo from './ActivityPromo';
+import WalkMode from './WalkMode';
+import { metersBetween } from '../../lib/walk';
 
 // Explore mode assumes the user is on foot with spare time right now.
 const EXPLORE_RADIUS_KM = 2;
@@ -23,16 +25,8 @@ function urlLocationOverride() {
   return null;
 }
 
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
+// Was a fourth copy of haversine in this repo; lib/walk.js owns it now.
+const haversineKm = (lat1, lng1, lat2, lng2) => metersBetween(lat1, lng1, lat2, lng2) / 1000;
 
 function gmapsDirectionsUrl(origin, places) {
   if (!places.length) return null;
@@ -92,6 +86,8 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   const [restRetry, setRestRetry] = useState(0);
   // A built-route stop reopened as a detail card (tap a number / map pin).
   const [cardStop, setCardStop] = useState(null);
+  // Walk mode: the route in progress, on foot. Its own screen on top of this one.
+  const [walking, setWalking] = useState(false);
   const launchedRef = useRef(false);
 
   const origin = currentTrip
@@ -192,13 +188,15 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
-      // A reopened stop card closes first; only then does Escape exit the deck.
-      if (cardStop) setCardStop(null);
+      // Innermost layer first: the walk, then a reopened stop card, then the deck.
+      // Escaping straight out of a walk in progress would be a nasty surprise.
+      if (walking) setWalking(false);
+      else if (cardStop) setCardStop(null);
       else handleClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose, cardStop]);
+  }, [handleClose, cardStop, walking]);
 
   // Removing a card nudges the deck to the next one — it feels like discarding.
   const handleTogglePlace = (place) => {
@@ -275,15 +273,22 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
         </div>
       </div>
       <div className="xp-head-actions">
+        {/* The walk is the primary action now, and Google Maps stays right next to
+            it rather than being replaced: Google is better at getting you down the
+            street than we will ever be, and the walk screen hands each leg back to
+            it. What it can't do is tell you what you're looking at. */}
+        <button type="button" className="xp-cta" onClick={() => setWalking(true)}>
+          Empezar el paseo
+        </button>
         {dirUrl && (
           <a
-            className="xp-cta"
+            className="xp-ghost-btn"
             href={dirUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => track('gmaps_opened', { city, stops: routePlaces.length })}
           >
-            Empezar en Google Maps
+            Ver en Maps
           </a>
         )}
         <button type="button" className="xp-ghost-btn" onClick={backToCandidates}>Cambiar sitios</button>
@@ -296,6 +301,21 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
       </div>
     </>
   );
+
+  // A walk in progress replaces this screen entirely rather than layering over
+  // it: on the street the phone shows one thing, and the map behind would keep a
+  // Leaflet instance repainting for nobody.
+  if (walking && showSitiosRoute && routePlaces.length > 0) {
+    return (
+      <WalkMode
+        places={routePlaces}
+        city={city}
+        origin={origin}
+        routeDistance={routeDistance}
+        onClose={() => setWalking(false)}
+      />
+    );
+  }
 
   return (
     <div className="xp-overlay" role="dialog" aria-modal="true" aria-label="Explora ahora">

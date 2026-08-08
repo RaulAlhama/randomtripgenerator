@@ -56,8 +56,12 @@ no `constants/themes`):
   routes), SavedContext, AuthContext, ThemeContext, ToastContext
 - `components/explore/` — **the main interface**: ExploreMode (the overlay that owns the
   flow), ExploreDeck (full-screen swipeable cards), DeckPlaceCard, DeckRestaurantCard,
-  ExploreMap, ExploreSheet (bottom sheet for the built route), RestaurantStrip, SaveHeart,
-  ActivityPromo
+  ExploreMap, ExploreSheet (bottom sheet for the built route), WalkMode, RestaurantStrip,
+  SaveHeart, ActivityPromo
+- `lib/walk.js` — walk mode's decisions, deliberately outside React: arrival radius per POI
+  type (OSM gives centroids, so a park's is 90m and a building's 40m), the accuracy floor
+  below which auto-advance stands down, the two-consecutive-fixes rule, and progress
+  persistence. Tested in `test/walk.test.js`; **WalkMode itself holds no arrival logic**
 - `components/hero/` — Hero (single CTA + "Restaurantes cerca" shortcut), CitySearch,
   CityPlanner, DistanceSlider, transportIcons
 - `components/layout/` — Header, Footer (also holds the Privacy/Terms modals), BottomNav,
@@ -106,6 +110,14 @@ generic hero. `assertIndexPatterns()` guards the mount point at startup.
 8. Frontend fetches weather via **Open-Meteo** API (free, no key)
 9. Frontend renders on **Leaflet** map (react-leaflet)
 10. Trip auto-saved if user is authenticated
+11. **"Empezar el paseo"** opens WalkMode: a companion for the walk itself, not a navigator.
+    It watches position only to notice arrival and hands each individual leg to Google Maps
+    (`legDirectionsUrl`, one destination, no waypoints). Deliberately absent: turn-by-turn,
+    re-routing, heading, wake lock — a web page has no background geolocation, and every
+    re-route would spend ORS quota to do worse than the phone's own map app. The watch stops
+    on `visibilitychange` and resumes on return, which is exactly the trip to Maps and back.
+    It is also the only source of funnel data past `gmaps_opened`: `walk_started`,
+    `walk_stop_reached` (`how`: auto/manual/skip), `walk_completed`, `gmaps_leg_opened`
 
 ### Auth0 (optional)
 - Backend: `express-oauth2-jwt-bearer` validates JWTs on `/api/trips` CRUD endpoints
