@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'; // useMemo: HeroDeck y la variante
+import { useMemo, useState } from 'react';
 import CityPlanner from './CityPlanner';
 
 // Real travel photography is the hero. Photos: Unsplash CDN (credited in footer).
@@ -63,15 +63,8 @@ export default function Hero({ onExplore }) {
   // landing presents a single action instead of a wall of controls.
   const [plannerOpen, setPlannerOpen] = useState(false);
 
-  // TEMPORAL: dos direcciones de diseño en paralelo para poder compararlas
-  // renderizadas (?hero=chapas). Se queda una y se borra la otra.
-  const variant = useMemo(() => {
-    const v = new URLSearchParams(window.location.search).get('hero');
-    return v === 'chapas' ? 'chapas' : 'sumario';
-  }, []);
-
   return (
-    <section className="hero" data-hero={variant}>
+    <section className="hero">
       <div className="hero-layout">
         <div className="hero-intro">
           <span className="hero-eyebrow">Cerca de ti · a pie</span>

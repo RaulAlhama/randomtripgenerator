@@ -26,7 +26,7 @@ export default function CityLanding({ city, onExplore }) {
         <p className="city-landing-kicker">A pie · {city.name}</p>
         <button
           type="button"
-          className="hero-cta"
+          className="city-cta"
           onClick={() => onExplore('sitios', { location: city })}
         >
           Generar mi ruta por {city.name}
