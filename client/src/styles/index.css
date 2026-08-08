@@ -2306,24 +2306,45 @@ a.footer-link-btn { text-decoration: none; }
 .hero-actions .hero-cta-alt:hover svg { transform: none; }
 .hero-actions .hero-cta:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 4px; }
 
-/* La línea de salto: otro eje (a la derecha), no otro rango en la misma pila */
+/* La línea de salto: otro eje (a la derecha), no otro rango en la misma pila.
+   Los tres elementos se alinean contra la banda de MAYÚSCULAS del rótulo, que es
+   lo único que se ve: `baseline` no servía porque la línea base de un <svg> es su
+   borde inferior, y `center` a secas centra contra la caja de línea del texto,
+   que incluye el hueco de los descendentes (vacío en un rótulo en versales). Por
+   eso los iconos caían bajos. line-height: 1 encoge esa caja y el desplazamiento
+   en em corrige el resto sin depender del tamaño de fuente. */
 .hero-actions .planner-toggle {
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end;
-  gap: 0.45rem; width: 100%; min-height: 56px; margin: 0; padding: 1rem 0 0.35rem;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+  gap: 0.4rem; width: 100%; min-height: 56px; margin: 0; padding: 1rem 0 0.35rem;
   border: 0; border-radius: 0; background: none; box-shadow: none;
   font-family: var(--font-sans); font-size: 0.78rem;
   color: var(--brand-pine); text-align: right; cursor: pointer;
 }
-.hero-actions .planner-toggle em {
-  font-family: var(--font-display); font-style: italic; font-size: 1rem;
-  font-weight: 500; color: var(--text-secondary);
-}
 .hero-actions .planner-toggle .pt-label {
-  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  border-bottom: 1px solid currentColor; padding-bottom: 2px;
+  font-size: 0.78rem; line-height: 1; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* En em, no en px: así el hueco bajo las letras crece con la fuente y el
+     desplazamiento de los iconos de más abajo sigue valiendo a cualquier tamaño.
+     El filete se queda en 1px, que es lo que debe medir un filete. */
+  border-bottom: 1px solid currentColor; padding-bottom: 0.16em;
 }
-.hero-actions .planner-toggle svg:first-of-type {
-  width: 14px; height: 14px; align-self: center; color: var(--text-secondary);
+/* Los dos iconos, medidos contra el rótulo en lugar de contra su caja:
+   - Alto 0.86em ≈ 1.18 veces la altura de mayúscula de Inter (0.727em). El pin
+     venía a 1,5 veces, y a ese tamaño, centrado sobre las letras, colgaba 2px por
+     debajo de la línea base. Un icono se dimensiona contra las mayúsculas que
+     acompaña, no contra el cuerpo de la fuente.
+   - El ancho del pin sale de la proporción de su viewBox recortado (19.8/22.8),
+     para que el dibujo llene la caja y no quede reencuadrado dentro de ella.
+   - -0.18em es medido, no tanteado: el centro de la caja de línea cae 2.26px por
+     debajo del centro de las mayúsculas, porque la caja incluye el espacio de los
+     descendentes y en un rótulo en versales ese espacio está vacío. */
+.hero-actions .planner-toggle svg {
+  flex: none; height: 0.86em; transform: translateY(-0.18em);
+}
+.hero-actions .planner-toggle svg:first-of-type { width: 0.747em; }
+.hero-actions .planner-toggle .planner-toggle-chevron { width: 0.86em; }
+.hero-actions .planner-toggle .planner-toggle-chevron.is-open {
+  transform: translateY(-0.18em) rotate(180deg);
 }
 .hero-actions .planner-toggle:hover,
 .hero-actions .planner-toggle:focus-visible { background: none; border: 0; }

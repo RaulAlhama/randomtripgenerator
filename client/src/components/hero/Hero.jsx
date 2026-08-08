@@ -120,12 +120,15 @@ export default function Hero({ onExplore }) {
             aria-controls="hero-planner"
             onClick={() => setPlannerOpen((o) => !o)}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {/* El pin se dibuja en su propio viewBox recortado a la tinta (18x22,
+                el alto real del alfiler con su trazo) en lugar de en el 24x24 de
+                la librería, donde sobra 1u arriba y 1.1u abajo. Con el recuadro
+                pegado al dibujo, centrarlo verticalmente centra lo que se ve. */}
+            <svg width="9.3" height="10.7" viewBox="2.1 0.1 19.8 22.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
             </svg>
-            <em>¿Aún no estás allí?</em>
             <span className="pt-label">Planificar otra ciudad</span>
-            <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg className={`planner-toggle-chevron${plannerOpen ? ' is-open' : ''}`} width="10.7" height="10.7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
