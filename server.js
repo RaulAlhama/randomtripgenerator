@@ -934,7 +934,7 @@ const OVERPASS_TYPE_MAP = {
   place_of_worship: 'church', restaurant: 'restaurant', cafe: 'restaurant',
   marketplace: 'market', theatre: 'theater', park: 'park', garden: 'garden',
   fountain: 'plaza', spring: 'viewpoint', peak: 'viewpoint', cave_entrance: 'viewpoint',
-  tower: 'viewpoint', bridge: 'monument'
+  tower: 'viewpoint', bridge: 'monument', townhall: 'townhall'
 };
 
 // ========== OVERPASS TRANSPORT ==========
@@ -1082,6 +1082,66 @@ function overpassQuery(query, opts = {}) {
   });
 }
 
+// Two OSM records, one building. Mappers routinely draw a civic building twice:
+// once for what it IS (historic=manor, heritage=yes) and once for what it DOES
+// (amenity=townhall). The names differ, so dedup-by-name keeps both, and the card
+// gets titled with whichever record our query happened to ask for.
+//
+// In Alhama de Murcia that shipped a card called "Casa de la Familia Artero"
+// wearing a photo of the town hall, described by the LLM as "arquitectura
+// residencial tradicional". The photo was right and the coordinates were right:
+// the name was the one nobody there uses, and the other two details were derived
+// from it. way/1160307312 (the manor) and way/511467229 (the town hall) share
+// four vertices — the same walls.
+//
+// So decide instead of picking blind. Which name wins is the whole question, and
+// a wikipedia/wikidata tag is the only evidence of common usage available without
+// asking a paid API: it keeps Madrid's city hall as "Palacio de Cibeles" while
+// letting Alhama's become the Ayuntamiento, where neither record is notable and
+// the function is what people say. The displaced name is kept as an alias,
+// because "the town hall is the old Artero house" is exactly what a walking route
+// should tell you.
+const SAME_BUILDING_M = 25;
+
+function reconcileCivicBuildings(pois) {
+  const halls = pois.filter(p => p.rawType === 'townhall');
+  if (!halls.length) return pois;
+  const dropped = new Set();
+
+  for (const hall of halls) {
+    let match = null;
+    let bestM = SAME_BUILDING_M;
+    for (const p of pois) {
+      if (p === hall || p.rawType === 'townhall' || dropped.has(p)) continue;
+      const d = haversineMeters(hall.lat, hall.lng, p.lat, p.lng);
+      if (d <= bestM) { bestM = d; match = p; }
+    }
+
+    // Nothing underneath it: a town hall earns a card only when OSM also calls it
+    // heritage. Every town has one, and a 1970s municipal block is not a sight —
+    // adding them all would pad decks with buildings nobody walks over to see.
+    if (!match) {
+      if (!(hall.heritage || hall.wikipedia || hall.wikidata)) dropped.add(hall);
+      continue;
+    }
+
+    if (match.wikipedia || match.wikidata) {
+      // The building is famous under its own name. Keep it, note the function.
+      match.alias = match.alias || hall.name;
+    } else {
+      match.alias = match.name;
+      match.name = hall.name;
+      match.rawType = 'townhall';
+      match.type = OVERPASS_TYPE_MAP.townhall;
+      match.wikipedia = match.wikipedia || hall.wikipedia;
+      match.wikidata = match.wikidata || hall.wikidata;
+    }
+    dropped.add(hall);
+  }
+
+  return dropped.size ? pois.filter(p => !dropped.has(p)) : pois;
+}
+
 // Get real POIs from OpenStreetMap via Overpass API
 async function getOverpassPOIs(lat, lng, radiusMeters) {
   // Caché por zona (~111m) y radio redondeado
@@ -1107,7 +1167,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
       query = `[out:json][timeout:${timeout}];(
         node["tourism"~"attraction|museum|viewpoint"](around:${radiusMeters},${lat},${lng});
         node["historic"](around:${radiusMeters},${lat},${lng});
-        node["amenity"~"marketplace|place_of_worship"](around:${radiusMeters},${lat},${lng});
+        node["amenity"~"marketplace|place_of_worship|townhall"](around:${radiusMeters},${lat},${lng});
         node["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         way["tourism"~"attraction|museum"](around:${radiusMeters},${lat},${lng});
         way["historic"](around:${radiusMeters},${lat},${lng});
@@ -1118,14 +1178,14 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
       query = `[out:json][timeout:${timeout}];(
         node["tourism"~"attraction|museum|viewpoint|artwork|gallery"](around:${radiusMeters},${lat},${lng});
         node["historic"](around:${radiusMeters},${lat},${lng});
-        node["amenity"~"marketplace|place_of_worship|fountain"](around:${radiusMeters},${lat},${lng});
+        node["amenity"~"marketplace|place_of_worship|fountain|townhall"](around:${radiusMeters},${lat},${lng});
         node["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         node["natural"~"spring|peak|cave_entrance"](around:${radiusMeters},${lat},${lng});
         node["man_made"~"tower|bridge"](around:${radiusMeters},${lat},${lng});
         way["tourism"~"attraction|museum|viewpoint"](around:${radiusMeters},${lat},${lng});
         way["historic"](around:${radiusMeters},${lat},${lng});
         way["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
-        way["amenity"~"marketplace|place_of_worship"](around:${radiusMeters},${lat},${lng});
+        way["amenity"~"marketplace|place_of_worship|townhall"](around:${radiusMeters},${lat},${lng});
         way["building"~"church|chapel|castle|cathedral"](around:${radiusMeters},${lat},${lng});
         relation["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
         relation["tourism"~"attraction"](around:${radiusMeters},${lat},${lng});
@@ -1156,15 +1216,18 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
           lng: el.lon || el.center?.lon,
           wikipedia: el.tags.wikipedia || null,
           wikidata: el.tags.wikidata || null,
+          heritage: el.tags.heritage || null,
           image: el.tags.image || el.tags.wikimedia_commons || null
         };
       })
       .filter(p => p.lat && p.lng)
       .filter(p => !SKIP_TYPES.has(p.rawType));
 
-    // Deduplicate by name
+    const reconciled = reconcileCivicBuildings(pois);
+
+    // Deduplicate by name (after the merge above, so a renamed POI can't collide)
     const seen = new Set();
-    const unique = pois.filter(p => {
+    const unique = reconciled.filter(p => {
       const key = p.name.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
@@ -1832,6 +1895,14 @@ const FALLBACK_DESC_BY_TYPE = {
     (c) => `Una plaza de ${c} donde sentarse un rato y ver pasar la ciudad.`,
     (c) => `Un espacio abierto de ${c}, punto de encuentro y buena parada.`,
   ],
+  // No century, no style, no claim about the plaza it faces: this template only
+  // gets used when neither Wikipedia nor the LLM had anything, and the whole
+  // reason this type exists is that a made-up detail is what went wrong before.
+  townhall: [
+    (c) => `La casa consistorial de ${c}, buen punto de referencia en el centro.`,
+    (c) => `El ayuntamiento de ${c}, fácil de reconocer y útil para orientarse.`,
+    (c) => `La sede municipal de ${c}; una parada breve de camino a lo siguiente.`,
+  ],
   theater: [
     (c) => `Un teatro de ${c}, parte de su vida cultural.`,
     (c) => `Un teatro de ${c} con historia sobre y bajo el escenario.`,
@@ -2018,6 +2089,9 @@ async function buildRoute(city, lat, lng, country, theme, transport, realPOIs, m
       const g = googleData[i] || {};
       return {
         name: p.name,
+        // The name this building also goes by, when OSM maps it twice — see
+        // reconcileCivicBuildings. Null for everything else.
+        alias: p.alias || null,
         type: p.type,
         lat: p.lat,
         lng: p.lng,
@@ -3085,6 +3159,8 @@ function sanitizeSharedPlace(p) {
   if (!name) return null;
   return {
     name,
+    // Kept so a reopened route still says the town hall is the old Artero house.
+    alias: str(p.alias, 160),
     lat,
     lng,
     type: str(p.type, 40) || 'place',
@@ -3600,4 +3676,5 @@ module.exports = {
   llmCandidates,
   callLLMOnce,
   googleNameMatchesPOI,
+  reconcileCivicBuildings,
 };

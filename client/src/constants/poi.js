@@ -12,6 +12,7 @@ export const typeIcons = {
   market: '\u{1F3EA}',
   garden: '\u{1F33A}',
   theater: '\u{1F3AD}',
+  townhall: '\u{1F3DB}\uFE0F',
   default: '\u{1F4CD}',
 };
 
@@ -29,5 +30,6 @@ export const typeLabels = {
   market: 'Mercado',
   garden: 'Jardín',
   theater: 'Teatro',
+  townhall: 'Ayuntamiento',
   default: 'Punto de interés',
 };

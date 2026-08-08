@@ -364,6 +364,17 @@
   color: var(--text);
 }
 
+/* Pulled up out of the body's 8px gap: at full gap it reads as another line of
+   information, and it is the same one as the title. */
+.xp-dcard-alias {
+  margin-top: -6px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
 .xp-dcard-meta,
 .xp-rcard-meta {
   display: flex;

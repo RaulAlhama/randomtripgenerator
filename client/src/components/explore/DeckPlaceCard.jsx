@@ -88,6 +88,11 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
 
       <div className="xp-dcard-body">
         <h3 className="xp-dcard-name">{place.name}</h3>
+        {/* The building's other identity, when OSM maps it twice: the town hall of
+            Alhama de Murcia is the old Casa de la Familia Artero. The title says
+            what you're looking at; this says what it was, which is the reason to
+            stop and look at all. */}
+        {place.alias && <p className="xp-dcard-alias">{place.alias}</p>}
         <div className="xp-dcard-meta">
           <span className="xp-dcard-distance">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
