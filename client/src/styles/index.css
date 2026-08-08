@@ -1075,7 +1075,6 @@ main {
 
 .hero-content { animation: rt-fade-up 600ms var(--ease) backwards; }
 .hero-preview { animation: rt-fade-up 600ms var(--ease) 140ms backwards; }
-.inspiration-section { animation: rt-fade-up 600ms var(--ease) backwards; }
 
 .trust-band-item { animation: rt-fade-up 520ms var(--ease) backwards; }
 .trust-band-item:nth-child(1) { animation-delay: 60ms; }
@@ -1085,7 +1084,6 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .hero-content,
   .hero-preview,
-  .inspiration-section,
   .trust-band-item {
     animation: none;
   }
@@ -1163,123 +1161,6 @@ main {
     border-top: 1px solid var(--border);
   }
 }
-
-/* ========== INSPIRATION CAROUSEL ========== */
-.inspiration-section {
-  width: 100%;
-  margin: 0.5rem 0 3rem;
-  scroll-margin-top: 2rem;
-}
-
-.carousel-wrapper {
-  position: relative;
-  overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-}
-
-.carousel-track {
-  display: flex;
-  gap: 0.85rem;
-  width: max-content;
-  padding: 0.4rem 0 0.5rem;
-  animation: carousel-scroll 45s linear infinite;
-}
-
-.carousel-track:hover { animation-play-state: paused; }
-
-@keyframes carousel-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-.carousel-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 240px;
-  max-width: 240px;
-  background: var(--bg-elevated);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: var(--transition);
-  text-align: left;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-xs);
-  font-family: inherit;
-  position: relative;
-  overflow: hidden;
-}
-
-.carousel-card:hover {
-  box-shadow: var(--shadow);
-  border-color: var(--primary-soft-hover);
-  transform: translateY(-3px);
-}
-
-.carousel-card-photo {
-  position: relative;
-  height: 132px;
-  overflow: hidden;
-  background: var(--ink-soft-strong);
-}
-
-.carousel-card-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform 500ms var(--ease);
-}
-
-.carousel-card:hover .carousel-card-photo img { transform: scale(1.06); }
-
-.carousel-card-photo-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(20, 12, 6, 0.82) 0%, rgba(20, 12, 6, 0.25) 45%, rgba(20, 12, 6, 0) 100%);
-}
-
-.carousel-card-city {
-  position: absolute;
-  left: 0.85rem;
-  bottom: 0.6rem;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
-}
-
-.carousel-card-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.85rem 1rem 1rem;
-}
-
-.carousel-card-tagline {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 0.25rem;
-}
-
-.carousel-card-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--primary);
-  letter-spacing: 0.01em;
-  margin-top: 0.25rem;
-  transition: gap 220ms var(--ease);
-}
-
-.carousel-card:hover .carousel-card-cta { gap: 0.5rem; }
 
 /* ========== TOAST ========== */
 .toast {
@@ -2416,64 +2297,6 @@ a.footer-link-btn { text-decoration: none; }
   text-align: center;
 }
 
-/* ========== RUTAS POR CIUDAD (home) ==========
-   The /ciudad/* pages had no entry point from the running app, and the links in
-   the pre-rendered block are wiped when React mounts — so they existed for a
-   crawler that doesn't run JS and for nobody else. */
-.city-links {
-  padding: 2rem 1.25rem 0.5rem;
-  max-width: 760px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.city-links-title {
-  font-family: var(--font-display, inherit);
-  font-size: 1.25rem;
-  margin: 0 0 0.35rem;
-  color: var(--text);
-}
-
-.city-links-sub {
-  font-size: 0.92rem;
-  color: var(--text-secondary);
-  margin: 0 0 1.1rem;
-}
-
-.city-links-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.city-links-list a {
-  display: inline-block;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill, 999px);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 0.88rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.city-links-list a:hover,
-.city-links-list a:focus-visible {
-  border-color: var(--brand-pine);
-  color: var(--brand-pine);
-}
-[data-theme="dark"] .city-links-list a:hover,
-[data-theme="dark"] .city-links-list a:focus-visible {
-  border-color: var(--map-route);
-  color: var(--map-route);
-}
-
 /* ==========================================================================
    HERO: ACCIONES — dos direcciones en paralelo, TEMPORAL
    Raúl rechazó dos veces la pila de tres pastillas y "los contenedores en forma
@@ -2662,4 +2485,117 @@ a.footer-link-btn { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   [data-hero="sumario"] .hero-actions .hero-cta-label,
   [data-hero="sumario"] .hero-actions .hero-cta svg { transition: none; }
+}
+
+/* ========== CIUDADES (portada) ==========
+   Sustituye al carrusel de inspiración y a la fila de cápsulas de ciudad: eran la
+   misma oferta dos veces, y las cápsulas son la forma que este proyecto está
+   dejando de usar. Aquí no hay ni un border-radius: el recorte a escuadra de la
+   foto y el filete inferior son el contenedor.
+   Cada tarjeta es un <a href> real a /ciudad/<slug>. */
+.city-grid-section {
+  padding: 2.5rem 1.25rem 0.5rem;
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.city-grid-head { max-width: 46ch; margin: 0 0 1.5rem; }
+
+.city-grid-eyebrow {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-pine);
+  margin-bottom: 0.5rem;
+}
+[data-theme="dark"] .city-grid-eyebrow { color: var(--map-route); }
+
+.city-grid-head h2 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.city-grid-head p {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.city-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem 1rem;
+}
+
+.city-tile {
+  display: block;
+  text-decoration: none;
+  /* El filete, no una caja: la tarjeta se apoya en una línea, como un pie de foto. */
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.6rem;
+  transition: border-color 180ms var(--ease);
+}
+
+.city-tile-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  /* A escuadra, deliberadamente. */
+  border-radius: 0;
+  background: var(--bg-muted);
+  filter: saturate(0.92);
+  transition: filter 220ms var(--ease);
+}
+
+.city-tile-name {
+  display: block;
+  margin-top: 0.6rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.city-tile:hover,
+.city-tile:focus-visible { border-bottom-color: var(--brand-pine); }
+.city-tile:hover .city-tile-photo,
+.city-tile:focus-visible .city-tile-photo { filter: saturate(1.05); }
+.city-tile:hover .city-tile-name,
+.city-tile:focus-visible .city-tile-name { color: var(--brand-pine); }
+
+[data-theme="dark"] .city-tile:hover,
+[data-theme="dark"] .city-tile:focus-visible { border-bottom-color: var(--map-route); }
+[data-theme="dark"] .city-tile:hover .city-tile-name,
+[data-theme="dark"] .city-tile:focus-visible .city-tile-name { color: var(--map-route); }
+
+.city-tile:focus-visible {
+  outline: 2px solid var(--brand-pine);
+  outline-offset: 4px;
+}
+
+@media (min-width: 620px) {
+  .city-grid { grid-template-columns: repeat(3, 1fr); gap: 1.75rem 1.25rem; }
+}
+@media (min-width: 980px) {
+  .city-grid-section { padding: 3rem 1.5rem 1rem; }
+  .city-grid { grid-template-columns: repeat(4, 1fr); }
+  .city-grid-head h2 { font-size: 2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .city-tile, .city-tile-photo { transition: none; }
 }
