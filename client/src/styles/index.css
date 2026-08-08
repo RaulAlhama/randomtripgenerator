@@ -2308,6 +2308,14 @@ a.footer-link-btn { text-decoration: none; }
 /* ---------- A) SUMARIO: el filete es el contenedor, no hay cápsula ---------- */
 [data-hero="sumario"] .hero-intro { align-items: flex-start; text-align: left; width: 100%; }
 [data-hero="sumario"] .hero-intro .subtitle { margin: 0 0 1.4rem; max-width: 46ch; }
+/* El h1 hereda un `margin: 0 auto` del layout centrado y quedaba indentado 58px
+   mientras el antetítulo, el subtítulo y las acciones salían a 16px. A bandera
+   izquierda eso se lee como un error, no como una decisión. */
+[data-hero="sumario"] .hero-intro h1 {
+  align-self: stretch;
+  margin-left: 0;
+  margin-right: 0;
+}
 [data-hero="sumario"] .hero-actions {
   display: block; width: 100%; max-width: 520px; text-align: left;
   border-top: 1px solid var(--border);
@@ -2598,4 +2606,15 @@ a.footer-link-btn { text-decoration: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .city-tile, .city-tile-photo { transition: none; }
+}
+
+/* Pantallas cortas (iPhone SE y similares): la barra inferior fija ocupa los
+   últimos 64px, así que el pliegue útil no es innerHeight sino innerHeight-64.
+   Sin esto el cambio de modo acababa 15px por detrás de la barra. Se recupera
+   apretando el ritmo vertical, no escondiendo nada. */
+@media (max-height: 720px) {
+  [data-hero="sumario"] .hero-intro .subtitle { margin-bottom: 0.9rem; }
+  [data-hero="sumario"] .hero-actions .hero-cta,
+  [data-hero="sumario"] .hero-actions .hero-cta-alt { padding: 0.85rem 0 0.95rem; }
+  [data-hero="sumario"] .hero-actions .planner-toggle { min-height: 48px; padding-top: 0.75rem; }
 }

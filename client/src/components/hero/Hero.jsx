@@ -84,10 +84,13 @@ export default function Hero({ onExplore }) {
           </p>
         </div>
 
-        <div className="hero-preview">
-          <HeroDeck />
-        </div>
-
+        {/* Las acciones van ANTES del ejemplo en el DOM. En móvil el mazo se
+            comía la primera pantalla y los botones caían por debajo del pliegue:
+            la acción principal del producto no se veía al cargar. El mazo es
+            decorativo (lleva aria-hidden y la etiqueta "Ejemplo"), así que no
+            debe ir por delante de la acción ni en orden visual ni en tabulación.
+            En escritorio el orden no cambia: esa rejilla usa grid-template-areas
+            y coloca cada bloque por nombre, no por posición en el DOM. */}
         <div className="hero-actions">
           {/* Two jobs, equal billing: build a route OR find a place to eat. */}
           <div className="hero-cta-row">
@@ -141,6 +144,10 @@ export default function Hero({ onExplore }) {
               />
             </div>
           )}
+        </div>
+
+        <div className="hero-preview">
+          <HeroDeck />
         </div>
       </div>
     </section>
