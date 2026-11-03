@@ -249,7 +249,8 @@ function metersFrom(city, p) {
 // Arqueológico de Mérida" both ranked high — they have plenty of Wikipedias —
 // and a walk can't stop at either.
 const AREA_TYPES = new Set(['town', 'city', 'village', 'district', 'city_district', 'quarter', 'neighbourhood', 'suburb']);
-const AREA_NAME_RE = /^(conjunto|ciudad vieja|casco (antiguo|hist[oó]rico|viejo)|centro hist[oó]rico)\b/i;
+// English too: Córdoba's UNESCO area is mapped as plain "historic centre".
+const AREA_NAME_RE = /^(conjunto|ciudad vieja|casco (antiguo|hist[oó]rico|viejo)|centro hist[oó]rico|historic cent(re|er)|old town)\b/i;
 
 // Statues and memorials whose wikidata tag names the PERSON, not the statue:
 // "Woody Allen" in Oviedo, "Miguel Ángel Blanco" in Burgos and "Pedro Romero"
