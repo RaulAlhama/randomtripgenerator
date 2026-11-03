@@ -4,6 +4,8 @@
 //
 // Priority when several are configured: Civitatis (best fit for the
 // Spanish-speaking audience) → GetYourGuide.
+import { CIVITATIS_SLUGS } from '../constants/cities';
+
 const CIVITATIS_AID = import.meta.env.VITE_CIVITATIS_AID;
 const GYG_PARTNER_ID = import.meta.env.VITE_GYG_PARTNER_ID;
 
@@ -26,8 +28,9 @@ export function activityAffiliate(city) {
 
   if (CIVITATIS_AID) {
     // ?aid= sets a 30-day attribution cookie on any civitatis.com URL.
-    const slug = citySlug(name);
-    if (!slug) return null;
+    const ours = citySlug(name);
+    if (!ours) return null;
+    const slug = CIVITATIS_SLUGS[ours] || ours;
     return {
       provider: 'Civitatis',
       url: `https://www.civitatis.com/es/${slug}/?aid=${encodeURIComponent(CIVITATIS_AID)}`,

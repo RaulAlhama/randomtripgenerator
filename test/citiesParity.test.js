@@ -31,3 +31,18 @@ test('the client city list matches cityData.js exactly, in order', async () => {
     'los nombres visibles no coinciden'
   );
 });
+
+// The affiliate link is built in two places too: on the server from cityData's
+// civitatisSlug, in the client from the trip's city name. A city whose
+// Civitatis slug differs from ours has to be overridden in both, or one of the
+// two sends its clicks to Civitatis' homepage.
+test('the client knows every Civitatis slug override that cityData declares', async () => {
+  const { CIVITATIS_SLUGS } = await import(
+    pathToFileURL(path.join(__dirname, '..', 'client', 'src', 'constants', 'cities.js')).href
+  );
+  const nameSlug = (name) => name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  for (const c of CITIES.filter((city) => city.civitatisSlug)) {
+    assert.strictEqual(CIVITATIS_SLUGS[nameSlug(c.name)], c.civitatisSlug, `${c.name}: el cliente no usa ${c.civitatisSlug}`);
+  }
+});

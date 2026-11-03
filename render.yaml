@@ -46,3 +46,8 @@ services:
       # in the Render dashboard; leave VITE_UMAMI_SRC unset unless self-hosting.
       - key: VITE_UMAMI_WEBSITE_ID
         sync: false
+      # Civitatis affiliate id (aid). Read at BUILD time by the client (route
+      # view promo) and at runtime by the server (city and 2-hour pages), so one
+      # value covers both. Unset = no affiliate sections anywhere.
+      - key: VITE_CIVITATIS_AID
+        sync: false

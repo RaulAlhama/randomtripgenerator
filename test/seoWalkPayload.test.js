@@ -32,6 +32,22 @@ test('the gastro page carries no walk', () => {
   assert.strictEqual(cityPayload(html).walk, undefined);
 });
 
+test('the activities section uses Civitatis\' own slug where it differs, and is tracked', () => {
+  const { activitiesSectionHtml } = require('../seoPages');
+  const { CITY_BY_SLUG } = require('../cityData');
+  const html = activitiesSectionHtml(CITY_BY_SLUG.girona, 'paseo-2h', { civitatis: 'AID1', gyg: '' });
+  assert.match(html, /civitatis\.com\/es\/gerona\/\?aid=AID1/);
+  assert.match(html, /data-umami-event="activities_clicked"/);
+  assert.match(html, /data-umami-event-placement="paseo-2h"/);
+  assert.match(html, /rel="sponsored noopener"/);
+  assert.match(activitiesSectionHtml(CITY_BY_SLUG.toledo, 'city_page', { civitatis: 'AID1', gyg: '' }), /\/es\/toledo\//);
+});
+
+test('with no affiliate configured there is no activities section', () => {
+  const { activitiesSectionHtml } = require('../seoPages');
+  assert.strictEqual(activitiesSectionHtml(CITY, 'paseo-2h', { civitatis: '', gyg: '' }), '');
+});
+
 test('a stop name cannot close the script tag that carries it', () => {
   const evil = [{ ...STOPS[0], name: 'Bar </script><script>alert(1)</script>' }, STOPS[1]];
   const html = buildVariantHtml(INDEX, CITY, { page_type: 'paseo-2h', content: evil, total_distance_m: 2900, intro: 'x' }, LINKS);

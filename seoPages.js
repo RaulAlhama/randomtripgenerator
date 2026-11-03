@@ -414,6 +414,62 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
 }
 
 // ---------------------------------------------------------------------------
+// Activities affiliate, for the city pages AND the 2-hour pages. It used to
+// live in server.js and only the city landing page used it, while the 2-hour
+// pages — where 57% of search clicks land — had none.
+//
+// Same provider priority as the client (services/affiliates.js): Civitatis →
+// GetYourGuide. One value can serve both layers: the client reads the VITE_
+// name at build time and the server accepts either name at runtime (Render
+// exposes the same env to both). With nothing configured, the section vanishes.
+// ---------------------------------------------------------------------------
+
+const AFFILIATE_IDS = {
+  civitatis: process.env.CIVITATIS_AID || process.env.VITE_CIVITATIS_AID || '',
+  gyg: process.env.GYG_PARTNER_ID || process.env.VITE_GYG_PARTNER_ID || '',
+};
+
+// ids is a parameter so tests can exercise a configured provider.
+function activityAffiliateLink(city, ids = AFFILIATE_IDS) {
+  if (ids.civitatis) {
+    // Checked against civitatis.com for every city: 26 slugs match ours, and
+    // the two that don't (Girona, Palma) redirect to the homepage, so cityData
+    // carries Civitatis' own slug for those.
+    return {
+      provider: 'Civitatis',
+      url: `https://www.civitatis.com/es/${city.civitatisSlug || city.slug}/?aid=${encodeURIComponent(ids.civitatis)}`,
+    };
+  }
+  if (ids.gyg) {
+    // GYG city pages need internal location ids, so deep-link the search
+    // page — any getyourguide.com URL with ?partner_id= attributes the sale.
+    return {
+      provider: 'GetYourGuide',
+      url: `https://www.getyourguide.es/s/?q=${encodeURIComponent(city.name)}&partner_id=${encodeURIComponent(ids.gyg)}`,
+    };
+  }
+  return null;
+}
+
+// The data-umami-event attributes are how a server-rendered link gets tracked:
+// Umami's script records clicks on them without any JS of ours, which matters
+// because this markup is adopted into React as inert HTML.
+function activitiesSectionHtml(city, placement, ids = AFFILIATE_IDS) {
+  const aff = activityAffiliateLink(city, ids);
+  if (!aff) return '';
+  return `
+      <h2>Reserva actividades en ${escapeHtml(city.name)}</h2>
+      <p>
+        ¿Prefieres una visita con guía? Reserva
+        <a href="${escapeHtml(aff.url)}" rel="sponsored noopener" target="_blank"
+          data-umami-event="activities_clicked" data-umami-event-provider="${escapeHtml(aff.provider)}"
+          data-umami-event-placement="${escapeHtml(placement)}" data-umami-event-city="${escapeHtml(city.name)}">tours, entradas y visitas guiadas
+        en ${escapeHtml(city.name)}</a> con ${escapeHtml(aff.provider)} (enlace de afiliado).
+      </p>
+`;
+}
+
+// ---------------------------------------------------------------------------
 // HTML builders — same index.html-injection technique as the /ciudad pages.
 // ---------------------------------------------------------------------------
 
@@ -477,7 +533,7 @@ ${links.siblingCities.map((l) => `        <li><a href="${l.href}">${escapeHtml(l
       <${tag}>
 ${itemsHtml}
       </${tag}>${distanceLine}
-
+${activitiesSectionHtml(city, page.page_type)}
       <h2>Genera tu propia ruta por ${escapeHtml(city.name)} con IA</h2>
       <p>
         Esta página recoge una selección fija. Si quieres un itinerario a tu medida —otro punto
@@ -658,6 +714,8 @@ module.exports = {
   PAGE_TYPE_BY_URL_SLUG,
   RETIRED_URL_SLUGS,
   namesCity,
+  activityAffiliateLink,
+  activitiesSectionHtml,
   sanitizeItems,
   validatePage,
   injectSeoContent,

@@ -43,3 +43,15 @@ export const SEO_CITIES = [
   { slug: 'pamplona', name: 'Pamplona', photo: '1636217424464-e717e1849855', photoBy: 'David Vives' },
   { slug: 'valladolid', name: 'Valladolid', photo: '1595415961896-7809eea97c9e', photoBy: 'Clemente Corona' },
 ];
+
+// Civitatis destination slugs that differ from the one our name produces,
+// keyed by that name-derived slug (what services/affiliates.js computes from
+// the trip's city). Checked against civitatis.com: /es/girona/ and
+// /es/palma-de-mallorca/ redirect to its homepage, which would send an
+// affiliate click nowhere. "palma" covers the reverse-geocoded name. Must agree
+// with civitatisSlug in cityData.js — test/citiesParity.test.js checks it.
+export const CIVITATIS_SLUGS = {
+  girona: 'gerona',
+  'palma-de-mallorca': 'palma-mallorca',
+  palma: 'palma-mallorca',
+};

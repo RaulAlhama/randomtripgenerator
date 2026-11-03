@@ -301,6 +301,8 @@ const CITIES = [
   {
     slug: 'girona',
     name: 'Girona',
+    // Civitatis' destination page is /es/gerona/; /es/girona/ redirects to its homepage.
+    civitatisSlug: 'gerona',
     region: 'Cataluña',
     lat: 41.9875,
     lng: 2.8263, // Catedral
@@ -420,6 +422,8 @@ const CITIES = [
   {
     slug: 'palma-de-mallorca',
     name: 'Palma de Mallorca',
+    // Civitatis: /es/palma-mallorca/. Ours redirects to its homepage.
+    civitatisSlug: 'palma-mallorca',
     region: 'Islas Baleares',
     lat: 39.5696,
     lng: 2.6501, // Plaça de Cort
