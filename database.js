@@ -108,6 +108,20 @@ async function initDatabase() {
       CREATE UNIQUE INDEX IF NOT EXISTS api_spend_day_scope_key ON api_spend(day, scope)
     `);
 
+    // Persistent POI cache (see getOverpassPOIs in server.js): survives deploys,
+    // so areas explored before an Overpass outage can still be explored during
+    // it. A row in use is refetched every month, so one six months old is an
+    // area nobody has asked for since: pruned here, at startup, to keep the
+    // free-tier database small.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS poi_cache (
+        cache_key TEXT PRIMARY KEY,
+        pois JSONB NOT NULL,
+        fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`DELETE FROM poi_cache WHERE fetched_at < NOW() - INTERVAL '180 days'`);
+
     console.log('Database connected and initialized');
   } finally {
     client.release();

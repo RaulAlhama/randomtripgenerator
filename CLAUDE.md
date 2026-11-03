@@ -9,6 +9,7 @@ npm start            # Start Express server (serves React build or public/ fallb
 npm run dev          # Same as start
 npm run client:dev   # Start Vite dev server (port 5173, proxies /api to :3000)
 npm run client:build # Build React app to client/dist/
+npm run poi:warm     # Store the city pages' POIs in poi_cache (fresh rows skipped)
 ```
 
 Development workflow: run `npm start` in one terminal, `npm run client:dev` in another. Access via http://localhost:5173.
@@ -100,9 +101,15 @@ generic hero. `assertIndexPatterns()` guards the mount point at startup.
    GENEROUS (it's the point at which Overpass aborts our query and returns 504 — a low value
    manufactures the failure it looks like it prevents), and an upstream failure must never
    be flattened into an empty POI list. It throws `OverpassUnavailableError`, the handler
-   answers 503, and stale cached POIs (6h TTL, 24h stale window) are served while an
-   instance is down. Returning `[]` on failure is what made the app serve LLM-invented
-   places for Madrid.
+   answers 503, and stale cached POIs are served while an instance is down. Returning `[]`
+   on failure is what made the app serve LLM-invented places for Madrid.
+   POIs are cached twice: in memory (6h, lost on every deploy) and in Postgres
+   (`poi_cache`, fresh for 30 days, served at any age when Overpass fails). The persistent
+   one exists because on 2026-11-03 the main instance answered every query with "at
+   capacity" and the only live one took 9–12s: the app failed for everyone except the
+   areas it had already stored. `npm run poi:warm` fills it for every city page's own
+   CTA request (city coordinates, 2 km walk); bump `POI_CACHE_VERSION` when the query
+   or the POI mapping changes.
 4. Server adds descriptions in tiers: **Wikipedia extract → LLM (Gemini/Nebius, OpenAI-compatible) → varied templates** (or a full LLM route if no Overpass data)
 5. POIs sorted by nearest-neighbor algorithm, trimmed to fit max distance
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
@@ -146,6 +153,7 @@ Shared routes are served as HTML at `/r/:slug` with per-route OG/meta tags injec
 
 ### Database (PostgreSQL via `pg`)
 `trips` table: id (SERIAL PK), user_id (indexed), city, country, theme, transport_mode, origin_lat, origin_lng, places (JSON string), route_distance, route_duration, created_at. Connection via `DATABASE_URL` env var. SSL enabled in production.
+Also `seo_pages`, `shared_trips`, `api_spend` and `poi_cache` (cache_key PK, pois JSONB, fetched_at; rows not refreshed in 180 days are pruned at startup) — all created idempotently in `database.js`.
 
 ### LLM prompt
 Temperature 0.7 for descriptions, 0.85 for full routes. Random "variety seed" phrase from `VARIETY_SEEDS` array + theme-specific descriptions in `THEME_PROMPTS`. Dynamic radius hint based on user-selected max distance. Themes: classic, historical, gastro, cultural, nature, surprise.

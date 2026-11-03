@@ -969,16 +969,21 @@ const OVERPASS_ENDPOINTS = (process.env.OVERPASS_ENDPOINTS ||
 const OVERPASS_QUERY_TIMEOUT_S = 25;
 
 // What WE are willing to wait for one instance. Successful answers were measured
-// between 2.8s and 11.2s on the same query depending on instance load.
-const OVERPASS_ATTEMPT_TIMEOUT_MS = 10000;
+// between 2.8s and 11.2s on the same query depending on instance load. On
+// 2026-11-03 the main instance answered every query with an instant 502 "at
+// capacity, request queue full" and the French one was the only one alive, at
+// 9.5-12.4s for the real walking query: a 10s leash turned a slow answer into
+// "No hemos podido explorar" for everyone. A slow deck beats an error page.
+const OVERPASS_ATTEMPT_TIMEOUT_MS = 18000;
 // If the first instance hasn't answered by this point, start the next one
 // alongside it rather than waiting for the first to fail (see overpassQuery).
 // Tuned just above the hedge target's measured worst case (~1.7s), so a healthy
 // primary is never second-guessed but a sick one is bypassed quickly.
 const OVERPASS_HEDGE_AFTER_MS = 2500;
 // Hard cap on the whole chain, so a bad minute upstream can never turn into a
-// 40-second wait for the user.
-const OVERPASS_TOTAL_BUDGET_MS = 14000;
+// 40-second wait for the user. Must stay well under the client's own timeout
+// (GENERATE_TIMEOUT_MS in TripContext), which also covers images and Google data.
+const OVERPASS_TOTAL_BUDGET_MS = 20000;
 
 class OverpassUnavailableError extends Error {
   constructor(message) {
@@ -1159,13 +1164,65 @@ function reconcileCivicBuildings(pois) {
 //     `name` is the local one, so a Spanish page listed "Iruñeko katedrala" and
 //     "Castell de Santa Bàrbara" for places its readers search as the Catedral
 //     de Pamplona and the Castillo de Santa Bárbara.
+// POIs also persist in Postgres (poi_cache), because the in-memory cache is
+// wiped by every deploy and restart, and that is the cache that matters when
+// Overpass is down: an area someone explored last week can still be explored
+// during an outage. OSM data is ODbL, so storing it is allowed.
+//   fresh:  served without asking Overpass at all. A month is fine for
+//           monuments and parks, and every hit spares a public instance that
+//           is often at capacity.
+//   stale:  any age, but only when Overpass has failed. Old real places beat
+//           an error page and beat invented ones.
+// Bump POI_CACHE_VERSION when the query or the mapping below changes, so rows
+// written by the old code stop being served.
+const POI_CACHE_VERSION = 1;
+const POI_DB_FRESH_DAYS = 30;
+// pg waits forever by default. A database that doesn't answer must cost a
+// cache miss, not hang the request in front of Overpass.
+const POI_DB_TIMEOUT_MS = 3000;
+
+// Never lets a database problem break trip generation: no row is a cache miss.
+async function poiDbGet(key) {
+  try {
+    const { rows } = await Promise.race([
+      query(
+        `SELECT pois, fetched_at > NOW() - make_interval(days => $2) AS fresh
+           FROM poi_cache WHERE cache_key = $1`,
+        [key, POI_DB_FRESH_DAYS]
+      ),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`sin respuesta en ${POI_DB_TIMEOUT_MS}ms`)), POI_DB_TIMEOUT_MS).unref();
+      }),
+    ]);
+    return rows[0] || null;
+  } catch (e) {
+    console.warn('[POI cache] Lectura fallida:', e.message);
+    return null;
+  }
+}
+
+function poiDbPut(key, pois) {
+  return query(
+    `INSERT INTO poi_cache (cache_key, pois, fetched_at) VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (cache_key) DO UPDATE SET pois = EXCLUDED.pois, fetched_at = NOW()`,
+    [key, JSON.stringify(pois)]
+  ).catch((e) => console.warn('[POI cache] Escritura fallida:', e.message));
+}
+
 async function getOverpassPOIs(lat, lng, radiusMeters, { overpass: overpassOpts = {}, withRelations = false, nameLang = null } = {}) {
   // Caché por zona (~111m) y radio redondeado
-  const cacheKey = `pois:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}${withRelations ? ':rel' : ''}${nameLang ? `:${nameLang}` : ''}`;
+  const cacheKey = `pois:v${POI_CACHE_VERSION}:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}${withRelations ? ':rel' : ''}${nameLang ? `:${nameLang}` : ''}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
     console.log('[Cache] Hit for Overpass POIs:', cacheKey);
     return cached;
+  }
+
+  const stored = await poiDbGet(cacheKey);
+  if (stored?.fresh && Array.isArray(stored.pois)) {
+    console.log('[POI cache] Hit en base de datos:', cacheKey);
+    cacheSet(cacheKey, stored.pois, OSM_CACHE_TTL);
+    return stored.pois;
   }
 
   try {
@@ -1260,13 +1317,17 @@ async function getOverpassPOIs(lat, lng, radiusMeters, { overpass: overpassOpts 
 
     console.log(`[Overpass] Found ${unique.length} real POIs within ${radiusMeters}m`);
     cacheSet(cacheKey, unique, OSM_CACHE_TTL);
+    // An empty answer is not stored: it's the shape a half-broken instance
+    // returns, and persisting it would hide the area's places for a month.
+    if (unique.length) poiDbPut(cacheKey, unique);
     return unique;
   } catch (error) {
-    // An upstream failure is not "there is nothing here". Serve slightly stale
-    // real places if we have any; otherwise propagate, so the caller can say
-    // the map is unreachable instead of inventing a route.
+    // An upstream failure is not "there is nothing here". Serve stale real
+    // places if we have any, from memory or from the database; otherwise
+    // propagate, so the caller can say the map is unreachable instead of
+    // inventing a route.
     if (error instanceof OverpassUnavailableError) {
-      const stale = cacheGetStale(cacheKey);
+      const stale = cacheGetStale(cacheKey) || (Array.isArray(stored?.pois) ? stored.pois : null);
       if (stale) {
         console.warn(`[Overpass] Caído — sirviendo ${stale.length} POIs de caché rancio (${cacheKey})`);
         return stale;

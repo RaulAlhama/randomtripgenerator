@@ -29,8 +29,10 @@ const CANDIDATE_COUNT = 10;
 // The server bounds its own upstream work (Overpass failover is capped, then
 // images and Google data resolve), but a stalled network or a proxy that never
 // closes the socket can still leave the deck spinning forever. Cap it here too
-// and say what happened, instead of spinning until the user gives up.
-const GENERATE_TIMEOUT_MS = 25000;
+// and say what happened, instead of spinning until the user gives up. Sized
+// above the server's Overpass budget (20s) plus images and Google data, so a
+// slow-but-alive map answers instead of being cut off here.
+const GENERATE_TIMEOUT_MS = 35000;
 
 // Stable identity for a POI across selection toggles
 function poiKey(p) {

@@ -31,7 +31,8 @@
     "client:build": "cd client && npm run build",
     "build": "cd client && npm install && npm run build",
     "seo:generate": "node scripts/generateSeoPages.js",
-    "seo:status": "node scripts/generateSeoPages.js --status"
+    "seo:status": "node scripts/generateSeoPages.js --status",
+    "poi:warm": "node scripts/warmPoiCache.js"
   },
   "engines": {
     "node": ">=20"
