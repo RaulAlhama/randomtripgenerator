@@ -24,8 +24,8 @@ export default function CityGrid() {
         <span className="city-grid-eyebrow">Ciudades</span>
         <h2 id="city-grid-title">Rutas ya preparadas</h2>
         <p>
-          Un paseo de dos horas, una ruta gastronómica y los senderos de alrededor,
-          con lugares reales. Para cuando no estás donde quieres pasear.
+          Un paseo de dos horas por el centro, con lugares reales. Para cuando
+          no estás donde quieres pasear.
         </p>
       </div>
 

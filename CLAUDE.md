@@ -135,7 +135,6 @@ generic hero. `assertIndexPatterns()` guards the mount point at startup.
 | GET | `/api/resolve-city` | No | Resolve a Google autocomplete `placeId` to lat/lng |
 | POST | `/api/descriptions` | No | Backfill LLM descriptions for a fast deck |
 | GET | `/api/restaurants` | No | Nearby restaurants via Google Places |
-| GET | `/api/hiking-trails` | No | OSM hiking routes near a point |
 | GET | `/api/place-image` | No | Resolve a POI image (Google → Wikipedia), accepts optional `lat`/`lng` for geo-validation |
 | POST | `/api/share` | No | Create a public share link for a route (rate-limited) |
 | GET | `/api/share/:slug` | No | Fetch a shared route |

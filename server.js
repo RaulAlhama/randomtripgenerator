@@ -1142,10 +1142,26 @@ function reconcileCivicBuildings(pois) {
   return dropped.size ? pois.filter(p => !dropped.has(p)) : pois;
 }
 
-// Get real POIs from OpenStreetMap via Overpass API
-async function getOverpassPOIs(lat, lng, radiusMeters) {
+// Get real POIs from OpenStreetMap via Overpass API.
+//
+// Both options exist for the SEO generator, which is a batch job writing pages
+// titled "qué ver en X" — the interactive app calls this with neither.
+//   overpass: transport limits. The defaults are sized for a person waiting on
+//     a card deck; a batch job would rather wait a minute than record a page as
+//     failed because the public instances had a slow hour (all 16 cities of the
+//     2026-11 batch did exactly that).
+//   withRelations: also fetch landmarks mapped as relations. The big ones
+//     usually are — Catedral de Sevilla, Sagrada Família, the Acueducto, Alcázar
+//     and Catedral de Segovia are all multipolygon relations — and the walking
+//     query below only asks for relations that are parks or attractions, so
+//     those pages were published without the very places their title promises.
+//   nameLang: prefer `name:<lang>` over `name`. In bilingual regions OSM's
+//     `name` is the local one, so a Spanish page listed "Iruñeko katedrala" and
+//     "Castell de Santa Bàrbara" for places its readers search as the Catedral
+//     de Pamplona and the Castillo de Santa Bárbara.
+async function getOverpassPOIs(lat, lng, radiusMeters, { overpass: overpassOpts = {}, withRelations = false, nameLang = null } = {}) {
   // Caché por zona (~111m) y radio redondeado
-  const cacheKey = `pois:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}`;
+  const cacheKey = `pois:${lat.toFixed(3)},${lng.toFixed(3)},${Math.round(radiusMeters / 100) * 100}${withRelations ? ':rel' : ''}${nameLang ? `:${nameLang}` : ''}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
     console.log('[Cache] Hit for Overpass POIs:', cacheKey);
@@ -1188,11 +1204,15 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
         way["amenity"~"marketplace|place_of_worship|townhall"](around:${radiusMeters},${lat},${lng});
         way["building"~"church|chapel|castle|cathedral"](around:${radiusMeters},${lat},${lng});
         relation["leisure"~"park|garden"](around:${radiusMeters},${lat},${lng});
-        relation["tourism"~"attraction"](around:${radiusMeters},${lat},${lng});
+        relation["tourism"~"attraction"](around:${radiusMeters},${lat},${lng});${withRelations ? `
+        relation["tourism"~"museum|viewpoint"](around:${radiusMeters},${lat},${lng});
+        relation["historic"](around:${radiusMeters},${lat},${lng});
+        relation["amenity"~"marketplace|place_of_worship|townhall"](around:${radiusMeters},${lat},${lng});
+        relation["building"~"church|chapel|castle|cathedral"](around:${radiusMeters},${lat},${lng});` : ''}
       );out center body;`;
     }
 
-    const data = await overpassQuery(query, { label: 'pois' });
+    const data = await overpassQuery(query, { label: 'pois', ...overpassOpts });
 
     // Belt-and-braces: even though the queries above don't request these,
     // drop any that slip through tag mixing. Food types are owned by the
@@ -1209,7 +1229,11 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
       .map(el => {
         const rawType = el.tags.tourism || el.tags.historic || el.tags.amenity || el.tags.leisure || el.tags.natural || el.tags.man_made || el.tags.building || 'place';
         return {
-          name: el.tags.name,
+          name: (nameLang && el.tags[`name:${nameLang}`]) || el.tags.name,
+          // A Roman theatre is historic=theatre: a ruin you visit, not a stage
+          // that's only worth it on show nights. Without this the skip below
+          // dropped the Teatro Romano de Mérida, the city's best-known sight.
+          historicSite: Boolean(el.tags.historic),
           rawType,
           type: OVERPASS_TYPE_MAP[rawType] || 'monument',
           lat: el.lat || el.center?.lat,
@@ -1221,7 +1245,7 @@ async function getOverpassPOIs(lat, lng, radiusMeters) {
         };
       })
       .filter(p => p.lat && p.lng)
-      .filter(p => !SKIP_TYPES.has(p.rawType));
+      .filter(p => !SKIP_TYPES.has(p.rawType) || (p.rawType === 'theatre' && p.historicSite));
 
     const reconciled = reconcileCivicBuildings(pois);
 
@@ -2493,148 +2517,6 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-// Decimate a polyline to at most `maxPoints` vertices using regular sampling.
-// Cheap alternative to Douglas-Peucker — good enough for visual rendering at
-// the zoom levels this app uses.
-function decimate(points, maxPoints) {
-  if (points.length <= maxPoints) return points;
-  const step = points.length / maxPoints;
-  const out = [];
-  for (let i = 0; i < maxPoints; i++) out.push(points[Math.floor(i * step)]);
-  out.push(points[points.length - 1]);
-  return out;
-}
-
-// Sum of haversine distances along an ordered list of [lat, lng] points.
-function polylineLength(points) {
-  let total = 0;
-  for (let i = 1; i < points.length; i++) {
-    total += haversineMeters(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
-  }
-  return total;
-}
-
-// Stitch a hiking relation's member ways into a single ordered polyline.
-// Overpass returns each member's `geometry` as an array of {lat, lon}; we
-// concatenate them, dropping consecutive duplicates at join points.
-function buildTrailGeometry(relation) {
-  const members = (relation.members || []).filter(m => m.type === 'way' && Array.isArray(m.geometry));
-  if (members.length === 0) return [];
-  const points = [];
-  for (const m of members) {
-    for (const pt of m.geometry) {
-      const last = points[points.length - 1];
-      if (!last || last[0] !== pt.lat || last[1] !== pt.lon) {
-        points.push([pt.lat, pt.lon]);
-      }
-    }
-  }
-  return points;
-}
-
-// Difficulty rank for sac_scale — lower = easier. Used both for filtering and
-// for picking a polyline color in the frontend.
-const SAC_RANK = {
-  hiking: 1,
-  mountain_hiking: 2,
-  demanding_mountain_hiking: 3,
-  alpine_hiking: 4,
-  demanding_alpine_hiking: 5,
-  difficult_alpine_hiking: 6,
-};
-
-// Query Overpass for OSM-tagged hiking routes near a point and return a
-// curated list with stitched polylines, length, difficulty and signposting
-// network. Shared by the /api/hiking-trails endpoint and the SEO page
-// generator (scripts/generateSeoPages.js).
-async function fetchHikingTrails(latNum, lngNum, radiusMeters) {
-  // `out geom;` returns each relation with full member geometry plus tags —
-  // we need both to render the polyline and label it.
-  const query = `[out:json][timeout:30];relation["route"="hiking"](around:${radiusMeters},${latNum},${lngNum});out geom;`;
-  // Heavy query, and its callers are the SEO generator and an endpoint with no
-  // UI client, so it gets a longer leash than the interactive path — including a
-  // bigger byte cap. `out geom;` returns every node of every way of every hiking
-  // relation, and around a mountainous city that is a lot: at a 25km radius
-  // Bilbao blew past the 8MB default on both instances, which failed the page.
-  let data;
-  try {
-    data = await overpassQuery(query, {
-      label: 'hiking',
-      attemptTimeoutMs: 35000,
-      totalBudgetMs: 80000,
-      maxBytes: 48 * 1024 * 1024,
-    });
-  } catch (e) {
-    console.warn('[Hiking] Overpass no disponible:', e.message);
-    return { trails: [], origin: { lat: latNum, lng: lngNum } };
-  }
-
-  const trails = [];
-  for (const rel of data.elements) {
-    if (rel.type !== 'relation' || !rel.tags) continue;
-    const tags = rel.tags;
-    const name = tags['name:es'] || tags.name;
-    if (!name) continue;
-
-    const geometry = buildTrailGeometry(rel);
-    if (geometry.length < 2) continue;
-
-    // Trail length: prefer the tag (authoritative, set by the mapper) but
-    // fall back to summing the stitched polyline when missing.
-    let distance = null;
-    if (tags.distance) {
-      const parsed = parseFloat(String(tags.distance).replace(',', '.'));
-      if (!isNaN(parsed) && parsed > 0) distance = parsed * 1000; // km → meters
-    }
-    if (!distance) distance = polylineLength(geometry);
-
-    // Distance from search origin to the nearest point on the trail —
-    // used as the sort key so the closest trails appear first.
-    let nearest = Infinity;
-    for (const [plat, plng] of geometry) {
-      const d = haversineMeters(latNum, lngNum, plat, plng);
-      if (d < nearest) nearest = d;
-      if (nearest < 200) break; // close enough, stop scanning
-    }
-
-    trails.push({
-      id: rel.id,
-      name,
-      distance: Math.round(distance),
-      sacScale: tags.sac_scale || null,
-      sacRank: SAC_RANK[tags.sac_scale] || null,
-      network: tags.network || null,
-      operator: tags.operator || null,
-      website: tags.website || tags['website:en'] || null,
-      description: tags.description || tags['description:es'] || null,
-      symbol: tags.symbol || null,
-      colour: tags.colour || tags.color || null,
-      roundtrip: tags.roundtrip === 'yes',
-      ref: tags.ref || null,
-      // Decimated for transport; client renders polylines, not pixel art.
-      geometry: decimate(geometry, 200),
-      distanceFromOrigin: Math.round(nearest),
-    });
-  }
-
-  trails.sort((a, b) => a.distanceFromOrigin - b.distanceFromOrigin);
-  const top = trails.slice(0, 20);
-
-  console.log(`[Hiking] Returned ${top.length}/${trails.length} trails within ${radiusMeters}m of ${latNum},${lngNum}`);
-  return {
-    trails: top,
-    origin: { lat: latNum, lng: lngNum },
-    radius: radiusMeters,
-    total: trails.length,
-  };
-}
-
-// GET /api/hiking-trails — validation + caching around fetchHikingTrails.
-// No /api/hiking-trails endpoint: the hiking tab was removed from the UI, and an
-// endpoint with no client was still answering the heaviest Overpass query on the
-// site to anyone who found it. fetchHikingTrails() stays — the SEO generator uses
-// it to build the /ciudad/*/senderos pages.
-
 // Generate trip
 app.get('/api/generate-trip', async (req, res) => {
   try {
@@ -3270,6 +3152,7 @@ const {
   escapeHtml,
   PAGE_TYPES,
   PAGE_TYPE_BY_URL_SLUG,
+  RETIRED_URL_SLUGS,
   buildVariantHtml,
   injectSeoContent,
   assertIndexPatterns,
@@ -3435,7 +3318,17 @@ app.get('/ciudad/:slug', async (req, res, next) => {
   }
 });
 
-// Pre-generated variant pages (e.g. /ciudad/toledo/senderos), served from the
+// Retired variant URLs (see RETIRED_URL_SLUGS). Permanent redirect rather than a
+// 404: Google still holds them in its index and a visitor arriving from a result
+// should land on a page, not an error. Registered before the variant route so the
+// retired slug never reaches it.
+app.get('/ciudad/:slug/:variant', (req, res, next) => {
+  const target = RETIRED_URL_SLUGS[req.params.variant];
+  if (!target || !CITY_BY_SLUG[req.params.slug]) return next();
+  res.redirect(301, `/ciudad/${req.params.slug}/${target}`);
+});
+
+// Pre-generated variant pages (e.g. /ciudad/toledo/en-2-horas-a-pie), served from the
 // seo_pages table. Unknown variant slugs fall through to the SPA; a known
 // variant without a published row returns an explicit 404 (never a soft-404)
 // so Google doesn't index half-empty pages.
@@ -3661,7 +3554,6 @@ if (require.main === module) {
 module.exports = {
   getOverpassPOIs,
   getOverpassFoodPOIs,
-  fetchHikingTrails,
   selectPOIsForTheme,
   sortByProximity,
   estimateRouteDistance,

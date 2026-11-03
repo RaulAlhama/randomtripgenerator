@@ -52,40 +52,20 @@ const PAGE_TYPES = {
     linkLabel: (city) => `Ruta gastronómica por ${city.name}`,
     siblingHeading: 'Rutas gastronómicas en otras ciudades',
   },
-  senderos: {
-    urlSlug: 'senderos',
-    ordered: false,
-    h1: (city) => `Senderos cerca de ${city.name}`,
-    // Not "señalizadas": OSM route=hiking relations are usually signposted but
-    // nothing guarantees it, and the claim was coming from this template rather
-    // than from any data we hold.
-    title: (city) => `Senderos cerca de ${city.name}: rutas de senderismo — RandomTrip`,
-    metaDescription: (city, items) => {
-      const top = items.slice(0, 2).map((i) => i.name).join(' y ');
-      // Only promise difficulty when OSM actually tagged it. sac_scale is rare,
-      // and buildItemHtml omits it when missing, so this meta description used
-      // to advertise a field that appeared in the body of none of the pages.
-      const hasDifficulty = items.some((i) => i.sacScale && SAC_LABELS[i.sacScale]);
-      const fields = hasDifficulty ? 'distancia, dificultad y descripción' : 'distancia y descripción';
-      return `${items.length} rutas de senderismo cerca de ${city.name}, como ${top}. Con ${fields} de cada sendero.`;
-    },
-    listHeading: (city) => `Rutas de senderismo cerca de ${city.name}`,
-    linkLabel: (city) => `Senderos cerca de ${city.name}`,
-    siblingHeading: 'Senderos en otras ciudades',
-  },
 };
 
 const PAGE_TYPE_BY_URL_SLUG = Object.fromEntries(
   Object.entries(PAGE_TYPES).map(([key, def]) => [def.urlSlug, key])
 );
 
-const SAC_LABELS = {
-  hiking: 'fácil',
-  mountain_hiking: 'media',
-  demanding_mountain_hiking: 'exigente',
-  alpine_hiking: 'alpina',
-  demanding_alpine_hiking: 'alpina exigente',
-  difficult_alpine_hiking: 'alpina difícil',
+// Variant URLs that existed and no longer do, mapped to where they now send the
+// reader (301). /ciudad/*/senderos outlived the app's hiking feature: the tab
+// went in 2026-06, but the twelve pages stayed published until 2026-11,
+// promising trails to a visitor whose "Genera tu propia ruta" button opened an
+// app with none. They earned 4 clicks in 16 months. The 2-hour walk page is the
+// closest thing the city still has, and every city that had trails has one.
+const RETIRED_URL_SLUGS = {
+  senderos: 'en-2-horas-a-pie',
 };
 
 function formatKm(meters) {
@@ -129,14 +109,36 @@ function normalizeText(str) {
 // These are not verifiable from a name and a city, so the fix is to forbid the
 // CLASS of claim rather than try to fact-check it.
 //
-// Applied only to model-written text. OSM `description` tags are written by
-// human mappers and may legitimately date a building or name a hamlet, so
-// items carrying descSource === 'osm' are exempt.
+// Every description these gates see is model-written. The trail pages were the
+// only ones carrying human-written OSM text, and they are gone.
 
 // Strips accents but keeps capitalisation, because capitalisation is the signal
 // this gate runs on.
 function deaccentKeepCase(str) {
   return String(str || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Whether `text` names `cityName` as a place. Whole-word and case-sensitive on
+// purpose: several cities we publish are also Spanish words, or the inside of
+// one — "la cuenca del Ebro", "una ronda de vinos", "las palmeras", "Napoleón" —
+// and the lowercase substring match this replaced would have read each of those
+// as a description wandering off to Cuenca, Ronda, Palma or León. A city named
+// as a place is capitalised; that is what this keys on.
+function namesCity(text, cityName) {
+  const name = deaccentKeepCase(cityName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z])${name}(?![A-Za-z])`).test(deaccentKeepCase(text));
+}
+
+// Another published city that a description names when the item's own name
+// doesn't ("Puerta de Toledo" in Madrid may say Toledo). A description naming
+// somewhere else is describing somewhere else. Returns the city or null.
+function strayCity(description, itemName, cityName) {
+  const nameNorm = normalizeText(itemName);
+  return Object.values(CITY_BY_SLUG).find((c) =>
+    normalizeText(c.name) !== normalizeText(cityName) &&
+    namesCity(description, c.name) &&
+    !nameNorm.includes(normalizeText(c.name))
+  ) || null;
 }
 
 // Asserting WHERE something is, and naming the place. The proper noun is the
@@ -226,19 +228,6 @@ function textDefect(text, itemName = '') {
   return null;
 }
 
-// Contradicts data we already hold from OSM. "Vuelta a Ulia (6,5 km - lineal):
-// Un trazado circular" shipped with roundtrip=false and the prose saying the
-// opposite, on the same line.
-function contradictsTrailData(item) {
-  const d = normalizeText(item.description);
-  if (typeof item.roundtrip !== 'boolean') return null;
-  const saysCircular = /\b(circular|en circuito)\b/.test(d) && !/\bno es circular\b/.test(d);
-  const saysLinear = /\b(lineal|de ida y vuelta|no circular)\b/.test(d);
-  if (saysCircular && !item.roundtrip) return 'contradiction_circular';
-  if (saysLinear && item.roundtrip) return 'contradiction_linear';
-  return null;
-}
-
 // Metres between two coordinates. Two stops on the same building are the same
 // stop under two names — the Toledo page listed "Sinagoga del Transito" and
 // "Museo Sefardi" as stops 6 and 7 of 8, which are one place.
@@ -303,31 +292,16 @@ function namesLookLikeSamePlace(a, b) {
 // Returns { items, dropped: [{ name, reason }] }.
 function sanitizeItems(pageType, items, cityName) {
   const dropped = [];
-  const otherCities = Object.values(CITY_BY_SLUG)
-    .filter((c) => normalizeText(c.name) !== normalizeText(cityName))
-    .map((c) => normalizeText(c.name));
 
   let kept = [];
   for (const item of items) {
     const desc = String(item.description || '').trim();
-    // OSM `description` tags are written by human mappers: a mapper naming a
-    // hamlet or dating a chapel is a fact, not a guess.
-    const modelWritten = item.descSource !== 'osm';
 
     let reason = null;
-    if (modelWritten) {
-      if (ENGLISH_LEAK_RE.test(desc)) reason = 'not_spanish';
-      if (!reason) reason = textDefect(desc, item.name);
-      if (!reason) reason = unverifiableClaim(desc, item.name);
-      if (!reason) {
-        const nameNorm = normalizeText(item.name);
-        const descNorm = normalizeText(desc);
-        const stray = otherCities.find((c) => descNorm.includes(c) && !nameNorm.includes(c));
-        if (stray) reason = 'claim_other_city';
-      }
-    }
-    // Checked whoever wrote it: this one contradicts our own data.
-    if (!reason && pageType === 'senderos') reason = contradictsTrailData(item);
+    if (ENGLISH_LEAK_RE.test(desc)) reason = 'not_spanish';
+    if (!reason) reason = textDefect(desc, item.name);
+    if (!reason) reason = unverifiableClaim(desc, item.name);
+    if (!reason && strayCity(desc, item.name, cityName)) reason = 'claim_other_city';
 
     if (reason) dropped.push({ name: item.name, reason });
     else kept.push(item);
@@ -358,22 +332,9 @@ function sanitizeItems(pageType, items, cityName) {
 // llmOk: whether getDescriptionsFromLLM returned a real array (vs null);
 // existingIntros: intros already stored for OTHER pages (duplicate check).
 function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros = [] }) {
-  const isTrailPage = pageType === 'senderos';
-
   if (!llmOk) return { ok: false, reason: 'llm_failed' };
 
-  if (isTrailPage) {
-    const longEnough = (items || []).filter((t) => t.name && t.distanceM > 1000);
-    if (longEnough.length < 3) return { ok: false, reason: `trails_insufficient:${(items || []).length}` };
-  } else {
-    if (!items || items.length < 5) return { ok: false, reason: `overpass_insufficient:${(items || []).length}` };
-  }
-
-  // Other cities we publish pages for. A description naming one of them, when
-  // the item's own name doesn't, is describing somewhere else.
-  const otherCities = Object.values(CITY_BY_SLUG)
-    .filter((c) => normalizeText(c.name) !== normalizeText(cityName))
-    .map((c) => normalizeText(c.name));
+  if (!items || items.length < 5) return { ok: false, reason: `overpass_insufficient:${(items || []).length}` };
 
   const seenStarts = new Set();
   for (const item of items) {
@@ -389,19 +350,10 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
     // Backstop only. sanitizeItems should already have dropped these, so
     // reaching here means the generator skipped it — fail loudly rather than
     // publish. Same helpers, so the two can't drift apart.
-    if (item.descSource !== 'osm') {
-      if (ENGLISH_LEAK_RE.test(desc)) return { ok: false, reason: `not_spanish:${item.name}` };
-      const claim = unverifiableClaim(desc, item.name);
-      if (claim) return { ok: false, reason: `${claim}:${item.name}` };
-      const nameNorm = normalizeText(item.name);
-      const descNorm = normalizeText(desc);
-      const stray = otherCities.find((c) => descNorm.includes(c) && !nameNorm.includes(c));
-      if (stray) return { ok: false, reason: `claim_other_city:${item.name}` };
-    }
-    if (isTrailPage) {
-      const contradiction = contradictsTrailData(item);
-      if (contradiction) return { ok: false, reason: `${contradiction}:${item.name}` };
-    }
+    if (ENGLISH_LEAK_RE.test(desc)) return { ok: false, reason: `not_spanish:${item.name}` };
+    const claim = unverifiableClaim(desc, item.name);
+    if (claim) return { ok: false, reason: `${claim}:${item.name}` };
+    if (strayCity(desc, item.name, cityName)) return { ok: false, reason: `claim_other_city:${item.name}` };
   }
 
   for (let i = 0; i < items.length; i++) {
@@ -465,13 +417,7 @@ function estimateWalkTime(distanceM, stopCount) {
   return `unas ${Math.floor(rounded)} horas y media`;
 }
 
-function buildItemHtml(pageType, item) {
-  if (pageType === 'senderos') {
-    const meta = [formatKm(item.distanceM)];
-    if (item.sacScale && SAC_LABELS[item.sacScale]) meta.push(`dificultad ${SAC_LABELS[item.sacScale]}`);
-    meta.push(item.roundtrip ? 'circular' : 'lineal');
-    return `        <li><strong>${escapeHtml(item.name)}</strong> (${meta.join(' · ')}): ${escapeHtml(item.description)}</li>`;
-  }
+function buildItemHtml(item) {
   return `        <li><strong>${escapeHtml(item.name)}:</strong> ${escapeHtml(item.description)}</li>`;
 }
 
@@ -480,7 +426,7 @@ function buildVariantSeoBlock(city, page, links) {
   const def = PAGE_TYPES[page.page_type];
   const items = page.content;
   const tag = def.ordered ? 'ol' : 'ul';
-  const itemsHtml = items.map((item) => buildItemHtml(page.page_type, item)).join('\n');
+  const itemsHtml = items.map(buildItemHtml).join('\n');
 
   // The walk page's title, URL and intro all promise two hours, and the
   // generator now fits the route to that budget, so it states two hours rather
@@ -490,10 +436,9 @@ function buildVariantSeoBlock(city, page, links) {
   const duration = page.page_type === 'paseo-2h'
     ? 'unas 2 horas'
     : estimateWalkTime(page.total_distance_m, items.length);
-  const distanceLine =
-    page.page_type !== 'senderos' && page.total_distance_m
-      ? `\n      <p>Recorrido estimado: ${formatKm(page.total_distance_m)} a pie, ${duration} con paradas incluidas.</p>`
-      : '';
+  const distanceLine = page.total_distance_m
+    ? `\n      <p>Recorrido estimado: ${formatKm(page.total_distance_m)} a pie, ${duration} con paradas incluidas.</p>`
+    : '';
 
   const cityLinks = [
     `        <li><a href="/ciudad/${city.slug}">Qué visitar en ${escapeHtml(city.name)}</a></li>`,
@@ -680,6 +625,8 @@ module.exports = {
   escapeHtml,
   PAGE_TYPES,
   PAGE_TYPE_BY_URL_SLUG,
+  RETIRED_URL_SLUGS,
+  namesCity,
   sanitizeItems,
   validatePage,
   injectSeoContent,

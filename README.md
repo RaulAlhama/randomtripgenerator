@@ -131,7 +131,6 @@ Producción local: `npm run client:build && npm start` → http://localhost:3000
 | GET | `/api/search-city` | — | Autocompletado de ciudades |
 | GET | `/api/resolve-city` | — | Resuelve un `placeId` a coordenadas |
 | GET | `/api/restaurants` | — | Restaurantes cercanos mejor valorados |
-| GET | `/api/hiking-trails` | — | Rutas de senderismo de OSM cercanas |
 | GET | `/api/place-image` | — | Resuelve la imagen de un lugar (Google → Wikipedia) |
 | POST | `/api/share` | — | Crea un enlace público para una ruta |
 | GET | `/api/share/:slug` | — | Recupera una ruta compartida |

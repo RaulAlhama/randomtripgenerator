@@ -24,11 +24,9 @@ const {
 const {
   getOverpassPOIs,
   getOverpassFoodPOIs,
-  fetchHikingTrails,
   sortByProximity,
   estimateRouteDistance,
   getDescriptionsFromLLM,
-  fetchAllPOIImages,
   parseLLMJsonSafe,
   llmCandidates,
   callLLMOnce,
@@ -65,10 +63,6 @@ const INTRO_BRIEFS = {
     `una ruta a pie de unas 2 horas por el centro de ${city.name} (${city.region})`,
   gastro: (city) =>
     `una ruta gastronómica a pie por ${city.name} (${city.region}): mercados, bares y locales con historia`,
-  // Not "señalizadas": that claim was ours, not the data's. OSM route=hiking
-  // relations are usually signposted but nothing here proves it.
-  senderos: (city) =>
-    `las rutas de senderismo que rodean ${city.name} (${city.region})`,
 };
 
 async function getSeoIntroFromLLM(pageType, city, itemNames) {
@@ -88,7 +82,6 @@ Debe mencionar ${city.name} y citar de forma natural 2 o 3 de estos lugares real
 Tono informativo y cercano, sin exclamaciones ni clichés de folleto turístico ("joya escondida", "rincón mágico", etc.).
 NO inventes datos que no puedas verificar: ni siglos, ni años, ni estilos arquitectónicos, ni barrios o calles concretas, ni distancias, ni otras ciudades o monumentos que no estén en la lista.
 NO digas por dónde empieza, por dónde termina ni en qué orden se recorren: esa lista no va en orden y cualquier afirmación sobre el recorrido sería falsa.
-NO afirmes que los senderos están señalizados, ni describas el terreno o el paisaje: no tienes ese dato.
 Devuelve un JSON: {"intro": "..."}`;
 
   // Same fallback chain the descriptions use: a page rejected as `llm_failed`
@@ -132,13 +125,22 @@ Devuelve un JSON: {"intro": "..."}`;
 // "qué ver en X", so they must feature the landmarks, not whatever bust or
 // neighborhood theater a random shuffle surfaces (downtown Madrid has 600+
 // POIs and the app's randomized selectPOIsForTheme buried Plaza Mayor under
-// minor memorials). A Wikipedia article is the strongest free notability
-// signal OSM carries; major building types break the ties.
+// minor memorials).
+//
+// The signal is how many Wikipedia editions have an article about the place
+// (fetchSitelinkCounts). It used to be whether ONE existed, which is true of the
+// Museu de la Moto and the Sagrada Família alike: in a centre with a hundred
+// tagged POIs that tie decided the page, and the 2026-08 pages shipped Barcelona
+// without the Sagrada Família, Sevilla without its cathedral or Alcázar, and
+// Toledo without either of its own. The language count separates those by an
+// order of magnitude. Type only breaks ties among places nobody wrote about.
+//
 // MAX_PER_TYPE exists because pure scoring produced monotonous pages: Toledo's
 // walk came out as six churches and a chapel out of eight stops. Ranking alone
 // can't fix that — a city with forty churches will always have churches at the
 // top — so the pick is capped per type and topped up afterwards if the cap left
-// it short.
+// it short. With the language count the cap keeps the RIGHT three: the
+// cathedral first, not whichever church Overpass happened to list first.
 const MAX_PER_TYPE = 3;
 
 function pickNotable(pois, count, maxPerType = MAX_PER_TYPE) {
@@ -147,16 +149,25 @@ function pickNotable(pois, count, maxPerType = MAX_PER_TYPE) {
     viewpoint: 2, plaza: 2, park: 2, monument: 1, garden: 1,
   };
   const scored = [...pois]
-    .map((p) => ({ p, s: (p.wikipedia ? 4 : p.wikidata ? 1 : 0) + (TYPE_SCORE[p.type] || 1) }))
-    .sort((a, b) => b.s - a.s);
+    .map((p) => ({
+      p,
+      langs: p.sitelinks || 0,
+      s: (p.wikipedia ? 4 : p.wikidata ? 1 : 0) + (TYPE_SCORE[p.type] || 1),
+    }))
+    .sort((a, b) => b.langs - a.langs || b.s - a.s);
 
   const perType = new Map();
   const picked = [];
+  // One Wikidata item, one stop. OSM often maps a monument twice (the building
+  // and the museum inside it) and both carry the same id.
+  const seenQids = new Set();
   for (const { p } of scored) {
     if (picked.length >= count) break;
+    if (p.qid && seenQids.has(p.qid)) continue;
     const t = p.type || 'other';
     if ((perType.get(t) || 0) >= maxPerType) continue;
     perType.set(t, (perType.get(t) || 0) + 1);
+    if (p.qid) seenQids.add(p.qid);
     picked.push(p);
   }
   // Small towns may not have enough variety to fill the pool under the cap. Top
@@ -167,11 +178,51 @@ function pickNotable(pois, count, maxPerType = MAX_PER_TYPE) {
   if (picked.length < Math.min(count, MIN_POOL)) {
     for (const { p } of scored) {
       if (picked.length >= Math.min(count, MIN_POOL)) break;
+      if (p.qid && seenQids.has(p.qid)) continue;
       if (!picked.includes(p)) picked.push(p);
     }
   }
   return picked;
 }
+
+// Wikipedia editions linked from each Wikidata item, keyed by Q-id. Keys like
+// "eswiki" are Wikipedias; "commonswiki", "metawiki" and friends are not, and
+// "eswikivoyage" / "eswikisource" don't end in "wiki" so they fall out by shape.
+const NON_WIKIPEDIA_SITES = new Set([
+  'commonswiki', 'specieswiki', 'metawiki', 'mediawikiwiki', 'wikidatawiki',
+  'sourceswiki', 'outreachwiki', 'wikimaniawiki', 'foundationwiki', 'incubatorwiki',
+]);
+
+// One request per 50 ids. A failure degrades to the old type-based order with a
+// warning, never to a failed page: the ranking gets worse, the run goes on.
+async function fetchSitelinkCounts(qids) {
+  const counts = new Map();
+  const ids = [...new Set(qids.filter(Boolean))];
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=sitelinks&ids=${batch.join('|')}`;
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'RandomTripGenerator/1.0 (https://randomtripgenerator.com)' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      for (const [id, entity] of Object.entries(body.entities || {})) {
+        const wikipedias = Object.keys(entity.sitelinks || {})
+          .filter((site) => /wiki$/.test(site) && !NON_WIKIPEDIA_SITES.has(site));
+        counts.set(id, wikipedias.length);
+      }
+    } catch (e) {
+      console.warn(`[Wikidata] Sin recuento de idiomas para ${batch.length} lugares (${e.message}); se ordenan por tipo.`);
+    }
+  }
+  return counts;
+}
+
+// OSM's wikidata tag is usually one id, occasionally "Q1;Q2". The first is the
+// place itself.
+const firstQid = (tag) => (String(tag || '').match(/Q\d+/) || [null])[0];
 
 // A page needs 5 stops to publish, and the quality gates drop the ones whose
 // description guessed something. Describing a wider pool costs tokens on one
@@ -179,9 +230,58 @@ function pickNotable(pois, count, maxPerType = MAX_PER_TYPE) {
 // taking the whole page below the minimum.
 const POOL_SIZE = 12;
 
+// Same leash the food query already had. Nobody is waiting on a batch job, and a
+// page recorded as failed only because Overpass was slow is a wasted run.
+const PATIENT_OVERPASS = { attemptTimeoutMs: 30000, totalBudgetMs: 70000 };
+
+const WALK_RADIUS_M = 1200;
+
+function metersFrom(city, p) {
+  const R = 6371000;
+  const rad = (x) => (x * Math.PI) / 180;
+  const h = Math.sin(rad(p.lat - city.lat) / 2) ** 2 +
+    Math.cos(rad(city.lat)) * Math.cos(rad(p.lat)) * Math.sin(rad(p.lng - city.lng) / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Records that are a whole area, not a stop: the UNESCO inscription "Ciudad
+// vieja de Ávila e iglesias extramuros" (historic=town) and the "Conjunto
+// Arqueológico de Mérida" both ranked high — they have plenty of Wikipedias —
+// and a walk can't stop at either.
+const AREA_TYPES = new Set(['town', 'city', 'village', 'district', 'city_district', 'quarter', 'neighbourhood', 'suburb']);
+const AREA_NAME_RE = /^(conjunto|ciudad vieja|casco (antiguo|hist[oó]rico|viejo)|centro hist[oó]rico)\b/i;
+
+// Statues and memorials whose wikidata tag names the PERSON, not the statue:
+// "Woody Allen" in Oviedo, "Miguel Ángel Blanco" in Burgos and "Pedro Romero"
+// in Ronda each inherited dozens of Wikipedias from who they depict and
+// outranked the cathedral. Their language count says nothing about the statue.
+const DEPICTION_TYPES = new Set(['artwork', 'memorial', 'statue', 'bust', 'plaque', 'sculpture']);
+
+function isWalkStop(city) {
+  return (p) =>
+    // `around` matches a relation if ANY member is in range, but `out center`
+    // reports the centre of its whole extent. The Via Augusta and the Tren de
+    // Sóller passed the query that way and put Girona's and Palma's "2 hours"
+    // at 15 and 19 km.
+    metersFrom(city, p) <= WALK_RADIUS_M * 1.2 &&
+    !AREA_TYPES.has(p.rawType) &&
+    !AREA_NAME_RE.test(p.name);
+}
+
 async function buildWalkContent(city) {
-  const pois = await getOverpassPOIs(city.lat, city.lng, 1200);
+  const found = await getOverpassPOIs(city.lat, city.lng, WALK_RADIUS_M, {
+    overpass: PATIENT_OVERPASS,
+    withRelations: true,
+    nameLang: 'es',
+  });
   await sleep(SLEEP_BETWEEN_CALLS);
+
+  const withQid = found.filter(isWalkStop(city)).map((p) => ({ ...p, qid: firstQid(p.wikidata) }));
+  const langs = await fetchSitelinkCounts(withQid.map((p) => p.qid));
+  const pois = withQid.map((p) => ({
+    ...p,
+    sitelinks: (p.qid && !DEPICTION_TYPES.has(p.rawType) && langs.get(p.qid)) || 0,
+  }));
 
   // notabilityRank is carried through so fitWalkBudget can keep the LANDMARKS
   // when it trims. Without it the trim kept whatever was nearest the centroid,
@@ -197,19 +297,19 @@ async function buildWalkContent(city) {
   // cautious: even with notability ranking some stops are lesser-known —
   // better a sober description than an invented fact set in stone.
   const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'monuments', { cautious: true });
-  await sleep(SLEEP_BETWEEN_CALLS);
-  const withImages = await fetchAllPOIImages(selected, city.name);
 
-  const items = withImages.map((p, i) => ({
+  // No images. This used to call fetchAllPOIImages for every stop and store the
+  // result, but no page renders it — buildItemHtml prints name and description,
+  // the JSON-LD carries neither — so every run paid Google Places for photos
+  // nobody saw.
+  const items = selected.map((p, i) => ({
     name: p.name,
     type: p.type,
     lat: p.lat,
     lng: p.lng,
     description: (descriptions && descriptions[i]) || '',
-    imageUrl: p.imageUrl || null,
     wikipedia: p.wikipedia || null,
-    // fetchAllPOIImages rebuilds the objects, so carry this over explicitly.
-    notabilityRank: selected[i]?.notabilityRank ?? i,
+    notabilityRank: p.notabilityRank ?? i,
   }));
   return {
     items,
@@ -222,13 +322,16 @@ async function buildWalkContent(city) {
 // AFTER the gates, so the surviving stops are the ones that get fitted.
 function fitWalkBudget(items, city, maxStops = 8, budgetM = 6000) {
   // Choose WHICH stops by notability, then order them by proximity so the walk
-  // still flows, then drop from the far end until it fits the time budget.
+  // still flows, then drop the least notable until it fits the time budget —
+  // not the last one in walking order, which is as likely to be the Alcázar as
+  // a minor chapel.
   const byNotability = [...items].sort(
     (a, b) => (a.notabilityRank ?? 99) - (b.notabilityRank ?? 99)
   ).slice(0, maxStops);
   let kept = sortByProximity(byNotability, city.lat, city.lng);
   while (kept.length > 5 && estimateRouteDistance(kept, city.lat, city.lng) * 1.4 > budgetM) {
-    kept = kept.slice(0, -1);
+    const leastNotable = kept.reduce((a, b) => ((b.notabilityRank ?? 99) > (a.notabilityRank ?? 99) ? b : a));
+    kept = sortByProximity(kept.filter((p) => p !== leastNotable), city.lat, city.lng);
   }
   return {
     // notabilityRank is a working field, not page content.
@@ -253,7 +356,6 @@ async function buildGastroContent(city) {
     lat: p.lat,
     lng: p.lng,
     description: (descriptions && descriptions[i]) || '',
-    imageUrl: null,
     wikipedia: p.wikipedia || null,
   }));
   return {
@@ -263,60 +365,9 @@ async function buildGastroContent(city) {
   };
 }
 
-async function buildTrailsContent(city) {
-  const payload = await fetchHikingTrails(city.lat, city.lng, 25000);
-  await sleep(SLEEP_BETWEEN_CALLS);
-
-  // Day-hike material first: a "senderos cerca de X" reader wants local
-  // routes, not the 1.000 km national caminos that happen to pass nearby.
-  // Long-distance routes only fill in when there aren't enough local ones.
-  const usable = (payload.trails || []).filter((t) => t.name && t.distance > 1000);
-  const local = usable.filter((t) => t.distance <= 60000);
-  const longDistance = usable.filter((t) => t.distance > 60000);
-  const trails = [...local, ...longDistance].slice(0, 6);
-  if (!trails.length) return { items: [], llmOk: true, totalDistanceM: null };
-
-  // OSM description tag wins when substantial; LLM fills the gaps.
-  const needLLM = trails.filter((t) => !(t.description && t.description.trim().length >= 60));
-  let llmDescs = null;
-  if (needLLM.length) {
-    llmDescs = await getDescriptionsFromLLM(
-      needLLM.map((t) => ({ name: t.name, type: 'sendero' })),
-      city.name,
-      'España',
-      'nature',
-      { cautious: true }
-    );
-  }
-
-  let llmIdx = 0;
-  const items = trails.map((t) => {
-    const osmDesc = t.description && t.description.trim().length >= 60 ? t.description.trim() : null;
-    const description = osmDesc || (llmDescs && llmDescs[llmIdx++]) || '';
-    return {
-      name: t.name,
-      distanceM: t.distance,
-      sacScale: t.sacScale || null,
-      network: t.network || null,
-      ref: t.ref || null,
-      roundtrip: Boolean(t.roundtrip),
-      description,
-      // Who wrote it. The unverifiable-claim gates in validatePage only police
-      // the model: a human mapper naming a hamlet or dating a chapel is fine.
-      descSource: osmDesc ? 'osm' : 'llm',
-    };
-  });
-  return {
-    items,
-    llmOk: needLLM.length === 0 || Array.isArray(llmDescs),
-    totalDistanceM: null,
-  };
-}
-
 const CONTENT_BUILDERS = {
   'paseo-2h': buildWalkContent,
   gastro: buildGastroContent,
-  senderos: buildTrailsContent,
 };
 
 // ---------------------------------------------------------------------------

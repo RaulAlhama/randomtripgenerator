@@ -95,24 +95,24 @@ test('drops two words fused together, but not a venue named that way', () => {
   );
 });
 
-test('drops a trail whose prose contradicts the OSM roundtrip flag', () => {
-  const trails = [
-    { name: 'Vuelta a Ulía', distanceM: 6500, roundtrip: false, description: 'Un trazado circular alrededor del pico que permite contemplar la bahía desde lo alto.' },
-    { name: 'Senda del Río', distanceM: 4000, roundtrip: true, description: 'Un recorrido lineal junto al cauce, cómodo y bien sombreado durante casi todo el trayecto.' },
-  ];
-  const reasons = sanitizeItems('senderos', trails, 'San Sebastián').dropped.map((d) => d.reason);
-  assert.deepStrictEqual(reasons, ['contradiction_circular', 'contradiction_linear']);
+// Several cities we publish are also Spanish words. The gate used to match the
+// lowercase name anywhere in the text, which read all of these as a description
+// wandering off to another city.
+test('keeps common words that happen to spell a city we publish', () => {
+  const reasons = dropped([
+    item({ name: 'Mirador del Ebro', description: 'Balcón sobre la cuenca del Ebro, con bancos a la sombra para mirar el río con calma.' }),
+    item({ name: 'Bar La Esquina', description: 'Barra estrecha donde pedir una ronda de vinos de la tierra y algo de picar de pie.' }),
+    item({ name: 'Paseo Marítimo', description: 'Paseo llano entre palmeras, con el mar a un lado y terrazas abiertas al otro.' }),
+    item({ name: 'Museo del Ejército', description: 'Colección militar con uniformes y estandartes de las guerras napoleónicas y de Napoleón.' }),
+  ], 'Madrid');
+  assert.deepStrictEqual(reasons, []);
 });
 
-test('trusts OSM-authored text: a mapper dating a chapel is a fact, not a guess', () => {
-  const trails = [{
-    name: 'Ruta de las Ermitas',
-    distanceM: 8000,
-    roundtrip: true,
-    descSource: 'osm',
-    description: 'Sendero circular que pasa por la ermita del siglo XVI, en el barrio de Santa Cruz, con fuerte desnivel.',
-  }];
-  assert.deepStrictEqual(sanitizeItems('senderos', trails, 'Toledo').dropped, []);
+test('still drops a description naming one of those cities as a place', () => {
+  const reasons = dropped([
+    item({ name: 'Puente Viejo', description: 'Puente de piedra que lleva el camino antiguo hacia Cuenca, entre huertas y molinos.' }),
+  ], 'Madrid');
+  assert.deepStrictEqual(reasons, ['claim_other_city']);
 });
 
 test('collapses two names for one building, keeping the one OSM considers notable', () => {
@@ -133,12 +133,12 @@ test('does not collapse distinct places that merely share the city name', () => 
   assert.deepStrictEqual(sanitizeItems('paseo-2h', items, 'Málaga').dropped, []);
 });
 
-test('does not collapse numbered stages of the same long route', () => {
-  const trails = [
-    { name: 'Camino de los Montes - Etapa 1', distanceM: 12000, roundtrip: false, description: 'Primera etapa entre robledales, con desnivel suave y buenas vistas del valle al fondo.' },
-    { name: 'Camino de los Montes - Etapa 2', distanceM: 14000, roundtrip: false, description: 'Segunda etapa por crestas rocosas, algo más exigente y con tramos expuestos al sol.' },
-  ];
-  assert.deepStrictEqual(sanitizeItems('senderos', trails, 'Toledo').dropped, []);
+test('does not collapse numbered places that share every other word', () => {
+  const items = spread([
+    item({ name: 'Torre 1 de la Muralla Califal', description: 'Primera torre del lienzo conservado, con un tramo de adarve abierto a la visita.' }),
+    item({ name: 'Torre 2 de la Muralla Califal', description: 'Segunda torre del mismo lienzo, más baja y con la mejor vista sobre el foso.' }),
+  ]);
+  assert.deepStrictEqual(sanitizeItems('paseo-2h', items, 'Toledo').dropped, []);
 });
 
 test('validatePage refuses a page left short after the gates ran', () => {
