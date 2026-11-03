@@ -109,8 +109,13 @@ export default function WalkPreviewMap({ stops, cityName, onOpen }) {
           </MapContainer>
         )}
       </div>
+      {/* Under the map, not floating on it: in a corner it covered whichever
+          stop happened to fall there (Palma's 7, San Sebastián's on a phone). */}
       <button type="button" className="city-walk-map-open" onClick={onOpen}>
         Abrir la ruta en el mapa
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
       </button>
       <figcaption className="sr-only">
         Mapa del recorrido por {cityName}: {stops.map((s, i) => `${i + 1}. ${s.name}`).join(', ')}.

@@ -2180,31 +2180,37 @@ main {
 /* Leaflet sets its own pointer; the whole frame is one tap target. */
 .city-walk-map-frame .leaflet-container { cursor: pointer; }
 
+/* The map's footer: a bar under the frame, the same width and square cut,
+   rather than a chip floating on the map, where it covered stops. */
 .city-walk-map-open {
-  position: absolute;
-  /* Top corner: the bottom one holds the OpenStreetMap credit, and on a phone
-     the floating bottom nav passes over it while scrolling. */
-  right: 10px;
-  top: 10px;
-  z-index: 500; /* above Leaflet's panes (400) */
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0;
   background: var(--bg-card);
-  color: var(--text);
-  font-size: 0.82rem;
+  color: var(--brand-pine);
+  font-size: 0.88rem;
   font-weight: 650;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  transition: background 180ms var(--ease);
 }
-.city-walk-map-open:hover { color: var(--brand-pine); }
-[data-theme="dark"] .city-walk-map-open:hover { color: var(--map-route); }
+.city-walk-map-open svg { transition: transform 200ms var(--ease); }
+.city-walk-map-open:hover { background: var(--bg-subtle); }
+.city-walk-map-open:hover svg { transform: translateX(3px); }
+[data-theme="dark"] .city-walk-map-open { color: var(--map-route); }
 .city-walk-map-open:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .city-walk-map-open svg { transition: none; }
+}
 
 @media (min-width: 760px) {
   .city-walk-map { margin-top: 1.5rem; }
   .city-walk-map-frame { height: 360px; }
-  .city-walk-map-open { right: 12px; top: 12px; }
 }
 
 .sr-only {
