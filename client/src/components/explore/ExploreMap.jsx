@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { typeIcons } from '../../constants/poi';
+import { spreadPins } from '../../lib/spreadPins';
 
 const USER_ICON = L.divIcon({
   className: 'xp-user-marker',
@@ -17,15 +18,63 @@ const REST_ICON = L.divIcon({
   iconAnchor: [13, 13],
 });
 
-function spotIcon(place, { selected, number }) {
+// `offset` moves the drawn pin, in pixels, without moving the marker: see
+// spreadPins. Shifting the anchor the other way is how Leaflet draws an icon
+// somewhere other than its point.
+function spotIcon(place, { selected, number, offset }) {
   const emoji = typeIcons[place.type] || typeIcons.default;
   const isNum = number != null;
   const inner = isNum ? String(number) : emoji;
+  const dx = offset?.dx || 0;
+  const dy = offset?.dy || 0;
   return L.divIcon({
     className: 'xp-spot-marker',
     html: `<div class="xp-pin${selected ? ' is-on' : ''}${isNum ? ' is-num' : ''}">${inner}</div>`,
     iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    iconAnchor: [17 - dx, 17 - dy],
+  });
+}
+
+// Pixel offsets that keep the numbered route pins from covering each other at
+// the current zoom; recomputed whenever the zoom or the stops change. Empty
+// outside the route stage, where the pins aren't numbered.
+function usePinSpread(places, enabled) {
+  const map = useMap();
+  const [offsets, setOffsets] = useState([]);
+  useEffect(() => {
+    if (!enabled || !places?.length) { setOffsets([]); return undefined; }
+    const update = () => {
+      const z = map.getZoom();
+      setOffsets(spreadPins(places.map((p) => map.project([p.lat, p.lng], z)), 30));
+    };
+    update();
+    map.on('zoomend', update);
+    return () => { map.off('zoomend', update); };
+  }, [map, places, enabled]);
+  return offsets;
+}
+
+function SpotMarkers({ places, isRoute, selectedKeys, poiKey, onSpotTap }) {
+  const offsets = usePinSpread(places, isRoute);
+  return places.map((place, index) => {
+    const key = poiKey(place);
+    const selected = isRoute || selectedKeys.has(key);
+    const icon = spotIcon(place, {
+      selected,
+      number: isRoute ? index + 1 : null,
+      offset: isRoute ? offsets[index] : null,
+    });
+    return (
+      <Marker
+        key={`spot-${key}`}
+        position={[place.lat, place.lng]}
+        icon={icon}
+        // Where two pins still touch, the later stop draws on top, so the
+        // stacking follows the walk's order instead of the stops' latitude.
+        zIndexOffset={selected ? 300 + (isRoute ? index : 0) : 100}
+        eventHandlers={{ click: () => onSpotTap?.(place) }}
+      />
+    );
   });
 }
 
@@ -64,9 +113,14 @@ export default function ExploreMap({
 
   return (
     <div className="xp-map">
+      {/* zoomSnap 0.25: with whole zoom levels only, fitBounds had to choose
+          between a route that doesn't fit and one that fills half the visible
+          map (Toledo's walk used a third of it). Tiles come from the nearest
+          whole level, drawn at between ~0.7x and ~1.2x their size. */}
       <MapContainer
         center={[origin.lat, origin.lng]}
         zoom={15}
+        zoomSnap={0.25}
         zoomControl={false}
         style={{ width: '100%', height: '100%' }}
       >
@@ -85,23 +139,13 @@ export default function ExploreMap({
           <Popup><b>Estás aquí</b></Popup>
         </Marker>
 
-        {places.map((place, index) => {
-          const key = poiKey(place);
-          const selected = isRoute || selectedKeys.has(key);
-          const icon = spotIcon(place, {
-            selected,
-            number: isRoute ? index + 1 : null,
-          });
-          return (
-            <Marker
-              key={`spot-${key}`}
-              position={[place.lat, place.lng]}
-              icon={icon}
-              zIndexOffset={selected ? 300 : 100}
-              eventHandlers={{ click: () => onSpotTap?.(place) }}
-            />
-          );
-        })}
+        <SpotMarkers
+          places={places}
+          isRoute={isRoute}
+          selectedKeys={selectedKeys}
+          poiKey={poiKey}
+          onSpotTap={onSpotTap}
+        />
 
         {(restaurants || []).map((r) => (
           r.lat != null && r.lng != null && (
