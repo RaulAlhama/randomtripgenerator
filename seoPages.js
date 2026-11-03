@@ -541,8 +541,20 @@ function buildVariantHtml(indexHtml, city, page, links) {
       `  <script type="application/ld+json">\n${JSON.stringify(itemList)}\n  </script>\n</head>`
   );
 
-  html = injectSeoContent(html, buildVariantSeoBlock(city, page, links), city);
+  html = injectSeoContent(html, buildVariantSeoBlock(city, page, links), city, walkPayload(page));
   return html;
+}
+
+// The 2-hour page is a finished route, so it carries its stops for the "Hacer
+// esta ruta ahora" button. 83% of visitors read the page and never touched the
+// app: the only button offered to generate a DIFFERENT route from scratch. Only
+// the fields the route view and walk mode read, in the page's walking order.
+function walkPayload(page) {
+  if (page.page_type !== 'paseo-2h' || !Array.isArray(page.content)) return null;
+  const stops = page.content
+    .filter((s) => s && s.name && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+    .map(({ name, type, lat, lng, description }) => ({ name, type: type || 'monument', lat, lng, description: description || '' }));
+  return stops.length >= 2 ? { stops, distanceM: page.total_distance_m || null } : null;
 }
 
 // The builders above rely on regex replacement against the built index.html.
@@ -557,13 +569,16 @@ function buildVariantHtml(indexHtml, city, page, links) {
 // throws away whatever is in #root. Crawlers that execute JS — Google does —
 // therefore indexed the rendered homepage on every /ciudad/* URL, so 48 pages
 // with 300-500 unique words each looked like 48 copies of the home.
-function injectSeoContent(html, block, city) {
+// `walk`, when given, is the page's own route: the stops a visitor just read, so
+// the app can open exactly that walk instead of generating a different one.
+function injectSeoContent(html, block, city, walk = null) {
   const payload = JSON.stringify({
     slug: city.slug,
     name: city.name,
     lat: city.lat,
     lng: city.lng,
     country: 'España',
+    ...(walk ? { walk } : {}),
   }).replace(/</g, '\\u003c'); // can't break out of the script tag
   return html
     // Drop the homepage block: this page has its own, and two elements with the

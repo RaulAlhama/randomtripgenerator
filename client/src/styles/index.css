@@ -2407,6 +2407,23 @@ a.footer-link-btn { text-decoration: none; }
   .city-cta, .city-cta svg { transition: none; }
 }
 
+/* The secondary action under "Hacer esta ruta ahora": a text link in shape, so
+   there is one button on the screen and it is the route the page describes. */
+.city-cta-alt {
+  border: 0;
+  background: none;
+  padding: 0.25rem 0;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--brand-pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+[data-theme="dark"] .city-cta-alt { color: var(--map-route); }
+.city-cta-alt:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 3px; }
+
 /* ========== CIUDADES (portada) ==========
    Sustituye al carrusel de inspiración y a la fila de cápsulas de ciudad: eran la
    misma oferta dos veces, y las cápsulas son la forma que este proyecto está

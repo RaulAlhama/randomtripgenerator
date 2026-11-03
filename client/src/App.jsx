@@ -40,6 +40,16 @@ function cityFromPage() {
   return c;
 }
 
+// The 2-hour walk pages also carry their own stops (see walkPayload in
+// seoPages.js), so the visitor can take the route they just read. Anything
+// malformed means no button, never a broken route.
+function walkFromCity(c) {
+  const stops = c?.walk?.stops;
+  if (!Array.isArray(stops)) return null;
+  const valid = stops.filter((s) => s && typeof s.name === 'string' && Number.isFinite(s.lat) && Number.isFinite(s.lng));
+  return valid.length >= 2 ? { stops: valid, distanceM: Number.isFinite(c.walk.distanceM) ? c.walk.distanceM : null } : null;
+}
+
 // /privacidad and /terminos: real URLs that render the legal document as a page.
 function legalFromPage() {
   const l = window.__LEGAL__;
@@ -85,6 +95,24 @@ function AppShell() {
     setExplore({ view: 'sitios', location: null, radiusKm: null, preloaded: true });
   };
 
+  // "Hacer esta ruta ahora" on a 2-hour page: the page's own stops, opened the
+  // same way a saved route is — straight onto the route view, where "Empezar el
+  // paseo" is one tap away. Not into walk mode directly: many of these visitors
+  // are planning from home, and a map serves them better than "you're 70 km away".
+  // Origin is the city centre, which is where the generator ordered the stops from.
+  const [pageWalk] = useState(() => walkFromCity(cityFromPage()));
+  const openPageWalk = () => {
+    track('page_walk_opened', { city: city.name, stops: pageWalk.stops.length });
+    openSavedRouteInOverlay({
+      city: city.name,
+      country: city.country || 'España',
+      places: pageWalk.stops,
+      origin_lat: city.lat,
+      origin_lng: city.lng,
+      transport: 'walking',
+    });
+  };
+
   return (
     <div className="container has-bottom-nav">
       <Header />
@@ -93,7 +121,7 @@ function AppShell() {
           <LegalPage which={legal} />
         ) : city ? (
           <>
-            <CityLanding city={city} onExplore={openExplore} />
+            <CityLanding city={city} onExplore={openExplore} walk={pageWalk} onWalk={openPageWalk} />
             <TrustBand />
           </>
         ) : (
