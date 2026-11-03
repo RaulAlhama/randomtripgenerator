@@ -125,6 +125,32 @@ test('collapses two names for one building, keeping the one OSM considers notabl
   assert.strictEqual(out.items[0].name, 'Sinagoga del Tránsito');
 });
 
+test('collapses one museum mapped twice when the names share their only distinctive word and sit next door', () => {
+  // The real Valladolid pair: 102 m apart.
+  const items = [
+    { name: 'Museo de Escultura Colegio de San Gregorio', description: CLEAN[0], lat: 41.65790, lng: -4.72440 },
+    { name: 'Museo Nacional de Escultura', description: CLEAN[1], lat: 41.65880, lng: -4.72420 },
+  ];
+  assert.strictEqual(sanitizeItems('paseo-2h', items, 'Valladolid').items.length, 1);
+});
+
+test('keeps neighbours that share one word but each have another of their own', () => {
+  // Salamanca's two cathedrals are joined wall to wall and are two visits.
+  const items = [
+    { name: 'Catedral Vieja', description: CLEAN[0], lat: 40.96060, lng: -5.66630 },
+    { name: 'Catedral Nueva', description: CLEAN[1], lat: 40.96090, lng: -5.66570 },
+  ];
+  assert.deepStrictEqual(sanitizeItems('paseo-2h', items, 'Salamanca').dropped, []);
+});
+
+test('does not collapse one-word matches that are far apart', () => {
+  const items = [
+    { name: 'Museo de Escultura', description: CLEAN[0], lat: 41.6579, lng: -4.7244 },
+    { name: 'Jardín de la Escultura Contemporánea', description: CLEAN[1], lat: 41.6650, lng: -4.7300 },
+  ];
+  assert.deepStrictEqual(sanitizeItems('paseo-2h', items, 'Valladolid').dropped, []);
+});
+
 test('does not collapse distinct places that merely share the city name', () => {
   const items = spread([
     item({ name: 'Museo de Málaga' }),

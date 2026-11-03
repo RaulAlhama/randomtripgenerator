@@ -285,6 +285,29 @@ function namesLookLikeSamePlace(a, b) {
   return shorter.every((w) => longer.includes(w));
 }
 
+// The rule above needs two shared distinctive words, and some places only have
+// one: "Museo Nacional de Escultura" and "Museo de Escultura Colegio de San
+// Gregorio" are one museum under two OSM records, 102 m apart, and Valladolid's
+// page listed them as consecutive stops. One shared word is weak evidence on its
+// own, so it also takes being next door. Two names of two words each ("Catedral
+// Vieja", "Catedral Nueva") never reach this rule.
+const ONE_WORD_TWIN_METERS = 120;
+
+function oneWordTwins(a, b) {
+  const coreA = nameCore(a.name);
+  const coreB = nameCore(b.name);
+  const [shorter, longer] = coreA.length <= coreB.length ? [coreA, coreB] : [coreB, coreA];
+  return shorter.length === 1 && longer.includes(shorter[0]) &&
+    typeof a.lat === 'number' && typeof b.lat === 'number' &&
+    metersBetween(a, b) < ONE_WORD_TWIN_METERS;
+}
+
+function samePlace(a, b) {
+  return (typeof a.lat === 'number' && typeof b.lat === 'number' && metersBetween(a, b) < SAME_PLACE_METERS) ||
+    namesLookLikeSamePlace(a.name, b.name) ||
+    oneWordTwins(a, b);
+}
+
 // Drops the items a page should not publish, instead of failing the whole page.
 // Rejecting a page because one of eight descriptions guessed a neighbourhood
 // throws away seven good ones and, at the measured rates (24% of descriptions
@@ -311,11 +334,7 @@ function sanitizeItems(pageType, items, cityName) {
   // more notable (a wikipedia tag), otherwise the first.
   const deduped = [];
   for (const item of kept) {
-    const twin = deduped.find((other) =>
-      (typeof item.lat === 'number' && typeof other.lat === 'number' &&
-        metersBetween(item, other) < SAME_PLACE_METERS) ||
-      namesLookLikeSamePlace(item.name, other.name)
-    );
+    const twin = deduped.find((other) => samePlace(item, other));
     if (!twin) { deduped.push(item); continue; }
     if (item.wikipedia && !twin.wikipedia) {
       deduped[deduped.indexOf(twin)] = item;
@@ -360,10 +379,7 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
     for (let j = i + 1; j < items.length; j++) {
       const a = items[i];
       const b = items[j];
-      const sameSpot =
-        typeof a.lat === 'number' && typeof b.lat === 'number' &&
-        metersBetween(a, b) < SAME_PLACE_METERS;
-      if (sameSpot || namesLookLikeSamePlace(a.name, b.name)) {
+      if (samePlace(a, b)) {
         return { ok: false, reason: `duplicate_place:${a.name}|${b.name}` };
       }
     }

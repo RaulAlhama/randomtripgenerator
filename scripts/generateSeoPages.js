@@ -486,14 +486,37 @@ async function main() {
         // twice) BEFORE asking for the intro, so the intro never names a stop
         // that isn't on the page. The builders over-fetch precisely so there's
         // room to lose a few here.
-        const sanitized = sanitizeItems(pageType, built.items, city.name);
-        items = sanitized.items;
+        let sanitized = sanitizeItems(pageType, built.items, city.name);
         if (sanitized.dropped.length) {
           console.log(
             `[gates] descartados ${sanitized.dropped.length}/${built.items.length}: ` +
               sanitized.dropped.map((d) => `${d.name} (${d.reason})`).join(', ')
           );
         }
+
+        // One second chance for stops dropped for what their description SAID
+        // (a style, a century, a barrio), never for being a duplicate. The
+        // prompt already forbids those claims; the model breaks the rule most on
+        // the famous places, because it knows them. The Catedral de Palma was
+        // dropped for calling itself Gothic. Dropping that sentence is right;
+        // publishing "qué ver en Palma" without its cathedral because of it is
+        // not. Same prompt, same gates on the new text: nothing is waved through.
+        const redo = sanitized.dropped.filter((d) => !d.reason.startsWith('duplicate_place'));
+        if (redo.length && built.llmOk) {
+          const again = built.items.filter((it) => redo.some((d) => d.name === it.name));
+          await sleep(SLEEP_BETWEEN_CALLS);
+          const fresh = await getDescriptionsFromLLM(
+            again, city.name, 'España', pageType === 'gastro' ? 'food' : 'monuments', { cautious: true }
+          );
+          if (Array.isArray(fresh)) {
+            const redescribed = again.map((it, i) => ({ ...it, description: fresh[i] || '' }));
+            const second = sanitizeItems(pageType, [...sanitized.items, ...redescribed], city.name);
+            const rescued = second.items.filter((it) => redescribed.includes(it)).map((it) => it.name);
+            if (rescued.length) console.log(`[gates] recuperados con otra descripción: ${rescued.join(', ')}`);
+            sanitized = second;
+          }
+        }
+        items = sanitized.items;
 
         // Only now, with the surviving stops known, fit the walk to its 2h claim.
         if (pageType === 'paseo-2h') {
