@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { TripProvider } from './context/TripContext';
@@ -68,6 +68,13 @@ function AppShell() {
   });
   // Which bottom-nav section is showing.
   const [tab, setTab] = useState('explorar');
+  // A tab opens at its top. The page kept the previous tab's scroll: tapping
+  // Perfil from halfway down the homepage showed the footer, with the profile
+  // itself scrolled out of view above.
+  const selectTab = (next) => {
+    setTab(next);
+    window.scrollTo(0, 0);
+  };
   const exploreOpen = explore !== null;
   // Read once: the page identity doesn't change without a navigation.
   const [city] = useState(cityFromPage);
@@ -86,6 +93,24 @@ function AppShell() {
     if (explore?.sharedSlug) window.history.replaceState(null, '', '/');
     setExplore(null);
   };
+
+  // "Buscar una ciudad", offered when we can't locate the user: the homepage's
+  // planner, opened and scrolled into view. A request Hero consumes and clears,
+  // not a standing flag or counter: those would reopen the planner every time
+  // Hero remounts, i.e. on every return to the Explorar tab. Only the homepage
+  // has a planner, so from a city or legal page it's a navigation to
+  // /#planificar, which Hero reads on mount.
+  const [plannerRequested, setPlannerRequested] = useState(false);
+  const searchCity = () => {
+    if (city || legal) {
+      window.location.assign('/#planificar');
+      return;
+    }
+    closeExplore();
+    setTab('explorar');
+    setPlannerRequested(true);
+  };
+  const plannerRequestHandled = useCallback(() => setPlannerRequested(false), []);
 
   // Reopen a route from the "Rutas" tab: load it into trip state first, then show
   // the overlay with `preloaded` so it renders that route instead of generating
@@ -131,7 +156,11 @@ function AppShell() {
                 Esa página no existe. Te dejamos en la portada.
               </p>
             )}
-            <Hero onExplore={openExplore} />
+            <Hero
+              onExplore={openExplore}
+              plannerRequested={plannerRequested}
+              onPlannerRequestHandled={plannerRequestHandled}
+            />
             <TrustBand />
             <CityGrid />
           </>
@@ -163,7 +192,7 @@ function AppShell() {
       </main>
       <Footer />
 
-      <BottomNav active={tab} onChange={setTab} savedCount={saved.length} />
+      <BottomNav active={tab} onChange={selectTab} savedCount={saved.length} />
 
       {exploreOpen && (
         <ErrorBoundary>
@@ -174,6 +203,7 @@ function AppShell() {
             sharedSlug={explore.sharedSlug || null}
             preloaded={explore.preloaded || false}
             onClose={closeExplore}
+            onSearchCity={searchCity}
           />
         </ErrorBoundary>
       )}

@@ -1,5 +1,7 @@
 import { useSaved } from '../../context/SavedContext';
 import { typeIcons, typeLabels } from '../../constants/poi';
+import { formatDecimal } from '../../lib/format';
+import { cssUrl } from '../../lib/cssUrl';
 
 function HeartIcon() {
   return (
@@ -18,7 +20,7 @@ function SavedCard({ item, onRemove }) {
     <article className="saved-card">
       <div
         className="saved-card-photo"
-        style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
+        style={item.imageUrl ? { backgroundImage: cssUrl(item.imageUrl) } : undefined}
       >
         {!item.imageUrl && <span className="saved-card-photo-icon" aria-hidden="true">{icon}</span>}
         <span className="saved-card-chip">{chip}</span>
@@ -36,7 +38,7 @@ function SavedCard({ item, onRemove }) {
         <div className="saved-card-meta">
           {item.city && <span>{item.city}</span>}
           {typeof item.rating === 'number' && item.rating > 0 && (
-            <span className="saved-card-rating">★ {item.rating.toFixed(1)}</span>
+            <span className="saved-card-rating">★ {formatDecimal(item.rating)}</span>
           )}
         </div>
         {item.address && <p className="saved-card-sub">{item.address}</p>}

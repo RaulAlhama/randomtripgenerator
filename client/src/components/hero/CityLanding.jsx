@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SEO_CITIES } from '../../constants/cities';
 import WalkPreviewMap from './WalkPreviewMap';
+import { formatKm } from '../../lib/format';
 
 // What a visitor arriving from Google at /ciudad/madrid should get: that city,
 // not the generic homepage asking for GPS permission.
@@ -71,7 +72,7 @@ export default function CityLanding({ city, onExplore, walk = null, onWalk }) {
         <div className="city-landing-cta">
           <p className="city-landing-kicker">
             {walk.stops.length} paradas
-            {walk.distanceM ? ` · ${(walk.distanceM / 1000).toFixed(1).replace('.', ',')} km` : ''}
+            {walk.distanceM ? ` · ${formatKm(walk.distanceM)}` : ''}
             {/* "con visitas": the route view right after shows walking time alone
                 (Toledo: 50 min), and two bare figures read as a contradiction. */}
             {' · '}unas 2 horas con visitas

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-l
 import L from 'leaflet';
 import { spotIcon, usePinSpread, ROUTE_LINE } from './routePins';
 import { OSM_TILE_PROPS } from './osmTiles';
+import { SHEET_HALF_OFFSET } from './ExploreSheet';
 
 const USER_ICON = L.divIcon({
   className: 'xp-user-marker',
@@ -42,6 +43,23 @@ function SpotMarkers({ places, isRoute, selectedKeys, poiKey, onSpotTap }) {
   });
 }
 
+// How much of the screen the route sheet covers when it opens at 'half', read
+// from the sheet itself. It used to be a guess (42% of the window) while the
+// sheet actually covers ~45%, so on a 390x844 phone stops 1 and 2 opened
+// hidden under it. offsetTop/offsetHeight ignore the sheet's transform, so this
+// is right even while it's still sliding into place.
+function sheetCoverPx() {
+  const sheet = document.querySelector('.xp-sheet');
+  if (!sheet) return Math.round(window.innerHeight * 0.5);
+  const parentTop = sheet.offsetParent?.getBoundingClientRect().top || 0;
+  const halfTop = parentTop + sheet.offsetTop + sheet.offsetHeight * SHEET_HALF_OFFSET;
+  return Math.max(0, Math.round(window.innerHeight - halfTop));
+}
+
+// Half a numbered pin (34px, anchored at its centre) plus a little air, so a
+// stop at the edge of the bounds shows whole instead of cut by the sheet.
+const PIN_CLEARANCE = 26;
+
 // Keeps the visible (non-sheet-covered) area framed around the POIs.
 function FitController({ origin, places, stage }) {
   const map = useMap();
@@ -52,7 +70,7 @@ function FitController({ origin, places, stage }) {
     const docked = window.innerWidth >= 900;
     map.fitBounds(bounds, {
       paddingTopLeft: docked ? [460, 80] : [36, 110],
-      paddingBottomRight: docked ? [36, 36] : [36, Math.round(window.innerHeight * 0.42)],
+      paddingBottomRight: docked ? [36, 36] : [36, sheetCoverPx() + PIN_CLEARANCE],
     });
   }, [map, origin?.lat, origin?.lng, places, stage]);
   return null;

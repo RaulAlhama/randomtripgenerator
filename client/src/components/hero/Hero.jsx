@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import CityPlanner from './CityPlanner';
 
 // Real travel photography is the hero. Photos: Unsplash CDN (credited in footer).
@@ -58,10 +58,34 @@ function HeroDeck() {
   );
 }
 
-export default function Hero({ onExplore }) {
+export default function Hero({ onExplore, plannerRequested = false, onPlannerRequestHandled }) {
   // The planner is the power tool, not the front door: keep it folded so the
-  // landing presents a single action instead of a wall of controls.
-  const [plannerOpen, setPlannerOpen] = useState(false);
+  // landing presents a single action instead of a wall of controls. Unless
+  // someone was sent here for it (see searchCity in App.jsx).
+  const [plannerOpen, setPlannerOpen] = useState(() => window.location.hash === '#planificar');
+  const toggleRef = useRef(null);
+  // Bumped on each request, so a planner that's already open still scrolls up.
+  const [revealTick, setRevealTick] = useState(0);
+
+  useEffect(() => {
+    if (!plannerRequested) return;
+    setPlannerOpen(true);
+    setRevealTick((t) => t + 1);
+    onPlannerRequestHandled?.();
+  }, [plannerRequested, onPlannerRequestHandled]);
+
+  // Whenever it opens, bring it to the top of the screen with the cursor in the
+  // search. It opens near the bottom of the first screen, so the suggestions
+  // used to unfold below the fold, behind the bottom bar (and, on a phone,
+  // behind the keyboard).
+  useEffect(() => {
+    if (!plannerOpen) return;
+    if (window.location.hash === '#planificar') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    toggleRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    document.querySelector('#hero-planner input')?.focus({ preventScroll: true });
+  }, [plannerOpen, revealTick]);
 
   return (
     <section className="hero">
@@ -114,6 +138,7 @@ export default function Hero({ onExplore }) {
               planning from the sofa can't use either, so this needs to be
               findable rather than tucked away as a footnote. */}
           <button
+            ref={toggleRef}
             type="button"
             className="planner-toggle"
             aria-expanded={plannerOpen}

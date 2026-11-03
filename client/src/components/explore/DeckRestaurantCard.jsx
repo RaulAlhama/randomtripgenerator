@@ -1,5 +1,7 @@
 import SaveHeart from './SaveHeart';
 import { track } from '../../services/analytics';
+import { formatDecimal } from '../../lib/format';
+import { cssUrl } from '../../lib/cssUrl';
 
 // One full-screen restaurant card in the swipe deck. The first card in the
 // deck is flagged `featured` — this is the slot that can later become paid
@@ -12,7 +14,7 @@ export default function DeckRestaurantCard({ restaurant: r, featured, city = '' 
     <article className={`xp-rcard${featured ? ' is-featured' : ''}`}>
       <div
         className="xp-rcard-photo"
-        style={r.photoUrl ? { backgroundImage: `url(${r.photoUrl})` } : undefined}
+        style={r.photoUrl ? { backgroundImage: cssUrl(r.photoUrl) } : undefined}
       >
         {!r.photoUrl && <span className="xp-rcard-photo-icon" aria-hidden="true">🍽️</span>}
         <div className="xp-dcard-scrim" />
@@ -38,7 +40,7 @@ export default function DeckRestaurantCard({ restaurant: r, featured, city = '' 
       <div className="xp-rcard-body">
         <h3 className="xp-rcard-name">{r.name}</h3>
         <div className="xp-rcard-meta">
-          <span className="xp-rcard-stars">★ {r.rating?.toFixed(1)}</span>
+          <span className="xp-rcard-stars">★ {r.rating != null && formatDecimal(r.rating)}</span>
           <span className="xp-rcard-count">({r.userRatingsTotal} reseñas)</span>
           {priceLabel && <span className="xp-rcard-price">{priceLabel}</span>}
         </div>

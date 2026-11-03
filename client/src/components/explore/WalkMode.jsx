@@ -219,7 +219,11 @@ export default function WalkMode({ places, city, origin, routeDistance = null, o
   else if (!signal) status = 'Buscando tu posición…';
   else if (signal.reason === 'accuracy') status = `Señal imprecisa (±${Math.round(signal.accuracy)} m) · marca la parada a mano`;
   else if (signal.reason === 'near') status = 'Ya casi · confirmando que has llegado';
-  else status = `A ${distanceLabel} · unos ${walkingMinutes(signal.distance)} min andando`;
+  else {
+    // "unos 1 min" read wrong; one minute is just one minute.
+    const mins = walkingMinutes(signal.distance);
+    status = `A ${distanceLabel} · ${mins === 1 ? '1 min' : `unos ${mins} min`} andando`;
+  }
 
   return (
     <div className="xp-walk" role="dialog" aria-modal="true" aria-label="Paseo en curso">

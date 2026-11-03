@@ -2055,19 +2055,45 @@ function trimExtract(extract) {
   return out;
 }
 
+// The tag names whichever language the mapper linked, and the UI is Spanish:
+// of the 604 wiki-tagged POIs stored on 2026-11-03, 141 pointed at another
+// Wikipedia (84 Catalan, 26 Galician, 12 English, 11 Basque…), so Barcelona's
+// deck read in Catalan and Toledo's had stops in English. Follow the article's
+// Spanish interlanguage link; with none, return null and let the caller fall
+// through to a Spanish source (LLM or template) rather than show another
+// language.
+async function spanishWikipediaTitle(lang, title) {
+  if (String(lang).toLowerCase() === 'es') return title;
+  if (!WIKI_LANG_RE.test(String(lang || ''))) return null;
+  const url = `https://${String(lang).toLowerCase()}.wikipedia.org/w/api.php?action=query&prop=langlinks&lllang=es&redirects=1&format=json&formatversion=2&titles=${encodeURIComponent(title)}`;
+  try {
+    if (!new URL(url).hostname.endsWith('.wikipedia.org')) return null;
+    const data = await fetchExternal(url);
+    const pages = data?.query?.pages || [];
+    for (const page of pages) {
+      const es = page?.langlinks?.find((l) => l.lang === 'es');
+      if (es?.title) return es.title;
+    }
+  } catch (_) { /* no Spanish article we can reach: same as none */ }
+  return null;
+}
+
 // Real, verified description straight from Wikipedia — for POIs that OSM tagged
 // with a wikipedia article. Reuses the same REST summary endpoint that sources
 // images (the extract ships in the same response), so it costs no API budget and
-// no LLM. Returns null when there's no wiki tag or the fetch fails.
+// no LLM. Returns null when there's no wiki tag, no Spanish article, or the
+// fetch fails.
 async function descriptionFromWikipedia(place) {
   if (!place || !place.wikipedia) return null;
   const parts = String(place.wikipedia).split(':');
   const lang = parts.length > 1 ? parts[0] : 'es';
-  const title = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+  const tagged = parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+  if (!tagged) return null;
+  const title = await spanishWikipediaTitle(lang, tagged);
   if (!title) return null;
   // Validated builder: the tag is client-supplied via POST /api/descriptions, and
   // the language segment used to land in the URL's host position (SSRF).
-  const url = wikipediaSummaryUrl(lang, title);
+  const url = wikipediaSummaryUrl('es', title);
   if (!url) return null;
   try {
     const data = await fetchExternal(url);

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { loadTrips, saveTrip, deleteTrip as apiDeleteTrip } from '../../services/trips';
 import { track } from '../../services/analytics';
+import { formatKm as kmLabel } from '../../lib/format';
 
 function formatWhen(ts) {
   if (!ts) return '';
@@ -19,7 +20,7 @@ function formatWhen(ts) {
 
 function formatKm(m) {
   if (m == null) return null;
-  return `${(m / 1000).toFixed(1)} km`;
+  return kmLabel(m);
 }
 
 function formatMin(s) {

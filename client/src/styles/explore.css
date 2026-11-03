@@ -1227,10 +1227,14 @@
   border-radius: 10px;
   transition: background 140ms var(--ease);
 }
-.xp-stop.is-tappable:hover,
 .xp-stop.is-tappable:focus-visible {
   background: var(--bg-subtle);
   outline: none;
+}
+/* Solo con ratón: en un móvil el :hover se queda pegado a la fila que tocaste
+   (o a la que quedó bajo el dedo al pulsar "Crear ruta"), y parece marcada. */
+@media (hover: hover) {
+  .xp-stop.is-tappable:hover { background: var(--bg-subtle); }
 }
 .xp-stop-go {
   flex: none;
@@ -1355,6 +1359,8 @@
    for the one control that serves visitors who aren't where they want to walk.
    Bordered and in the brand colour it's findable without competing. */
 .planner-toggle {
+  /* Hero scrolls it to the top when the planner opens; leave it some air. */
+  scroll-margin-top: 16px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1552,6 +1558,21 @@
   flex-direction: column;
   gap: 10px;
   margin-top: 8px;
+}
+
+/* Pantallas anchas: una columna del ancho del mazo. A pantalla completa en un
+   portátil la foto salía de 1250 px recortada a una franja y los botones iban
+   de lado a lado. */
+@media (min-width: 700px) {
+  .xp-walk-top,
+  .xp-walk-live,
+  .xp-walk-card,
+  .xp-walk-foot,
+  .xp-walk-done {
+    width: 100%;
+    max-width: 480px;
+    margin-inline: auto;
+  }
 }
 
 /* Pantallas cortas: el pie y la acción principal manda, el aviso se recorta. */

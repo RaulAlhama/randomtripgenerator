@@ -1,3 +1,5 @@
+import { formatKm } from './format.js';
+
 // Walk mode's decisions, kept out of React so they can be tested on their own.
 // Nothing in here touches the DOM, the network or the clock.
 //
@@ -87,7 +89,7 @@ export function formatMeters(meters) {
   if (!(meters >= 0)) return null;
   return meters < 1000
     ? `${Math.round(meters / 5) * 5} m`
-    : `${(meters / 1000).toFixed(1)} km`;
+    : formatKm(meters);
 }
 
 // Stable id for a route, so progress belongs to the route and not to the session:

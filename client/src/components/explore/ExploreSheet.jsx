@@ -4,6 +4,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 // On desktop (>=900px) it docks as a fixed left panel and dragging is disabled.
 
 const SNAP_ORDER = ['full', 'half', 'peek'];
+// How far down its own height the sheet sits at 'half'. ExploreMap reads it to
+// keep the route's stops out from under the sheet.
+export const SHEET_HALF_OFFSET = 0.48;
 
 function useDocked() {
   const [docked, setDocked] = useState(
@@ -49,7 +52,7 @@ export default function ExploreSheet({ snap, onSnapChange, handle, refreshing, c
 
   const offsetFor = (s) => {
     if (s === 'full') return 0;
-    if (s === 'half') return Math.max(0, sheetH * 0.48);
+    if (s === 'half') return Math.max(0, sheetH * SHEET_HALF_OFFSET);
     return Math.max(0, sheetH - handleH);
   };
 

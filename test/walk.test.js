@@ -161,7 +161,7 @@ test('distances read the way a person would say them', async () => {
   const { formatMeters, walkingMinutes } = await load();
   assert.equal(formatMeters(0), '0 m');
   assert.equal(formatMeters(37), '35 m', 'redondeado a 5 m: el GPS no sabe más');
-  assert.equal(formatMeters(1240), '1.2 km');
+  assert.equal(formatMeters(1240), '1,2 km');
   assert.equal(formatMeters(-1), null);
   assert.equal(walkingMinutes(30), 1, 'nunca "0 min"');
   assert.equal(walkingMinutes(750), 10);

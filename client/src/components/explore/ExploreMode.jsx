@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTrip, formatDuration, getUserLocation } from '../../context/TripContext';
+import { useTrip, formatDuration, getUserLocation, isLocationError } from '../../context/TripContext';
 import { fetchRestaurants } from '../../services/api';
 import { track } from '../../services/analytics';
 import ExploreMap from './ExploreMap';
@@ -11,6 +11,7 @@ import RestaurantStrip from './RestaurantStrip';
 import ActivityPromo from './ActivityPromo';
 import WalkMode from './WalkMode';
 import { metersBetween } from '../../lib/walk';
+import { formatKm } from '../../lib/format';
 
 // Explore mode assumes the user is on foot with spare time right now.
 const EXPLORE_RADIUS_KM = 2;
@@ -46,7 +47,9 @@ function CloseIcon() {
   );
 }
 
-export default function ExploreMode({ onClose, initialView = 'sitios', initialLocation = null, initialRadiusKm = null, sharedSlug = null, preloaded = false }) {
+// onSearchCity: where to send someone we can't locate (the homepage's city
+// planner). Without it the location errors only offer "Reintentar".
+export default function ExploreMode({ onClose, onSearchCity = null, initialView = 'sitios', initialLocation = null, initialRadiusKm = null, sharedSlug = null, preloaded = false }) {
   const {
     currentTrip,
     candidates,
@@ -129,7 +132,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
       }
       getUserLocation()
         .then(setLocalOrigin)
-        .catch((e) => setRestError(e.message || 'No se pudo obtener tu ubicación'));
+        .catch((e) => setRestError(e.message));
       return;
     }
     startCandidates(loc);
@@ -231,10 +234,19 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
             <div className="xp-boot-emoji" aria-hidden="true">🧭</div>
             <h2>No hemos podido explorar</h2>
             <p>{generationError}</p>
-            <div className="xp-boot-actions">
-              <button type="button" className="xp-cta" onClick={launch}>Reintentar</button>
-              <button type="button" className="xp-ghost-btn" onClick={handleClose}>Volver al inicio</button>
-            </div>
+            {/* We can't locate them: searching a city is the way forward, and
+                "Reintentar" alone was a dead end when the browser said no. */}
+            {onSearchCity && isLocationError(generationError) ? (
+              <div className="xp-boot-actions">
+                <button type="button" className="xp-cta" onClick={onSearchCity}>Buscar una ciudad</button>
+                <button type="button" className="xp-ghost-btn" onClick={launch}>Reintentar</button>
+              </div>
+            ) : (
+              <div className="xp-boot-actions">
+                <button type="button" className="xp-cta" onClick={launch}>Reintentar</button>
+                <button type="button" className="xp-ghost-btn" onClick={handleClose}>Volver al inicio</button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="xp-boot">
@@ -266,7 +278,7 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
         <div className="xp-head-text">
           <span className="xp-head-title">Tu ruta{city ? ` por ${city}` : ''}</span>
           <span className="xp-head-sub">
-            {routeDistance != null && `${(routeDistance / 1000).toFixed(1)} km`}
+            {routeDistance != null && formatKm(routeDistance)}
             {routeDuration != null && ` · ${formatDuration(routeDuration)} a pie`}
             {` · ${routePlaces.length} paradas`}
           </span>
@@ -476,7 +488,20 @@ export default function ExploreMode({ onClose, initialView = 'sitios', initialLo
           <div className="xp-deck-msg">
             <div className="xp-boot-emoji" aria-hidden="true">📍</div>
             <p>{restError}</p>
-            <button type="button" className="xp-cta" onClick={origin ? retryRestaurants : launch}>Reintentar</button>
+            {/* Inside .xp-boot-actions for its width: bare, the button stretched
+                across the whole screen on desktop. */}
+            <div className="xp-boot-actions">
+              {onSearchCity && isLocationError(restError) && (
+                <button type="button" className="xp-cta" onClick={onSearchCity}>Buscar una ciudad</button>
+              )}
+              <button
+                type="button"
+                className={onSearchCity && isLocationError(restError) ? 'xp-ghost-btn' : 'xp-cta'}
+                onClick={origin ? retryRestaurants : launch}
+              >
+                Reintentar
+              </button>
+            </div>
           </div>
         ) : restaurants === null ? (
           <div className="xp-deck-msg"><div className="xp-radar xp-radar-sm" aria-hidden="true"><span /><span /><div className="xp-radar-dot" /></div><p>Buscando restaurantes cerca…</p></div>

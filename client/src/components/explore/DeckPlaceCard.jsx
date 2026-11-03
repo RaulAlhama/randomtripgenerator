@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { typeIcons, typeLabels } from '../../constants/poi';
 import SaveHeart from './SaveHeart';
+import { formatKm, formatDecimal } from '../../lib/format';
 
 async function resolvePlaceImage(name, city, type, lat, lng) {
   try {
@@ -57,7 +58,7 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
   const showImage = imageUrl && !imgError;
   const distanceLabel = distanceKm < 1
     ? `${Math.round(distanceKm * 1000)} m`
-    : `${distanceKm.toFixed(1)} km`;
+    : formatKm(distanceKm * 1000);
   const hasRating = typeof place.rating === 'number' && place.rating > 0;
 
   return (
@@ -101,7 +102,7 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
             </svg>
             {distanceLabel}
           </span>
-          {hasRating && <span className="xp-dcard-rating">★ {place.rating.toFixed(1)}</span>}
+          {hasRating && <span className="xp-dcard-rating">★ {formatDecimal(place.rating)}</span>}
         </div>
         {place.description && (
           <div className="xp-dcard-desc-wrap">

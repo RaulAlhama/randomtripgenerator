@@ -153,12 +153,23 @@ function tripReducer(state, action) {
 
 const TripContext = createContext(null);
 
+// Every way of not knowing where the user is. Each one names the way out
+// (searching a city), and ExploreMode recognises them to offer the button that
+// does it. Denied gets its own words because "Reintentar" can't fix it: the
+// browser remembers the answer and won't ask again.
+export const LOCATION_ERRORS = {
+  unsupported: 'Tu navegador no nos deja ver tu ubicación. Busca una ciudad para ver sus sitios.',
+  denied: 'No tenemos permiso para ver tu ubicación. Actívalo en los ajustes del navegador o busca una ciudad.',
+  failed: 'No hemos podido situarte. Vuelve a intentarlo o busca una ciudad.',
+};
+export const isLocationError = (message) => Object.values(LOCATION_ERRORS).includes(message);
+
 // Geolocation helper. Exported so flows that don't need the trip pipeline
 // (e.g. the standalone Restaurantes view) can resolve a position the same way.
 export function getUserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Tu navegador no soporta geolocalización'));
+      reject(new Error(LOCATION_ERRORS.unsupported));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -168,10 +179,8 @@ export function getUserLocation() {
           lng: position.coords.longitude,
         });
       },
-      () => {
-        reject(
-          new Error('No se pudo obtener tu ubicación. Permite el acceso o busca una ciudad.')
-        );
+      (err) => {
+        reject(new Error(err?.code === 1 ? LOCATION_ERRORS.denied : LOCATION_ERRORS.failed));
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -442,7 +451,9 @@ export function TripProvider({ children }) {
       dispatch({ type: SET_STATUS, payload: null });
       dispatch({ type: SET_GENERATING, payload: false });
       dispatch({ type: SET_PROGRESS, payload: 0 });
-      showToast(msg, 'error');
+      // No toast: candidates are only generated while there are none, so this
+      // message is always on screen already, as ExploreMode's error page. The
+      // toast repeated it word for word underneath.
     } finally {
       clearTimeout(timeoutTimer);
     }

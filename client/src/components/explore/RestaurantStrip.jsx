@@ -1,3 +1,6 @@
+import { formatDecimal } from '../../lib/format';
+import { cssUrl } from '../../lib/cssUrl';
+
 // Horizontal strip of nearby restaurants. The first slot carries a highlight
 // badge — this is the placement that can later become sponsored inventory.
 export default function RestaurantStrip({ restaurants, title = 'Dónde comer cerca' }) {
@@ -22,7 +25,7 @@ export default function RestaurantStrip({ restaurants, title = 'Dónde comer cer
           >
             <div
               className="xp-rest-photo"
-              style={r.photoUrl ? { backgroundImage: `url(${r.photoUrl})` } : undefined}
+              style={r.photoUrl ? { backgroundImage: cssUrl(r.photoUrl) } : undefined}
             >
               {!r.photoUrl && <span className="xp-rest-photo-icon" aria-hidden="true">🍽️</span>}
               {i === 0 && <span className="xp-rest-badge">Top valorado</span>}
@@ -31,7 +34,7 @@ export default function RestaurantStrip({ restaurants, title = 'Dónde comer cer
             <div className="xp-rest-info">
               <span className="xp-rest-name">{r.name}</span>
               <span className="xp-rest-meta">
-                <span className="xp-rest-stars">★ {r.rating?.toFixed(1)}</span>
+                <span className="xp-rest-stars">★ {r.rating != null && formatDecimal(r.rating)}</span>
                 <span className="xp-rest-count">({r.userRatingsTotal})</span>
                 {r.priceLevel > 0 && (
                   <span className="xp-rest-price">{'€'.repeat(r.priceLevel)}</span>

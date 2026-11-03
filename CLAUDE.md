@@ -116,7 +116,11 @@ cost one ORS call between them.
    areas it had already stored. `npm run poi:warm` fills it for every city page's own
    CTA request (city coordinates, 2 km walk); bump `POI_CACHE_VERSION` when the query
    or the POI mapping changes.
-4. Server adds descriptions in tiers: **Wikipedia extract → LLM (Gemini/Nebius, OpenAI-compatible) → varied templates** (or a full LLM route if no Overpass data)
+4. Server adds descriptions in tiers: **Wikipedia extract → LLM (Gemini/Nebius, OpenAI-compatible) → varied templates** (or a full LLM route if no Overpass data).
+   The extract is always from **Spanish** Wikipedia: OSM's `wikipedia` tag names whatever
+   language the mapper linked (23% of stored POIs: Catalan, Galician, Basque, English…), so
+   `spanishWikipediaTitle` follows the article's `es` langlink, and with none the stop falls
+   through to the LLM instead of showing another language
 5. POIs sorted by nearest-neighbor algorithm, trimmed to fit max distance
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
 7. Frontend calculates route via `GET /api/route` → **OpenRouteService** (fallback: OSRM demos)
