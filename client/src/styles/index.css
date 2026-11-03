@@ -2156,6 +2156,69 @@ main {
   .city-landing-photo figcaption { padding-right: 0; }
 }
 
+/* The 2-hour page's route preview (WalkPreviewMap). Its height is fixed
+   before the map mounts, so nothing below jumps when it does. Square-cut and
+   as wide as the photo above it. */
+.city-walk-map {
+  position: relative;
+  /* It sits in .city-landing-cta, which centres its children and pads them
+     1.25rem: stretch, and step back out of the padding to the photo's width. */
+  align-self: stretch;
+  width: calc(100% + 2.5rem);
+  margin: 1.25rem -1.25rem 0;
+  padding: 0;
+}
+
+.city-walk-map-frame {
+  height: 270px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* Leaflet sets its own pointer; the whole frame is one tap target. */
+.city-walk-map-frame .leaflet-container { cursor: pointer; }
+
+.city-walk-map-open {
+  position: absolute;
+  /* Top corner: the bottom one holds the OpenStreetMap credit, and on a phone
+     the floating bottom nav passes over it while scrolling. */
+  right: 10px;
+  top: 10px;
+  z-index: 500; /* above Leaflet's panes (400) */
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.city-walk-map-open:hover { color: var(--brand-pine); }
+[data-theme="dark"] .city-walk-map-open:hover { color: var(--map-route); }
+.city-walk-map-open:focus-visible { outline: 2px solid var(--brand-pine); outline-offset: 2px; }
+
+@media (min-width: 760px) {
+  .city-walk-map { margin-top: 1.5rem; }
+  .city-walk-map-frame { height: 360px; }
+  .city-walk-map-open { right: 12px; top: 12px; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .city-landing-title {
   font-family: var(--font-display);
   font-size: clamp(1.7rem, 6.4vw, 2.4rem);

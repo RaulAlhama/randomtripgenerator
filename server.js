@@ -2860,9 +2860,20 @@ app.get('/api/route', async (req, res) => {
     }
     const coordsLngLat = points;
 
+    // Same stops, same streets: the 2-hour pages draw their route's preview
+    // map from this endpoint, and "Hacer esta ruta ahora" then asks for the
+    // very same route. Cached for as long as POIs are, so the second ask and
+    // every other visitor's don't spend the ORS daily quota (2000).
+    // A degraded answer (car profile standing in for walking) is not cached.
+    const routeKey = `route:${mode}:${coordsLngLat.map(([lng, lat]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join(';')}`;
+    const cachedRoute = cacheGet(routeKey);
+    if (cachedRoute) return res.json(cachedRoute);
+
     const ors = await routeViaORS(coordsLngLat, ORS_PROFILES[mode] ? mode : 'driving');
     if (ors) {
-      return res.json({ ...ors, mode });
+      const payload = { ...ors, mode };
+      cacheSet(routeKey, payload, OSM_CACHE_TTL);
+      return res.json(payload);
     }
 
     const osrmCoords = coordsLngLat.map(c => c.join(',')).join(';');
@@ -2895,13 +2906,15 @@ app.get('/api/route', async (req, res) => {
       duration = (route.distance / 1000 / transportConfig.speedKmh) * 3600;
     }
 
-    res.json({
+    const payload = {
       geometry: route.geometry,
       distance: route.distance,
       duration,
       mode,
       legs: route.legs
-    });
+    };
+    if (profileUsed === mode) cacheSet(routeKey, payload, OSM_CACHE_TTL);
+    res.json(payload);
   } catch (error) {
     console.error('Error fetching route:', error);
     res.status(500).json({ error: 'Failed to fetch route' });

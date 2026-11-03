@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SEO_CITIES } from '../../constants/cities';
+import WalkPreviewMap from './WalkPreviewMap';
 
 // What a visitor arriving from Google at /ciudad/madrid should get: that city,
 // not the generic homepage asking for GPS permission.
@@ -92,6 +93,7 @@ export default function CityLanding({ city, onExplore, walk = null, onWalk }) {
           >
             O genera otra ruta por {city.name}
           </button>
+          <WalkPreviewMap stops={walk.stops} cityName={city.name} onOpen={onWalk} />
         </div>
       ) : (
         <div className="city-landing-cta">

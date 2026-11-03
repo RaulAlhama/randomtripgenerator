@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { typeIcons } from '../../constants/poi';
-import { spreadPins } from '../../lib/spreadPins';
+import { spotIcon, usePinSpread, ROUTE_LINE } from './routePins';
 
 const USER_ICON = L.divIcon({
   className: 'xp-user-marker',
@@ -17,42 +16,6 @@ const REST_ICON = L.divIcon({
   iconSize: [26, 26],
   iconAnchor: [13, 13],
 });
-
-// `offset` moves the drawn pin, in pixels, without moving the marker: see
-// spreadPins. Shifting the anchor the other way is how Leaflet draws an icon
-// somewhere other than its point.
-function spotIcon(place, { selected, number, offset }) {
-  const emoji = typeIcons[place.type] || typeIcons.default;
-  const isNum = number != null;
-  const inner = isNum ? String(number) : emoji;
-  const dx = offset?.dx || 0;
-  const dy = offset?.dy || 0;
-  return L.divIcon({
-    className: 'xp-spot-marker',
-    html: `<div class="xp-pin${selected ? ' is-on' : ''}${isNum ? ' is-num' : ''}">${inner}</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17 - dx, 17 - dy],
-  });
-}
-
-// Pixel offsets that keep the numbered route pins from covering each other at
-// the current zoom; recomputed whenever the zoom or the stops change. Empty
-// outside the route stage, where the pins aren't numbered.
-function usePinSpread(places, enabled) {
-  const map = useMap();
-  const [offsets, setOffsets] = useState([]);
-  useEffect(() => {
-    if (!enabled || !places?.length) { setOffsets([]); return undefined; }
-    const update = () => {
-      const z = map.getZoom();
-      setOffsets(spreadPins(places.map((p) => map.project([p.lat, p.lng], z)), 30));
-    };
-    update();
-    map.on('zoomend', update);
-    return () => { map.off('zoomend', update); };
-  }, [map, places, enabled]);
-  return offsets;
-}
 
 function SpotMarkers({ places, isRoute, selectedKeys, poiKey, onSpotTap }) {
   const offsets = usePinSpread(places, isRoute);
@@ -165,7 +128,7 @@ export default function ExploreMap({
           <GeoJSON
             key={JSON.stringify(routeGeometry).length}
             data={routeGeoJSON}
-            style={{ color: '#3f6a64', weight: 5, opacity: 0.85 }}
+            style={ROUTE_LINE}
           />
         )}
       </MapContainer>

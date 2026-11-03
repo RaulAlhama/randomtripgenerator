@@ -86,6 +86,12 @@ tree on mount and removes the original — so the human reads exactly what the c
 indexed, above the footer, with no second copy to keep in sync. The server also injects
 `window.__CITY__`, which is how `App.jsx` knows to render the city landing instead of the
 generic hero. `assertIndexPatterns()` guards the mount point at startup.
+`CityLanding` opens with the city's Unsplash photo (`SEO_CITIES`), then lifts the block's
+`<h1>` above the CTA — same text, still the only h1 on the page. On the 2-hour pages
+`window.__CITY__.walk` carries the stops: the CTA opens them as a route, and
+`WalkPreviewMap` draws them (non-draggable, so it can't trap page scroll; a tap opens the
+route view). `/api/route` caches answers for 6h, so the preview and the route view after it
+cost one ORS call between them.
 
 ### Backend (server.js)
 - Serves `client/dist/` (React build) if it exists, otherwise falls back to `public/`
