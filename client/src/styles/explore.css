@@ -204,11 +204,14 @@
 
 .xp-deck-track:not(.is-dragging) { transition: transform 340ms var(--ease); }
 
+/* The stage clips (it has to hide the neighbouring cards), so the card's
+   shadow needs room inside it: without the vertical padding the shadow was cut
+   flat along the card's top and bottom edges, a hard line across the deck. */
 .xp-deck-cell {
   flex: 0 0 100%;
   width: 100%;
   height: 100%;
-  padding: 0 16px;
+  padding: 4px 16px 18px;
   display: flex;
 }
 
@@ -217,7 +220,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 20px 4px;
+  padding: 0 20px 4px;
 }
 
 .xp-deck-footer .xp-cta { width: 100%; }
@@ -254,7 +257,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-deck);
   transition: opacity 220ms var(--ease);
 }
 
@@ -521,11 +524,11 @@
     overflow: hidden;
   }
 
-  .xp-deck-cell { justify-content: center; padding: 0 20px; }
+  .xp-deck-cell { justify-content: center; padding: 4px 20px 18px; }
   .xp-dcard,
   .xp-rcard { max-width: 100%; margin: 0; }
   .xp-deck-header { max-width: 100%; margin: 0; width: 100%; padding: 2px 26px 10px; }
-  .xp-deck-footer { max-width: 100%; margin: 0; width: 100%; padding: 12px 26px 4px; }
+  .xp-deck-footer { max-width: 100%; margin: 0; width: 100%; padding: 0 26px 4px; }
 
   /* Float the controls in a row that lines up with the framed deck. */
   .xp-top-deck {
