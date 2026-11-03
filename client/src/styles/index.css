@@ -2120,6 +2120,54 @@ main {
   padding: 1.5rem 0 0;
 }
 
+/* The city's photo opens the page: these landings are where search traffic
+   arrives, and they used to be text from top to bottom. Square-cut like the
+   city tiles, as wide as the page column, and short enough that the title and the
+   button stay above the fold on a 390x844 screen. */
+.city-landing-photo {
+  margin: -0.5rem 0 1.5rem;
+}
+
+.city-landing-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  max-height: 34vh;
+  object-fit: cover;
+  border-radius: 0;
+  background: var(--bg-muted);
+  filter: saturate(0.92);
+}
+
+.city-landing-photo figcaption {
+  padding: 0.35rem 1.25rem 0;
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+@media (min-width: 760px) {
+  .city-landing-photo {
+    max-width: 720px;
+    margin: 0 auto 1.75rem;
+  }
+  .city-landing-photo img { aspect-ratio: 2 / 1; max-height: 360px; }
+  .city-landing-photo figcaption { padding-right: 0; }
+}
+
+.city-landing-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 6.4vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  color: var(--text);
+  max-width: 620px;
+  margin: 0 0 0.35rem;
+  text-wrap: balance;
+}
+
 .city-landing-cta {
   display: flex;
   flex-direction: column;
