@@ -3643,4 +3643,6 @@ module.exports = {
   callLLMOnce,
   googleNameMatchesPOI,
   reconcileCivicBuildings,
+  // For tests that need the real middleware stack (response headers).
+  app,
 };
