@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { typeIcons } from '../../constants/poi';
+import { iconSvg } from '../../lib/icons';
 import { spreadPins } from '../../lib/spreadPins';
 
 // The colour the route line is drawn in, on both maps.
@@ -14,9 +15,8 @@ export const ROUTE_LINE = { color: '#3f6a64', weight: 5, opacity: 0.85 };
 // spreadPins. Shifting the anchor the other way is how Leaflet draws an icon
 // somewhere other than its point.
 export function spotIcon(place, { selected, number, offset }) {
-  const emoji = typeIcons[place.type] || typeIcons.default;
   const isNum = number != null;
-  const inner = isNum ? String(number) : emoji;
+  const inner = isNum ? String(number) : iconSvg(typeIcons[place.type] || typeIcons.default, { size: 16 });
   const dx = offset?.dx || 0;
   const dy = offset?.dy || 0;
   return L.divIcon({

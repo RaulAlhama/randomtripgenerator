@@ -2,6 +2,7 @@ import { useSaved } from '../../context/SavedContext';
 import { typeIcons, typeLabels } from '../../constants/poi';
 import { formatDecimal } from '../../lib/format';
 import { cssUrl } from '../../lib/cssUrl';
+import Icon from '../ui/Icon';
 
 function HeartIcon() {
   return (
@@ -13,7 +14,7 @@ function HeartIcon() {
 
 function SavedCard({ item, onRemove }) {
   const isRestaurant = item.kind === 'restaurant';
-  const icon = isRestaurant ? '🍴' : (typeIcons[item.type] || typeIcons.default);
+  const icon = isRestaurant ? 'utensils' : (typeIcons[item.type] || typeIcons.default);
   const chip = isRestaurant ? 'Restaurante' : (typeLabels[item.type] || typeLabels.default);
 
   return (
@@ -22,7 +23,7 @@ function SavedCard({ item, onRemove }) {
         className="saved-card-photo"
         style={item.imageUrl ? { backgroundImage: cssUrl(item.imageUrl) } : undefined}
       >
-        {!item.imageUrl && <span className="saved-card-photo-icon" aria-hidden="true">{icon}</span>}
+        {!item.imageUrl && <Icon className="saved-card-photo-icon" name={icon} size={44} strokeWidth={1.5} />}
         <span className="saved-card-chip">{chip}</span>
         <button
           type="button"
@@ -63,7 +64,7 @@ export default function SavedView() {
       <section className="saved-view">
         <h2 className="saved-view-title">Guardados</h2>
         <div className="saved-empty">
-          <div className="saved-empty-icon" aria-hidden="true">🤍</div>
+          <div className="saved-empty-icon"><Icon name="heart" size={30} /></div>
           <p className="saved-empty-title">Aún no has guardado nada</p>
           <p className="saved-empty-sub">
             Toca el corazón en cualquier sitio o restaurante para guardarlo aquí y tenerlo a mano.

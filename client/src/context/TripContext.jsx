@@ -204,7 +204,7 @@ function parseWeather(data) {
   const current = data.current;
   const daily = data.daily;
   const code = current.weather_code;
-  const weather = WEATHER_CODES[code] || { icon: '\u{1F321}️', desc: 'Desconocido' };
+  const weather = WEATHER_CODES[code] || { icon: 'thermometer', desc: 'Desconocido' };
 
   // Extract sunrise/sunset times (HH:MM)
   const sunrise = daily?.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : null;

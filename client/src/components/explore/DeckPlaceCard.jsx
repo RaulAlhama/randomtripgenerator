@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { typeIcons, typeLabels } from '../../constants/poi';
 import SaveHeart from './SaveHeart';
+import Icon from '../ui/Icon';
 import { formatKm, formatDecimal } from '../../lib/format';
 
 async function resolvePlaceImage(name, city, type, lat, lng) {
@@ -67,7 +68,7 @@ export default function DeckPlaceCard({ place, city, selected, onToggle, distanc
         {showImage ? (
           <img src={imageUrl} alt="" onError={() => setImgError(true)} />
         ) : (
-          <span className="xp-dcard-photo-icon" aria-hidden="true">{icon}</span>
+          <Icon className="xp-dcard-photo-icon" name={icon} size={56} strokeWidth={1.5} />
         )}
         <div className="xp-dcard-scrim" />
         <span className="xp-dcard-type">{typeLabels[place.type] || typeLabels.default}</span>

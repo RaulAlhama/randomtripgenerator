@@ -285,8 +285,9 @@
   display: block;
 }
 
+/* Sin foto: el icono del tipo de sitio, apagado, en el hueco de la foto. */
 .xp-dcard-photo-icon,
-.xp-rcard-photo-icon { font-size: 4rem; opacity: 0.4; }
+.xp-rcard-photo-icon { color: var(--text-muted); opacity: 0.55; }
 
 .xp-dcard-scrim {
   position: absolute;
@@ -496,7 +497,7 @@
 
 /* Restaurant stop in the route list — fork glyph instead of a number.
    Kept for older saved/shared routes that still carry restaurant stops. */
-.xp-stop-num.is-food { background: var(--bg-subtle); font-size: 0.95rem; }
+.xp-stop-num.is-food { background: var(--bg-subtle); color: var(--text-secondary); }
 
 /* Desktop: present the deck as a centred device panel so the cards read as a
    deliberate frame instead of floating, lost, in a sea of whitespace. */
@@ -602,6 +603,9 @@
   border-radius: 50% 50% 50% 4px;
   background: #fff;
   border: 2px solid rgba(15, 28, 32, 0.12);
+  /* El icono del tipo de sitio (un SVG que pinta con currentColor). El pin es
+     blanco en los dos temas, así que el pino sirve en los dos. */
+  color: #35584f;
   font-size: 15px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
   transform: rotate(0deg);
@@ -634,7 +638,7 @@
   border-radius: 50%;
   background: #fff7ec;
   border: 2px solid var(--amber-500, #eaaa50);
-  font-size: 12px;
+  color: #9a5b13;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
@@ -665,7 +669,19 @@
   min-height: 1.5em;
 }
 
-.xp-boot-emoji { font-size: 3rem; }
+/* El icono de las pantallas de carga fallida y de los avisos del mazo: en un
+   círculo suave, en el color de la marca. Antes era un emoji de 3rem. */
+.xp-boot-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--brand-pine);
+}
+[data-theme="dark"] .xp-boot-icon { color: var(--map-route); }
 
 .xp-boot-actions {
   display: flex;
@@ -1045,6 +1061,9 @@
 }
 
 .xp-rest-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-display);
   font-size: 1.05rem;
   font-weight: 650;
@@ -1101,7 +1120,7 @@
   place-items: center;
 }
 
-.xp-rest-photo-icon { font-size: 1.7rem; opacity: 0.6; }
+.xp-rest-photo-icon { color: var(--text-muted); opacity: 0.6; }
 
 .xp-rest-badge {
   position: absolute;
@@ -1265,8 +1284,9 @@
 
 .xp-promo-icon {
   flex: none;
-  font-size: 1.35rem;
+  color: var(--brand-pine);
 }
+[data-theme="dark"] .xp-promo-icon { color: var(--map-route); }
 
 .xp-promo-text {
   display: flex;

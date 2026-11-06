@@ -10,6 +10,7 @@ import DeckRestaurantCard from './DeckRestaurantCard';
 import RestaurantStrip from './RestaurantStrip';
 import ActivityPromo from './ActivityPromo';
 import WalkMode from './WalkMode';
+import Icon from '../ui/Icon';
 import { metersBetween } from '../../lib/walk';
 import { formatKm } from '../../lib/format';
 
@@ -231,7 +232,7 @@ export default function ExploreMode({ onClose, onSearchCity = null, initialView 
         </button>
         {generationError ? (
           <div className="xp-boot">
-            <div className="xp-boot-emoji" aria-hidden="true">🧭</div>
+            <div className="xp-boot-icon"><Icon name={isLocationError(generationError) ? 'pinOff' : 'compass'} size={30} /></div>
             <h2>No hemos podido explorar</h2>
             <p>{generationError}</p>
             {/* We can't locate them: searching a city is the way forward, and
@@ -359,7 +360,7 @@ export default function ExploreMode({ onClose, onSearchCity = null, initialView 
         <div className="xp-top-spacer" />
         {weather && (
           <div className="xp-top-pill" title={weather.desc}>
-            <span aria-hidden="true">{weather.icon}</span> {weather.temp}°
+            <Icon name={weather.icon} size={18} /> {weather.temp}°
           </div>
         )}
       </div>
@@ -391,7 +392,7 @@ export default function ExploreMode({ onClose, onSearchCity = null, initialView 
                   }}
                 >
                   <span className={`xp-stop-num${p.type === 'restaurant' ? ' is-food' : ''}`}>
-                    {p.type === 'restaurant' ? '🍴' : i + 1}
+                    {p.type === 'restaurant' ? <Icon name="utensils" size={14} /> : i + 1}
                   </span>
                   <div className="xp-stop-info">
                     <span className="xp-stop-name">{p.name}</span>
@@ -486,7 +487,7 @@ export default function ExploreMode({ onClose, onSearchCity = null, initialView 
       {view === 'restaurantes' && (
         restError ? (
           <div className="xp-deck-msg">
-            <div className="xp-boot-emoji" aria-hidden="true">📍</div>
+            <div className="xp-boot-icon"><Icon name={isLocationError(restError) ? 'pinOff' : 'utensils'} size={30} /></div>
             <p>{restError}</p>
             {/* Inside .xp-boot-actions for its width: bare, the button stretched
                 across the whole screen on desktop. */}
@@ -507,7 +508,7 @@ export default function ExploreMode({ onClose, onSearchCity = null, initialView 
           <div className="xp-deck-msg"><div className="xp-radar xp-radar-sm" aria-hidden="true"><span /><span /><div className="xp-radar-dot" /></div><p>Buscando restaurantes cerca…</p></div>
         ) : restaurants.length === 0 ? (
           <div className="xp-deck-msg">
-            <div className="xp-boot-emoji" aria-hidden="true">🍽️</div>
+            <div className="xp-boot-icon"><Icon name="utensils" size={30} /></div>
             <p>No hemos encontrado restaurantes valorados aquí cerca.</p>
           </div>
         ) : (

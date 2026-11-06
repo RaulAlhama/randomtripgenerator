@@ -1,5 +1,6 @@
 import { activityAffiliate } from '../../services/affiliates';
 import { track } from '../../services/analytics';
+import Icon from '../ui/Icon';
 
 // Affiliate promo for tours/tickets in the routed city, shown under the
 // stops list. Renders nothing unless an affiliate provider is configured.
@@ -18,7 +19,7 @@ export default function ActivityPromo({ city }) {
         rel="sponsored noopener noreferrer"
         onClick={() => track('activities_clicked', { city, provider: aff.provider, placement: 'route' })}
       >
-        <span className="xp-promo-icon" aria-hidden="true">🎟️</span>
+        <Icon className="xp-promo-icon" name="ticket" size={22} />
         <span className="xp-promo-text">
           <span className="xp-promo-title">Entradas y visitas guiadas en {city}</span>
           <span className="xp-promo-sub">Tours y tickets sin colas con {aff.provider}</span>

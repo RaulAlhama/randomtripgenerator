@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-l
 import L from 'leaflet';
 import { spotIcon, usePinSpread, ROUTE_LINE } from './routePins';
 import { OSM_TILE_PROPS } from './osmTiles';
+import { iconSvg } from '../../lib/icons';
 import { SHEET_HALF_OFFSET } from './ExploreSheet';
 
 const USER_ICON = L.divIcon({
@@ -14,7 +15,7 @@ const USER_ICON = L.divIcon({
 
 const REST_ICON = L.divIcon({
   className: 'xp-rest-marker',
-  html: '<div class="xp-rest-pin">\u{1F374}</div>',
+  html: `<div class="xp-rest-pin">${iconSvg('utensils', { size: 13, strokeWidth: 2.2 })}</div>`,
   iconSize: [26, 26],
   iconAnchor: [13, 13],
 });

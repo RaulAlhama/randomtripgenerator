@@ -1,4 +1,5 @@
 import SaveHeart from './SaveHeart';
+import Icon from '../ui/Icon';
 import { track } from '../../services/analytics';
 import { formatDecimal } from '../../lib/format';
 import { cssUrl } from '../../lib/cssUrl';
@@ -16,7 +17,7 @@ export default function DeckRestaurantCard({ restaurant: r, featured, city = '' 
         className="xp-rcard-photo"
         style={r.photoUrl ? { backgroundImage: cssUrl(r.photoUrl) } : undefined}
       >
-        {!r.photoUrl && <span className="xp-rcard-photo-icon" aria-hidden="true">🍽️</span>}
+        {!r.photoUrl && <Icon className="xp-rcard-photo-icon" name="utensils" size={56} strokeWidth={1.5} />}
         <div className="xp-dcard-scrim" />
         <SaveHeart
           item={{

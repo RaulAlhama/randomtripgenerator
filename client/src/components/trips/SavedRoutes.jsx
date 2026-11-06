@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { loadTrips, saveTrip, deleteTrip as apiDeleteTrip } from '../../services/trips';
 import { track } from '../../services/analytics';
 import { formatKm as kmLabel } from '../../lib/format';
+import Icon from '../ui/Icon';
 
 function formatWhen(ts) {
   if (!ts) return '';
@@ -149,7 +150,7 @@ export default function SavedRoutes({ onOpenRoute, onExplore }) {
       <section className="saved-view">
         <h2 className="saved-view-title">Tus rutas</h2>
         <div className="saved-empty">
-          <div className="saved-empty-icon" aria-hidden="true">🧭</div>
+          <div className="saved-empty-icon"><Icon name="route" size={30} /></div>
           <p className="saved-empty-title">Aún no has creado ninguna ruta</p>
           <p className="saved-empty-sub">
             Genera una ruta a pie con los mejores sitios a tu alrededor y se guardará aquí sola.

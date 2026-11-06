@@ -1986,7 +1986,7 @@ main {
   display: grid;
   place-items: center;
 }
-.saved-card-photo-icon { font-size: 2.6rem; opacity: 0.4; }
+.saved-card-photo-icon { color: var(--text-muted); opacity: 0.55; }
 
 .saved-card-chip {
   position: absolute;
@@ -2044,7 +2044,19 @@ main {
   gap: 8px;
   padding: 60px 24px;
 }
-.saved-empty-icon { font-size: 2.8rem; }
+/* Same treatment as .xp-boot-icon in explore.css: a line icon in a soft
+   circle, in the brand colour. It was an emoji. */
+.saved-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--brand-pine);
+}
+[data-theme="dark"] .saved-empty-icon { color: var(--map-route); }
 .saved-empty-title { font-size: 1.1rem; font-weight: 700; color: var(--text); }
 .saved-empty-sub { font-size: 0.92rem; color: var(--text-muted); max-width: 320px; }
 
