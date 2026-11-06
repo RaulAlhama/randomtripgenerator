@@ -51,10 +51,19 @@ const allowedOrigins = CORS_ALLOWED_ORIGINS.length ? CORS_ALLOWED_ORIGINS : DEFA
 //   crossOriginResourcePolicy — the default `same-origin` tells browsers not to
 //     let other sites embed our resources, and /icons/og-default.png exists
 //     precisely to be embedded by other sites.
+// And one is replaced:
+//   referrerPolicy — the default `no-referrer` made browsers request every map
+//     tile without a Referer, which OpenStreetMap's tile policy forbids. When
+//     they started enforcing it (noticed 2026-11-06) every map in the app
+//     became a grid of 403 "Access blocked" images. strict-origin-when-cross-
+//     origin is the browser's own default: other sites see only our origin,
+//     never the path (so a /r/:slug share link doesn't leak), and same-origin
+//     requests keep the full URL.
 app.disable('x-powered-by');
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 
 // Middleware

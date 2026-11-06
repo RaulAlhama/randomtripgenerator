@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { spotIcon, usePinSpread, ROUTE_LINE } from './routePins';
+import { OSM_TILE_PROPS } from './osmTiles';
 
 const USER_ICON = L.divIcon({
   className: 'xp-user-marker',
@@ -91,11 +92,7 @@ export default function ExploreMap({
             (a/b/c) are deprecated — the modern server does HTTP/2 multiplexing, and
             one host caches better. See operations.osmfoundation.org/policies/tiles.
             maxZoom 19 is the highest zoom OSM renders; asking for more 404s. */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maxZoom={19}
-        />
+        <TileLayer {...OSM_TILE_PROPS} />
         <FitController origin={origin} places={places} stage={stage} />
 
         <Marker position={[origin.lat, origin.lng]} icon={USER_ICON} zIndexOffset={500}>

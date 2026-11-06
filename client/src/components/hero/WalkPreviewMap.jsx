@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, GeoJSON, Polyline, useMap } from 'reac
 import L from 'leaflet';
 import { getRoute } from '../../services/api';
 import { spotIcon, usePinSpread, ROUTE_LINE } from '../explore/routePins';
+import { OSM_TILE_PROPS } from '../explore/osmTiles';
 
 // The 2-hour page's route at a glance: its numbered stops and the streets
 // between them, above the list that describes them. A preview, not a map to
@@ -95,11 +96,7 @@ export default function WalkPreviewMap({ stops, cityName, onOpen }) {
             keyboard={false}
             style={{ width: '100%', height: '100%' }}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              maxZoom={19}
-            />
+            <TileLayer {...OSM_TILE_PROPS} />
             <Fit stops={stops} />
             {feature && <GeoJSON key={geometry.coordinates?.length || 0} data={feature} style={ROUTE_LINE} interactive={false} />}
             {!feature && routeFailed && (

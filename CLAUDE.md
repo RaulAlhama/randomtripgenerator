@@ -121,7 +121,11 @@ cost one ORS call between them.
 6. Response includes `poiSource: 'overpass' | 'llm'` flag
 7. Frontend calculates route via `GET /api/route` → **OpenRouteService** (fallback: OSRM demos)
 8. Frontend fetches weather via **Open-Meteo** API (free, no key)
-9. Frontend renders on **Leaflet** map (react-leaflet)
+9. Frontend renders on **Leaflet** map (react-leaflet). Tiles come from OpenStreetMap's own
+   servers (`components/explore/osmTiles.js`, shared by every map), whose policy requires a
+   Referer. **Never send `Referrer-Policy: no-referrer`** (helmet's default, overridden in
+   server.js): from 2026-11 OSM answers a browser without a Referer with a 403 "Access
+   blocked" image on every tile
 10. Trip auto-saved if user is authenticated
 11. **"Empezar el paseo"** opens WalkMode: a companion for the walk itself, not a navigator.
     It watches position only to notice arrival and hands each individual leg to Google Maps
