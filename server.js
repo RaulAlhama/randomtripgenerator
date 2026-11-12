@@ -36,11 +36,12 @@ function canonicalRedirectTarget(hostname, method, originalUrl) {
   if (url === '/api' || url.startsWith('/api/')) return null;
   return CANONICAL_ORIGIN + (url.startsWith('/') ? url : `/${url}`);
 }
-app.use((req, res, next) => {
-  const target = canonicalRedirectTarget(req.hostname, req.method, req.originalUrl);
-  if (target) return res.redirect(301, target);
-  next();
-});
+// NOT MOUNTED. Deployed on 2026-11-12 keyed on req.hostname, it put the real
+// domain into a redirect loop for several minutes: behind Cloudflare, Render
+// receives randomtripgenerator.com requests with a hostname that also ends in
+// onrender.com, so every page redirected to itself. The hostname Express sees
+// can't tell the two apart; before mounting anything like this again, log the
+// Host / X-Forwarded-Host headers production actually receives for each domain.
 
 // CORS: the SPA is served from this same origin (and Vite proxies /api in dev),
 // so no site legitimately needs cross-origin access. Restricting it stops other
