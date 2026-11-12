@@ -110,8 +110,10 @@ background by `warmStopMedia()` (startup + daily, one request every 700 ms). **N
 them inside the request**: six pages opened together drew a 429 from Wikimedia for every stop.
 
 ### Backend (server.js)
-- Requests for pages on `*.onrender.com` get a 301 to the real domain
-  (`canonicalRedirectTarget`); `/api` is exempt so Render's health check keeps working
+- `randomtripgenerator.onrender.com` still serves a full copy of the site. **Do not redirect
+  it by `req.hostname`**: on 2026-11-12 that looped the real domain for 4.5 hours, because
+  behind Cloudflare the app sees an onrender.com hostname for both. `canonicalRedirectTarget`
+  exists but is not mounted. **After any push, curl production pages before calling it done**
 - Serves `client/dist/` (React build) if it exists, otherwise falls back to `public/`
 - All API routes unchanged
 
