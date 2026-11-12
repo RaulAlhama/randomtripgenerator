@@ -22,6 +22,26 @@ const PORT = process.env.PORT || 3000;
 // Render's setup — never `true`, which would let a client spoof X-Forwarded-For.
 app.set('trust proxy', 1);
 
+// One address per page. Render keeps answering on randomtripgenerator.onrender.com
+// after a custom domain is attached, so the whole site existed twice. Search
+// Console (2026-11-12) listed 18 pages as "alternate with canonical", and the
+// only external link Google knew for the site came from that copy. Pages move to
+// the real domain with a 301; /api stays reachable on both hosts because
+// Render's health check may call it by the service's own hostname.
+const CANONICAL_ORIGIN = 'https://randomtripgenerator.com';
+function canonicalRedirectTarget(hostname, method, originalUrl) {
+  if (!/\.onrender\.com$/i.test(String(hostname || ''))) return null;
+  if (method !== 'GET' && method !== 'HEAD') return null;
+  const url = String(originalUrl || '/');
+  if (url === '/api' || url.startsWith('/api/')) return null;
+  return CANONICAL_ORIGIN + (url.startsWith('/') ? url : `/${url}`);
+}
+app.use((req, res, next) => {
+  const target = canonicalRedirectTarget(req.hostname, req.method, req.originalUrl);
+  if (target) return res.redirect(301, target);
+  next();
+});
+
 // CORS: the SPA is served from this same origin (and Vite proxies /api in dev),
 // so no site legitimately needs cross-origin access. Restricting it stops other
 // websites from calling this API from a browser and burning the Google Places
@@ -3329,11 +3349,11 @@ ${variantLinks.join('\n')}
 ${items}
       </ul>
 ${variantSection}
-      <h2>Genera tu ruta turística por ${escapeHtml(city.name)} con IA</h2>
+      <h2>Genera tu ruta turística por ${escapeHtml(city.name)}</h2>
       <p>
         RandomTrip crea un <strong>itinerario personalizado por ${escapeHtml(city.name)}</strong> en
-        segundos: combina lugares reales de OpenStreetMap con descripciones escritas por
-        inteligencia artificial y los ordena para recorrerlos a pie.
+        segundos: te enseña los lugares reales que hay alrededor, eliges los que te
+        apetecen y los ordena para recorrerlos a pie sin dar vueltas.
         Gratis y sin registro. <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
       </p>
 ${activitiesSection}
@@ -3349,9 +3369,12 @@ ${otherCities}
 // Render a full city page by injecting city-specific SEO into the built index.html.
 function buildCityHtml(city, publishedList = []) {
   const url = `${SITE_ORIGIN}/ciudad/${city.slug}`;
-  const title = `Qué visitar en ${city.name}: ruta turística con IA — RandomTrip`;
+  // No "con IA" here. Someone searching what to see in a city isn't looking for
+  // AI: "ruta turística por málaga con ia" sat at position 4.6 with 39
+  // impressions and no click (Search Console, 2026-11-12).
+  const title = `Qué visitar en ${city.name}: imprescindibles y ruta a pie — RandomTrip`;
   const topNames = city.highlights.slice(0, 3).map((h) => h.name).join(', ');
-  const desc = `Descubre qué visitar en ${city.name} y genera una ruta turística personalizada con IA: ${topNames} y más. Gratis y sin registro.`;
+  const desc = `Qué visitar en ${city.name}: ${topNames} y más, con una ruta a pie por lugares reales que puedes abrir en el mapa. Gratis y sin registro.`;
 
   let html = readIndexHtml();
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(title)}</title>`);
@@ -3392,6 +3415,107 @@ app.get('/ciudad/:slug', async (req, res, next) => {
   }
 });
 
+// A photo and a Spanish Wikipedia link per stop for the 2-hour pages, in the
+// HTML the crawler reads. Both come only from the stop's OWN article (the
+// `wikipedia` tag the page stores), never from a name search: a search is how a
+// statue once wore a university's photo. The tag may name any language (Valencia's
+// stops are mostly `ca:`), so the article is the one its `es` langlink points to,
+// and a stop with no Spanish article gets neither link nor photo.
+//
+// Pages never wait for Wikipedia. Resolving at request time was tried first and
+// six pages opened together drew a 429 for every stop after the first dozen:
+// Wikimedia throttles bursts, and a crawler requests pages in bursts. So
+// warmStopMedia() fills this map in the background, one request at a time,
+// when the server starts and once a day after that, and a page renders with
+// whatever is already here. For the first minutes after a deploy that is
+// nothing, and the page is simply the one it was before this existed.
+const stopMedia = new Map(); // wikipedia tag -> { title, image } | null (no Spanish article)
+const STOP_MEDIA_GAP_MS = 700;
+const WIKIMEDIA_UA = 'RandomTripGenerator/1.0 (https://randomtripgenerator.com)';
+
+function walkStopMedia(items) {
+  const out = {};
+  for (const item of items || []) {
+    const entry = item && item.wikipedia ? stopMedia.get(item.wikipedia) : null;
+    if (entry) out[item.name] = entry;
+  }
+  return out;
+}
+
+class WikimediaBusyError extends Error {}
+
+// Returns { title, image } for the stop's Spanish article, null when it has
+// none, and throws WikimediaBusyError when Wikipedia didn't give an answer at
+// all — which must not be stored as "this stop has no article".
+async function resolveStopMedia(tag) {
+  const m = /^([^:]+):(.+)$/.exec(String(tag || ''));
+  if (!m || !WIKI_LANG_RE.test(m[1])) return null;
+  const headers = { 'User-Agent': WIKIMEDIA_UA };
+
+  let title = m[2];
+  if (m[1].toLowerCase() !== 'es') {
+    const url = `https://${m[1].toLowerCase()}.wikipedia.org/w/api.php?action=query&prop=langlinks&lllang=es&redirects=1&format=json&formatversion=2&titles=${encodeURIComponent(m[2])}`;
+    if (!new URL(url).hostname.endsWith('.wikipedia.org')) return null;
+    const res = await fetchExternal(url, { timeoutMs: 8000, withStatus: true, headers: { ...headers } });
+    if (res.status !== 200 || !Array.isArray(res.body?.query?.pages)) throw new WikimediaBusyError(`langlinks ${res.status}`);
+    const es = res.body.query.pages.flatMap((p) => p.langlinks || []).find((l) => l.lang === 'es');
+    if (!es?.title) return null;
+    title = es.title;
+    await new Promise((r) => setTimeout(r, STOP_MEDIA_GAP_MS));
+  }
+
+  const url = wikipediaSummaryUrl('es', title);
+  if (!url) return null;
+  const res = await fetchExternal(url, { timeoutMs: 8000, withStatus: true, headers: { ...headers } });
+  if (res.status === 404) return null;
+  if (res.status !== 200 || !res.body?.title) throw new WikimediaBusyError(`summary ${res.status}`);
+  const t = res.body.thumbnail;
+  // Thumbnails are served from thumb.wikimedia.org, originals from upload.
+  const image = t && /^https:\/\/[a-z]+\.wikimedia\.org\//.test(t.source || '')
+    ? { src: t.source, width: t.width, height: t.height }
+    : null;
+  return { title: res.body.title, image };
+}
+
+let stopMediaWarming = false;
+async function warmStopMedia() {
+  if (stopMediaWarming) return;
+  stopMediaWarming = true;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let resolved = 0;
+  let busy = 0;
+  try {
+    const published = (await listPublishedPages()).filter((p) => p.page_type === 'paseo-2h');
+    for (const p of published) {
+      const page = await getPublishedPage(p.city_slug, 'paseo-2h');
+      let changed = false;
+      for (const item of page?.content || []) {
+        if (!item.wikipedia) continue;
+        try {
+          stopMedia.set(item.wikipedia, await resolveStopMedia(item.wikipedia));
+          resolved += 1;
+          changed = true;
+        } catch (err) {
+          // Keep whatever an earlier run stored for this stop. Too many of
+          // these means we are being throttled: stop and leave the rest for
+          // the next run instead of hammering.
+          busy += 1;
+          if (busy >= 8) throw new Error(`Wikipedia no responde (${err.message}); se reintenta en el siguiente ciclo`);
+          await sleep(15000);
+        }
+        await sleep(STOP_MEDIA_GAP_MS);
+      }
+      // The page's HTML is cached; drop it so the photos show without waiting.
+      if (changed) cache.delete(`seopage:${p.city_slug}:paseo-2h`);
+    }
+    console.log(`[SEO] Fotos de paradas: ${resolved} resueltas, ${busy} sin respuesta`);
+  } catch (err) {
+    console.warn(`[SEO] Fotos de paradas a medias (${resolved} resueltas): ${err.message}`);
+  } finally {
+    stopMediaWarming = false;
+  }
+}
+
 // Retired variant URLs (see RETIRED_URL_SLUGS). Permanent redirect rather than a
 // 404: Google still holds them in its index and a visitor arriving from a result
 // should land on a page, not an error. Registered before the variant route so the
@@ -3420,7 +3544,8 @@ app.get('/ciudad/:slug/:variant', async (req, res, next) => {
 
     const publishedList = await getPublishedListCached();
     const links = buildSiblingLinks(city, pageType, publishedList);
-    const html = buildVariantHtml(readIndexHtml(), city, page, links);
+    const media = pageType === 'paseo-2h' ? walkStopMedia(page.content) : {};
+    const html = buildVariantHtml(readIndexHtml(), city, page, links, media);
     cacheSet(cacheKey, html);
     res.type('html').send(html);
   } catch (err) {
@@ -3461,7 +3586,7 @@ function applyMetaTags(html, { title, desc, url }) {
 const LEGAL_PAGES = {
   privacidad: {
     title: 'Política de Privacidad — RandomTrip',
-    desc: 'Qué datos trata RandomTrip, con qué finalidad, qué terceros intervienen (Auth0, Google Places, Umami) y cómo ejercer tus derechos.',
+    desc: 'Qué datos trata RandomTrip, con qué finalidad, qué terceros intervienen y cómo ejercer tus derechos.',
   },
   terminos: {
     title: 'Términos de Uso — RandomTrip',
@@ -3609,6 +3734,11 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
+  // Stop photos for the 2-hour pages: now, and daily so a changed lead image
+  // or a new Spanish article is picked up. unref: never keeps the process alive.
+  warmStopMedia();
+  setInterval(warmStopMedia, 24 * 60 * 60 * 1000).unref();
+
   // Cerrar limpiamente con Ctrl+C para liberar el puerto
   process.on('SIGINT', () => {
     console.log('\nCerrando servidor...');
@@ -3643,6 +3773,7 @@ module.exports = {
   callLLMOnce,
   googleNameMatchesPOI,
   reconcileCivicBuildings,
+  canonicalRedirectTarget,
   // For tests that need the real middleware stack (response headers).
   app,
 };

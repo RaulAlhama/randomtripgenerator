@@ -1256,7 +1256,7 @@ main {
 
 .footer-links {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
 }
 
@@ -1352,7 +1352,7 @@ main {
 @media (max-width: 1024px) {
   .header-nav { display: none; }
   .footer-main { grid-template-columns: 1fr; gap: 2rem; }
-  .footer-links { grid-template-columns: repeat(3, 1fr); }
+  .footer-links { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 768px) {
@@ -2322,6 +2322,42 @@ main {
 }
 
 .city-landing-content #seo-prerender strong { color: var(--text); }
+
+/* 2-hour pages: a photo per stop, the walk from the previous one, and the FAQ.
+   The photo floats so the list keeps its numbers (a grid on the <li> drops the
+   marker). */
+.city-landing-content #seo-prerender h3 {
+  font-size: 0.95rem;
+  margin: 1.1rem 0 0.25rem;
+  color: var(--text);
+}
+
+.city-landing-content #seo-prerender li.seo-stop { margin-bottom: 1rem; }
+.city-landing-content #seo-prerender li.seo-stop::after {
+  content: '';
+  display: block;
+  clear: both;
+}
+
+.city-landing-content #seo-prerender .seo-stop-photo {
+  float: right;
+  margin: 0.15rem 0 0.4rem 0.85rem;
+}
+
+.city-landing-content #seo-prerender .seo-stop-photo img {
+  display: block;
+  width: 108px;
+  height: 81px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--border, rgba(0, 0, 0, 0.06));
+}
+
+.city-landing-content #seo-prerender .seo-stop-meta {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+}
 
 .city-landing-content #seo-prerender a {
   color: var(--brand-pine);

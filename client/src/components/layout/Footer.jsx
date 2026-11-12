@@ -223,8 +223,10 @@ export function TermsDoc() {
       <p>
         Los datos de lugares provienen de OpenStreetMap, disponibles bajo la licencia ODbL, y los
         textos e imágenes de Wikipedia y Wikimedia Commons bajo sus respectivas licencias. Las fotos,
-        valoraciones y horarios provienen de Google Maps Platform y están sujetos a sus términos. El
-        nombre, el diseño y el código de RandomTrip pertenecen a su titular.
+        valoraciones y horarios provienen de Google Maps Platform y están sujetos a sus términos. La
+        meteorología procede de Open-Meteo (licencia CC BY 4.0), el trazado de las rutas de
+        OpenRouteService y las fotos de ciudades de Unsplash. El nombre, el diseño y el código de
+        RandomTrip pertenecen a su titular.
       </p>
 
       <h3>Enlaces de afiliado</h3>
@@ -265,17 +267,12 @@ export default function Footer() {
               <img src="/icons/logo-mark.png" alt="" width="26" height="26" decoding="async" />
               RandomTrip
             </span>
-            <p>Rutas turísticas a pie generadas en segundos: detecta dónde estás y traza un itinerario por lugares reales de OpenStreetMap, con fotos, valoraciones y horarios de Google. Gratis y sin registro, en tu ciudad o en cualquier otra del mundo.</p>
+            <p>Rutas turísticas a pie generadas en segundos: detecta dónde estás y traza un itinerario por lugares reales, con fotos, valoraciones y horarios. Gratis y sin registro, en tu ciudad o en cualquier otra del mundo.</p>
           </div>
           <div className="footer-links">
             <div className="footer-links-group">
               <h4>Producto</h4>
               <a href="#inspiracion">Inspiración</a>
-            </div>
-            <div className="footer-links-group">
-              <h4>Recursos</h4>
-              <a href="https://www.openstreetmap.org" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>
-              <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
             </div>
             <div className="footer-links-group">
               <h4>Legal</h4>
@@ -289,11 +286,13 @@ export default function Footer() {
           </div>
         </div>
         <div className="footer-bottom">
-          <span>&copy; {year} RandomTrip. Hecho con IA y mucho café.</span>
+          <span>&copy; {year} RandomTrip. Hecho con mucho café.</span>
+          {/* The interface names no provider or technology (owner's call,
+              2026-11-12). The data licences still require credit, so it lives
+              in the Terms' attribution section and this is the way to it. The
+              map's own corner credit stays: the tile policy puts it there. */}
           <span className="footer-tech">
-            Datos de OpenStreetMap · Meteorología de Open-Meteo · Rutas OpenRouteService ·{' '}
-            Fotos de ciudades vía{' '}
-            <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer">Unsplash</a>
+            <a href="/terminos" onClick={openLegal('terminos')}>Créditos y licencias</a>
           </span>
         </div>
       </footer>

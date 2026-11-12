@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Generador de rutas turísticas con IA en cualquier ciudad — RandomTrip</title>
+  <title>Generador de rutas turísticas a pie en cualquier ciudad — RandomTrip</title>
   <meta name="description" content="Descubre qué ver cerca de ti y genera una ruta a pie por lugares reales en cualquier ciudad del mundo, en segundos. Con fotos, valoraciones y los restaurantes mejor valorados. Gratis y sin registro." />
   <meta name="theme-color" content="#3f6a64" />
   <meta name="robots" content="index,follow,max-image-preview:large" />
@@ -15,7 +15,7 @@
        property, so no verification meta tag is needed here. -->
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Generador de rutas turísticas con IA — RandomTrip" />
+  <meta property="og:title" content="Generador de rutas turísticas a pie — RandomTrip" />
   <meta property="og:description" content="Descubre qué visitar en cualquier ciudad del mundo: una ruta a pie por lugares reales, con fotos y valoraciones. Gratis y sin registro." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://randomtripgenerator.com/" />
@@ -31,7 +31,7 @@
   <!-- Twitter Card. title/description are rewritten per page by applyMetaTags,
        so a shared city page doesn't announce the homepage. -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Generador de rutas turísticas con IA — RandomTrip" />
+  <meta name="twitter:title" content="Generador de rutas turísticas a pie — RandomTrip" />
   <meta name="twitter:description" content="Rutas e itinerarios personalizados en cualquier ciudad. Gratis y sin registro." />
   <meta name="twitter:image" content="https://randomtripgenerator.com/icons/og-default.png" />
 
@@ -55,7 +55,7 @@
       "priceCurrency": "EUR"
     },
     "featureList": [
-      "Rutas a pie por lugares reales de OpenStreetMap",
+      "Rutas a pie por lugares reales, no inventados",
       "Fotos, valoraciones y horarios de cada lugar",
       "Restaurantes mejor valorados de la zona",
       "Meteorología del destino en vivo",
@@ -77,7 +77,7 @@
         "name": "¿Qué es RandomTrip?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "RandomTrip es un generador de rutas turísticas gratuito que crea itinerarios personalizados en cualquier ciudad del mundo. Combina lugares reales de OpenStreetMap con descripciones generadas por inteligencia artificial para que descubras qué visitar en segundos, sin necesidad de registro."
+          "text": "RandomTrip es un generador de rutas turísticas gratuito que crea itinerarios personalizados en cualquier ciudad del mundo. Te enseña los lugares reales que tienes alrededor y los ordena en una ruta a pie para que descubras qué visitar en segundos, sin necesidad de registro."
         }
       },
       {
@@ -93,7 +93,7 @@
         "name": "¿Qué información trae cada lugar?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Cada parada incluye una foto, su distancia desde tu punto de partida, la valoración y los horarios cuando están disponibles, y una descripción breve de qué es el lugar y por qué merece la pena. Los lugares salen de OpenStreetMap, así que son reales y no inventados."
+          "text": "Cada parada incluye una foto, su distancia desde tu punto de partida, la valoración y los horarios cuando están disponibles, y una descripción breve de qué es el lugar y por qué merece la pena. Todos los lugares existen: ninguno es inventado."
         }
       },
       {
@@ -124,6 +124,13 @@
     #seo-prerender h2 { font-size: 1.25rem; margin: 1.75rem 0 0.5rem; }
     #seo-prerender p { margin-bottom: 0.75rem; color: #5c3d28; }
     #seo-prerender ul { margin: 0 0 0.75rem 1.25rem; color: #5c3d28; }
+    /* Stop photos and walking detail on the 2-hour pages. Sized here as well as
+       in index.css so the photos don't paint at full size before React mounts. */
+    #seo-prerender h3 { font-size: 1rem; margin: 1.1rem 0 0.25rem; }
+    #seo-prerender li.seo-stop::after { content: ''; display: block; clear: both; }
+    #seo-prerender .seo-stop-photo { float: right; margin: 0.15rem 0 0.4rem 0.85rem; }
+    #seo-prerender .seo-stop-photo img { display: block; width: 108px; height: 81px; object-fit: cover; border-radius: 8px; }
+    #seo-prerender .seo-stop-meta { display: block; margin-top: 0.25rem; font-size: 0.875rem; }
     @media (prefers-color-scheme: dark) {
       #seo-prerender { color: #f0eae0; }
       #seo-prerender p, #seo-prerender ul { color: #c7bdae; }
@@ -155,7 +162,7 @@
 
       <h2>Qué puedes hacer con RandomTrip</h2>
       <ul>
-        <li><strong>Generar rutas a pie:</strong> itinerarios con lugares reales de OpenStreetMap, no inventados.</li>
+        <li><strong>Generar rutas a pie:</strong> itinerarios con lugares reales, no inventados.</li>
         <li><strong>Ver fotos, valoraciones y horarios</strong> de cada parada, con su distancia desde tu punto de partida.</li>
         <li><strong>Descubrir los mejores restaurantes:</strong> los sitios mejor valorados de la zona que elijas.</li>
         <li><strong>Consultar la meteorología</strong> en vivo de tu destino antes de salir.</li>
@@ -216,7 +223,7 @@
 
       <h2>Preguntas frecuentes</h2>
       <p><strong>¿Es gratis?</strong> Sí, RandomTrip es totalmente gratuito y no necesitas registrarte para generar rutas.</p>
-      <p><strong>¿En qué ciudades funciona?</strong> En cualquier ciudad del mundo: usa datos abiertos de OpenStreetMap, disponibles globalmente.</p>
+      <p><strong>¿En qué ciudades funciona?</strong> En cualquier ciudad del mundo, grande o pequeña.</p>
       <p><strong>¿Qué trae cada parada?</strong> Una foto, la distancia desde tu punto de partida, la valoración y los horarios cuando están disponibles, y una descripción de qué es el lugar.</p>
 
       <p><noscript>Necesitas activar JavaScript para usar la aplicación interactiva.</noscript></p>

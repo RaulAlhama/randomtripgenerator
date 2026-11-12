@@ -1,7 +1,7 @@
 {
-  "name": "RandomTrip - Generador de Rutas con IA",
+  "name": "RandomTrip - Rutas a pie en cualquier ciudad",
   "short_name": "RandomTrip",
-  "description": "Genera rutas turísticas aleatorias con inteligencia artificial",
+  "description": "Rutas a pie por lugares reales, en segundos y en cualquier ciudad",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f9fa",

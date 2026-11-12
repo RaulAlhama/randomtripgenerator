@@ -109,7 +109,7 @@ export default function CityLanding({ city, onExplore, walk = null, onWalk }) {
             <Arrow />
           </button>
           <p className="city-landing-note">
-            Lugares reales de OpenStreetMap alrededor del centro de {city.name}, ordenados
+            Lugares reales alrededor del centro de {city.name}, ordenados
             para recorrerlos andando. Gratis y sin registro.
           </p>
         </div>

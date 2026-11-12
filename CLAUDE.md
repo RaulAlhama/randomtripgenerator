@@ -93,7 +93,17 @@ generic hero. `assertIndexPatterns()` guards the mount point at startup.
 route view). `/api/route` caches answers for 6h, so the preview and the route view after it
 cost one ORS call between them.
 
+The 2-hour pages also carry practical detail built at render time from the stored stops
+(`walkLegs`, `walkFaq` in seoPages.js): the walk from the previous stop, and an FAQ that
+replaces the homepage's FAQPage JSON-LD. It is all arithmetic on coordinates — **no opening
+hours, prices or "worth going inside"**, because nothing stored can back them up. Each stop's
+photo and "Wikipedia" link come from its own article's Spanish version, resolved in the
+background by `warmStopMedia()` (startup + daily, one request every 700 ms). **Never resolve
+them inside the request**: six pages opened together drew a 429 from Wikimedia for every stop.
+
 ### Backend (server.js)
+- Requests for pages on `*.onrender.com` get a 301 to the real domain
+  (`canonicalRedirectTarget`); `/api` is exempt so Render's health check keeps working
 - Serves `client/dist/` (React build) if it exists, otherwise falls back to `public/`
 - All API routes unchanged
 

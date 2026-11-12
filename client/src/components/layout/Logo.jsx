@@ -8,7 +8,7 @@ export default function Logo() {
         <span className="logo-text">
           RandomTrip<span className="logo-text-accent">Generator</span>
         </span>
-        <span className="logo-sub">Rutas con IA</span>
+        <span className="logo-sub">Rutas a pie</span>
       </span>
     </a>
   );

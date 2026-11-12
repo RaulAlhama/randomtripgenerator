@@ -2,11 +2,13 @@
 // (no fabricated counters or testimonials). Reinforces the real
 // differentiators vs generic "AI trip planner" wrappers.
 // Only the claims the hero doesn't already make — the real differentiators
-// vs a generic "AI trip planner": real OSM places, real Google data, no friction.
+// vs a generic "AI trip planner": real places, real photos and ratings, no friction.
+// The copy names no provider or technology on purpose (owner's call, 2026-11-12):
+// what the visitor is told is what they get, not what it is built with.
 const ITEMS = [
   {
     title: 'Lugares reales',
-    text: 'De OpenStreetMap, no inventados por IA.',
+    text: 'Sitios que existen, ninguno inventado.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z" />
@@ -15,8 +17,8 @@ const ITEMS = [
     ),
   },
   {
-    title: 'Fotos y datos de Google',
-    text: 'Valoraciones y horarios reales.',
+    title: 'Fotos y valoraciones',
+    text: 'Con los horarios de cada sitio.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="16" rx="2" />

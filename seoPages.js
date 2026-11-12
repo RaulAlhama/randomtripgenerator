@@ -489,16 +489,139 @@ function estimateWalkTime(distanceM, stopCount) {
   return `unas ${Math.floor(rounded)} horas y media`;
 }
 
-function buildItemHtml(item) {
-  return `        <li><strong>${escapeHtml(item.name)}:</strong> ${escapeHtml(item.description)}</li>`;
+// ---------------------------------------------------------------------------
+// Practical detail for the 2-hour pages, computed from what the page stores.
+//
+// These pages sat at positions 12-16 for the big cities with ~300 words of
+// description and nothing a walker could use. Everything added here is
+// arithmetic on the stops' coordinates or a restatement of how the two hours
+// are budgeted: no opening hours, no prices, no "worth going inside", because
+// nothing in the stored data can back those up and this site has already
+// published invented facts once.
+// ---------------------------------------------------------------------------
+
+// Straight line to street distance: the same factor the generator applies to
+// total_distance_m, so the legs and the page's total tell one story.
+const STREET_FACTOR = 1.4;
+const WALK_M_PER_MIN = 75; // 4.5 km/h, as in estimateWalkTime
+
+const hasCoords = (s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lng);
+
+function walkMinutes(meters) {
+  return Math.max(1, Math.round(meters / WALK_M_PER_MIN));
+}
+
+// "350 m" below a kilometre, "1,2 km" from there on.
+function formatWalkDistance(meters) {
+  if (meters < 1000) return `${Math.max(50, Math.round(meters / 50) * 50)} m`;
+  return formatKm(meters);
+}
+
+// Distance from each stop to the one before it; null for the first stop and
+// for any pair missing coordinates.
+function walkLegs(items) {
+  return items.map((item, i) => {
+    const prev = items[i - 1];
+    if (!prev || !hasCoords(prev) || !hasCoords(item)) return null;
+    const meters = metersBetween(prev, item) * STREET_FACTOR;
+    return { from: prev.name, to: item.name, meters, minutes: walkMinutes(meters) };
+  });
+}
+
+// Always the Spanish article: the server resolves the stop's `wikipedia` tag
+// (which may name any language) to its Spanish title before it gets here.
+function spanishArticleUrl(title) {
+  const t = String(title || '').trim();
+  return t ? `https://es.wikipedia.org/wiki/${encodeURIComponent(t.replace(/ /g, '_'))}` : null;
+}
+
+// Questions a person planning this walk actually has, answered only from the
+// route's own numbers. Returns [] when the page lacks what an answer needs.
+function walkFaq(city, page) {
+  const items = (page.content || []).filter(hasCoords);
+  const total = page.total_distance_m;
+  if (page.page_type !== 'paseo-2h' || items.length < 2 || !total) return [];
+
+  const faq = [];
+  const walking = walkMinutes(total);
+  const perStop = Math.floor((120 - walking) / items.length);
+  faq.push({
+    q: `¿Cuánto se tarda en hacer esta ruta por ${city.name}?`,
+    a: `Son ${formatKm(total)} a pie, unos ${walking} minutos andando sin detenerse.` +
+      (perStop >= 3
+        ? ` El resto hasta las 2 horas se reparte entre las ${items.length} paradas: unos ${perStop} minutos en cada una, lo justo para verla por fuera y hacer fotos.`
+        : ''),
+  });
+
+  const first = items[0];
+  const last = items[items.length - 1];
+  const back = metersBetween(first, last) * STREET_FACTOR;
+  faq.push({
+    q: '¿Dónde empieza y dónde termina?',
+    a: `La primera parada es ${first.name} y la última, ${last.name}. El final queda a unos ${formatWalkDistance(back)} del punto de partida (unos ${walkMinutes(back)} minutos andando), por si tienes que volver.`,
+  });
+
+  faq.push({
+    q: '¿Da tiempo a entrar en los monumentos y museos?',
+    a: 'No dentro de las 2 horas: el tiempo está calculado para ver cada parada por fuera. Si quieres entrar en alguna, resérvale tiempo aparte o genera una ruta con menos paradas.',
+  });
+
+  const legs = walkLegs(items).filter(Boolean);
+  if (legs.length >= 2) {
+    const longest = legs.reduce((a, b) => (b.meters > a.meters ? b : a));
+    const shortest = legs.reduce((a, b) => (b.meters < a.meters ? b : a));
+    faq.push({
+      q: '¿Cuál es el tramo más largo?',
+      a: `El que va de ${longest.from} a ${longest.to}: unos ${formatWalkDistance(longest.meters)}, unos ${longest.minutes} minutos andando. El más corto, de ${shortest.from} a ${shortest.to}, son unos ${formatWalkDistance(shortest.meters)}.`,
+    });
+  }
+  return faq;
+}
+
+// extra: { leg, media, alt } — only the 2-hour pages pass any.
+//   leg   — walkLegs() entry for this stop
+//   media — { title, image: { src, width, height } | null } resolved by the
+//           server from the stop's own Wikipedia article. The photo links to
+//           that article, which is also its credit. Without media the stop
+//           shows neither: there is no Spanish article to send anyone to.
+function buildItemHtml(item, extra = {}) {
+  const wiki = extra.media ? spanishArticleUrl(extra.media.title) : null;
+  const image = extra.media && extra.media.image;
+  const photo = image && image.src && wiki
+    ? `<a class="seo-stop-photo" href="${escapeHtml(wiki)}" rel="noopener" target="_blank"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(extra.alt || item.name)}" loading="lazy" decoding="async" width="${Number(image.width) || 320}" height="${Number(image.height) || 240}" /></a>`
+    : '';
+  const meta = [];
+  if (extra.leg) {
+    meta.push(`A unos ${formatWalkDistance(extra.leg.meters)} de la parada anterior, unos ${extra.leg.minutes} min andando.`);
+  }
+  if (wiki) {
+    meta.push(`<a href="${escapeHtml(wiki)}" rel="noopener" target="_blank">${photo ? 'Foto y más información' : 'Más información'} en Wikipedia</a>`);
+  }
+  const metaHtml = meta.length ? ` <span class="seo-stop-meta">${meta.join(' ')}</span>` : '';
+  const cls = photo ? ' class="seo-stop"' : '';
+  return `        <li${cls}>${photo}<strong>${escapeHtml(item.name)}:</strong> ${escapeHtml(item.description)}${metaHtml}</li>`;
 }
 
 // links: { cityVariants: [{href,label}], siblingCities: [{href,label}] }
-function buildVariantSeoBlock(city, page, links) {
+// media: { [stop name]: { title, image } } — optional, 2-hour pages only.
+function buildVariantSeoBlock(city, page, links, media = {}) {
   const def = PAGE_TYPES[page.page_type];
   const items = page.content;
   const tag = def.ordered ? 'ol' : 'ul';
-  const itemsHtml = items.map(buildItemHtml).join('\n');
+  const isWalk = page.page_type === 'paseo-2h';
+  const legs = isWalk ? walkLegs(items) : [];
+  const itemsHtml = items
+    .map((item, i) => buildItemHtml(item, isWalk
+      ? { leg: legs[i], media: media[item.name], alt: `${item.name}, ${city.name}` }
+      : {}))
+    .join('\n');
+  const faq = walkFaq(city, page);
+  const faqSection = faq.length
+    ? `
+      <h2>Preguntas frecuentes sobre la ruta</h2>
+${faq.map((f) => `      <h3>${escapeHtml(f.q)}</h3>\n      <p>${escapeHtml(f.a)}</p>`).join('\n')}
+`
+    : '';
 
   // The walk page's title, URL and intro all promise two hours, and the
   // generator now fits the route to that budget, so it states two hours rather
@@ -533,12 +656,12 @@ ${links.siblingCities.map((l) => `        <li><a href="${l.href}">${escapeHtml(l
       <${tag}>
 ${itemsHtml}
       </${tag}>${distanceLine}
-${activitiesSectionHtml(city, page.page_type)}
-      <h2>Genera tu propia ruta por ${escapeHtml(city.name)} con IA</h2>
+${faqSection}${activitiesSectionHtml(city, page.page_type)}
+      <h2>Genera tu propia ruta por ${escapeHtml(city.name)}</h2>
       <p>
         Esta página recoge una selección fija. Si quieres un itinerario a tu medida —otro punto
         de partida u otra distancia—, RandomTrip lo genera en segundos con lugares
-        reales de OpenStreetMap. Gratis y sin registro.
+        reales. Gratis y sin registro.
         <a href="/">Generar mi ruta por ${escapeHtml(city.name)}</a>.
       </p>
 
@@ -551,7 +674,7 @@ ${cityLinks}
     </div>`;
 }
 
-function buildVariantHtml(indexHtml, city, page, links) {
+function buildVariantHtml(indexHtml, city, page, links, media = {}) {
   const def = PAGE_TYPES[page.page_type];
   const url = `${SITE_ORIGIN}/ciudad/${city.slug}/${def.urlSlug}`;
   const title = page.title || def.title(city);
@@ -597,7 +720,31 @@ function buildVariantHtml(indexHtml, city, page, links) {
       `  <script type="application/ld+json">\n${JSON.stringify(itemList)}\n  </script>\n</head>`
   );
 
-  html = injectSeoContent(html, buildVariantSeoBlock(city, page, links), city, walkPayload(page));
+  // The template carries the homepage's FAQPage ("¿Qué es RandomTrip?"), whose
+  // questions aren't on this page. Where the page has its own FAQ, that one
+  // replaces it: structured data has to describe what the reader can see.
+  const faq = walkFaq(city, page);
+  if (faq.length) {
+    const faqLd = {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    };
+    const own = `<script type="application/ld+json">\n${JSON.stringify(faqLd).replace(/</g, '\\u003c')}\n  </script>`;
+    let replaced = false;
+    html = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, (block) => {
+      if (replaced || !/"@type"\s*:\s*"FAQPage"/.test(block)) return block;
+      replaced = true;
+      return own;
+    });
+    if (!replaced) html = html.replace('</head>', `  ${own}\n</head>`);
+  }
+
+  html = injectSeoContent(html, buildVariantSeoBlock(city, page, links, media), city, walkPayload(page));
   return html;
 }
 
@@ -721,6 +868,8 @@ module.exports = {
   injectSeoContent,
   buildVariantHtml,
   buildVariantSeoBlock,
+  walkLegs,
+  walkFaq,
   assertIndexPatterns,
   getPublishedPage,
   listPublishedPages,
