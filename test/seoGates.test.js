@@ -199,3 +199,25 @@ test('validatePage accepts a clean page', () => {
   assert.strictEqual(verdict.reason, null);
   assert.strictEqual(verdict.ok, true);
 });
+
+// Outside Spain a place's own name is full of the words the English-leak gate
+// looks for. Berlin's page was rejected for citing its "Neues Museum".
+test('a stop name in another language is not English leaking into the copy', () => {
+  const page = cleanPage(5);
+  page[0] = { ...page[0], name: 'Neues Museum', description: 'El Neues Museum reúne colecciones de arqueología y arte antiguo en un edificio restaurado con mucho cuidado.' };
+  assert.deepStrictEqual(sanitizeItems('paseo-2h', page, 'Berlín').dropped, []);
+  const verdict = validatePage('paseo-2h', {
+    items: page,
+    intro: 'Un paseo de dos horas por el centro de Berlín que pasa junto al Neues Museum y otras cuatro paradas, a ritmo tranquilo y sin prisas.',
+    llmOk: true,
+    cityName: 'Berlín',
+  });
+  assert.notStrictEqual(verdict.reason, 'intro_not_spanish');
+});
+
+test('English prose around a foreign name is still caught', () => {
+  const reasons = dropped([
+    item({ name: 'Neues Museum', description: 'El Neues Museum is located junto al río y reúne colecciones de arqueología y arte antiguo.' }),
+  ], 'Berlín');
+  assert.deepStrictEqual(reasons, ['not_spanish']);
+});

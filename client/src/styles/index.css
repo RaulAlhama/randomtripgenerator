@@ -2720,3 +2720,24 @@ a.footer-link-btn { text-decoration: none; }
   .hero-actions .hero-cta-alt { padding: 0.85rem 0 0.95rem; }
   .hero-actions .planner-toggle { min-height: 48px; padding-top: 0.75rem; }
 }
+
+/* The city grid is grouped by where the city is (España / Europa). */
+.city-grid-group + .city-grid-group { margin-top: 2.5rem; }
+
+.city-grid-group-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+/* "Créditos y licencias" in the footer bar: reads as part of the bar, not as a
+   default blue link. */
+.footer-tech a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.footer-tech a:hover { color: var(--primary); }

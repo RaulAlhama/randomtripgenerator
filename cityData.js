@@ -1,5 +1,6 @@
 // City landing-page data for SEO. Each entry powers a server-rendered
-// /ciudad/<slug> page targeting the Spanish long-tail "qué visitar en X".
+// /ciudad/<slug> page targeting the Spanish-language long-tail "qué visitar en X".
+// The pages are in Spanish; the cities are Spanish and, since 2026-11, European.
 // Content is hand-written and distinct per city on purpose: thin/duplicated
 // boilerplate is what got the site de-indexed before, so keep it unique.
 
@@ -487,6 +488,228 @@ const CITIES = [
       { name: 'Iglesia de San Pablo', blurb: 'Fachada gótica de gran riqueza decorativa junto a San Gregorio.' },
       { name: 'Campo Grande', blurb: 'Parque romántico en el centro, con pavos reales sueltos.' },
       { name: 'Casa de Cervantes', blurb: 'La casa donde vivió el escritor, hoy museo.' },
+    ],
+  },
+
+  // ---- Europe (2026-11). The app itself always worked anywhere; what was
+  // Spain-only was this list, and with it the home grid, the sitemap and the
+  // 2-hour pages. `country` is new and only these entries set it: everything
+  // that reads it falls back to 'España'. Coordinates are a central square a
+  // walk can start from, because the 2-hour generator looks around them.
+  {
+    slug: 'lisboa',
+    name: 'Lisboa',
+    country: 'Portugal',
+    region: 'Portugal',
+    lat: 38.7139,
+    lng: -9.1394, // Praça do Rossio
+    intro:
+      'Lisboa se asoma al Tajo desde sus colinas, y eso se nota en las piernas: cuestas, escaleras y miradores a cada paso. La Baixa es llana y ordenada; alrededor, Alfama y el Chiado suben entre tranvías y fachadas de azulejo.',
+    highlights: [
+      { name: 'Praça do Comércio', blurb: 'La gran plaza abierta al Tajo, entrada monumental a la Baixa.' },
+      { name: 'Catedral de Lisboa (Sé)', blurb: 'La iglesia más antigua de la ciudad, con aspecto de fortaleza.' },
+      { name: 'Castillo de San Jorge', blurb: 'Murallas en lo alto de la colina, con vistas sobre los tejados y el río.' },
+      { name: 'Elevador de Santa Justa', blurb: 'Ascensor de hierro que une la Baixa con el Largo do Carmo.' },
+      { name: 'Convento do Carmo', blurb: 'Iglesia sin techo desde el terremoto de 1755, hoy museo arqueológico.' },
+      { name: 'Torre de Belém', blurb: 'Fortificación sobre el Tajo, a las afueras del centro, símbolo de la ciudad.' },
+    ],
+  },
+  {
+    slug: 'oporto',
+    name: 'Oporto',
+    country: 'Portugal',
+    region: 'Portugal',
+    lat: 41.1456,
+    lng: -8.6109, // Estación de São Bento
+    intro:
+      'Oporto baja en pendiente hasta el Duero, y casi todo lo que hay que ver queda en ese descenso: iglesias forradas de azulejo, la estación de São Bento y las casas estrechas de la Ribeira. Al otro lado del puente están las bodegas de Vila Nova de Gaia.',
+    highlights: [
+      { name: 'Ribeira', blurb: 'El frente fluvial de casas de colores, a los pies del puente.' },
+      { name: 'Puente Don Luis I', blurb: 'Puente de hierro de dos pisos sobre el Duero; el superior se cruza a pie.' },
+      { name: 'Estación de São Bento', blurb: 'Vestíbulo cubierto de paneles de azulejo con escenas de la historia de Portugal.' },
+      { name: 'Torre de los Clérigos', blurb: 'El campanario que domina el perfil de la ciudad, con mirador en lo alto.' },
+      { name: 'Catedral de Oporto (Sé)', blurb: 'Catedral fortificada con una terraza que mira al río.' },
+      { name: 'Librería Lello', blurb: 'Librería centenaria famosa por su escalera de madera.' },
+    ],
+  },
+  {
+    slug: 'paris',
+    name: 'París',
+    country: 'Francia',
+    region: 'Francia',
+    lat: 48.8566,
+    lng: 2.3522, // Hôtel de Ville
+    intro:
+      'París es demasiado grande para un solo paseo, pero su centro histórico es llano y se anda bien: las islas del Sena, el Louvre y el Marais quedan a pocos minutos unos de otros. El río sirve de guía, con un puente cada pocos cientos de metros.',
+    highlights: [
+      { name: 'Catedral de Notre-Dame', blurb: 'La catedral de la Île de la Cité, reabierta tras el incendio de 2019.' },
+      { name: 'Museo del Louvre', blurb: 'El antiguo palacio real y su pirámide de cristal, uno de los mayores museos del mundo.' },
+      { name: 'Sainte-Chapelle', blurb: 'Capilla de vidrieras que cubren casi por completo sus muros.' },
+      { name: 'Pont Neuf', blurb: 'El puente en pie más antiguo de París, pese a su nombre.' },
+      { name: 'Torre Eiffel', blurb: 'El símbolo de la ciudad, al oeste del centro, junto al Sena.' },
+      { name: 'Sacré-Cœur', blurb: 'La basílica blanca en lo alto de Montmartre, con vistas sobre la ciudad.' },
+    ],
+  },
+  {
+    slug: 'roma',
+    name: 'Roma',
+    country: 'Italia',
+    region: 'Italia',
+    lat: 41.8986,
+    lng: 12.4769, // Panteón
+    intro:
+      'En el centro de Roma las épocas se pisan unas a otras: un templo de hace dos mil años, una fuente barroca y una plaza renacentista a cinco minutos andando. Las calles son estrechas y empedradas, y lo mejor aparece al doblar una esquina.',
+    highlights: [
+      { name: 'Coliseo', blurb: 'El mayor anfiteatro del mundo romano, junto al Foro.' },
+      { name: 'Panteón', blurb: 'Templo romano con una cúpula abierta al cielo por su óculo.' },
+      { name: 'Fontana di Trevi', blurb: 'La fuente monumental a la que se lanza una moneda para volver.' },
+      { name: 'Piazza Navona', blurb: 'Plaza alargada sobre un antiguo estadio, con la fuente de los Cuatro Ríos.' },
+      { name: 'Foro Romano', blurb: 'Las ruinas del centro político y religioso de la antigua Roma.' },
+      { name: 'Plaza de España', blurb: 'La escalinata que sube hasta la iglesia de Trinità dei Monti.' },
+    ],
+  },
+  {
+    slug: 'florencia',
+    name: 'Florencia',
+    country: 'Italia',
+    region: 'Italia',
+    lat: 43.7731,
+    lng: 11.256, // Piazza del Duomo
+    intro:
+      'El centro de Florencia es pequeño y casi todo peatonal: de la catedral al Ponte Vecchio hay diez minutos a pie, y entre medias quedan sus plazas y palacios principales. Cruzando el Arno, la subida al Piazzale Michelangelo da la vista completa de la ciudad.',
+    highlights: [
+      { name: 'Catedral de Santa María del Fiore', blurb: 'El Duomo y la cúpula de Brunelleschi, visibles desde toda la ciudad.' },
+      { name: 'Ponte Vecchio', blurb: 'Puente medieval sobre el Arno con tiendas de joyeros a ambos lados.' },
+      { name: 'Piazza della Signoria', blurb: 'La plaza del Palazzo Vecchio, con esculturas al aire libre.' },
+      { name: 'Galería Uffizi', blurb: 'Una de las grandes pinacotecas del mundo, con Botticelli y Leonardo.' },
+      { name: 'Basílica de Santa Croce', blurb: 'Iglesia franciscana donde están enterrados Miguel Ángel y Galileo.' },
+      { name: 'Piazzale Michelangelo', blurb: 'Mirador al otro lado del río, con la panorámica clásica de Florencia.' },
+    ],
+  },
+  {
+    slug: 'venecia',
+    name: 'Venecia',
+    country: 'Italia',
+    region: 'Italia',
+    lat: 45.438,
+    lng: 12.3359, // Puente de Rialto
+    intro:
+      'En Venecia no hay coches: se anda o se va en barco. Entre Rialto y San Marcos hay un cuarto de hora a pie por callejones y puentes pequeños, y perderse por el camino forma parte de la visita. Fuera de ese eje la ciudad se queda mucho más tranquila.',
+    highlights: [
+      { name: 'Plaza de San Marcos', blurb: 'La gran plaza de la ciudad, entre la basílica y el campanario.' },
+      { name: 'Basílica de San Marcos', blurb: 'Iglesia de cúpulas y mosaicos dorados, de inspiración bizantina.' },
+      { name: 'Palacio Ducal', blurb: 'Sede del gobierno de la antigua república, frente a la laguna.' },
+      { name: 'Puente de Rialto', blurb: 'El más antiguo de los puentes que cruzan el Gran Canal.' },
+      { name: 'Puente de los Suspiros', blurb: 'Pasaje cerrado que unía el palacio con la prisión.' },
+      { name: 'Santa Maria della Salute', blurb: 'Iglesia de gran cúpula en la entrada del Gran Canal.' },
+    ],
+  },
+  {
+    slug: 'londres',
+    name: 'Londres',
+    country: 'Reino Unido',
+    region: 'Reino Unido',
+    lat: 51.5033,
+    lng: -0.1276, // Whitehall, between Trafalgar Square and Parliament
+    intro:
+      'Londres es enorme, pero Westminster se recorre a pie sin problema: de Trafalgar Square al Parlamento hay diez minutos, y el palacio de Buckingham queda al otro lado del parque de St James. El Támesis y sus puentes completan el paseo.',
+    highlights: [
+      { name: 'Palacio de Westminster y Big Ben', blurb: 'El Parlamento británico y su torre del reloj, junto al Támesis.' },
+      { name: 'Abadía de Westminster', blurb: 'Iglesia de las coronaciones y panteón de reyes y escritores.' },
+      { name: 'Trafalgar Square', blurb: 'La plaza de la columna de Nelson, frente a la National Gallery.' },
+      { name: 'Palacio de Buckingham', blurb: 'Residencia oficial de la monarquía, con el cambio de guardia.' },
+      { name: 'Puente de la Torre', blurb: 'El puente levadizo de dos torres, al este del centro.' },
+      { name: 'Museo Británico', blurb: 'Uno de los grandes museos de historia del mundo, de entrada gratuita.' },
+    ],
+  },
+  {
+    slug: 'amsterdam',
+    name: 'Ámsterdam',
+    country: 'Países Bajos',
+    region: 'Países Bajos',
+    lat: 52.3731,
+    lng: 4.8926, // Plaza Dam
+    intro:
+      'Ámsterdam es llana y compacta, hecha para ir a pie o en bici. El centro son anillos de canales con casas estrechas de fachada inclinada, y la plaza Dam queda en medio de todo. Conviene mirar a los dos lados antes de cruzar un carril bici.',
+    highlights: [
+      { name: 'Plaza Dam', blurb: 'La plaza central, con el Palacio Real y la Iglesia Nueva.' },
+      { name: 'Casa de Ana Frank', blurb: 'La casa del canal donde se escondió la familia Frank, hoy museo.' },
+      { name: 'Rijksmuseum', blurb: 'El gran museo nacional, con Rembrandt y Vermeer.' },
+      { name: 'Begijnhof', blurb: 'Patio tranquilo de casas antiguas escondido en pleno centro.' },
+      { name: 'Mercado de las Flores', blurb: 'Puestos de flores y bulbos sobre barcazas en el canal Singel.' },
+      { name: 'Barrio de Jordaan', blurb: 'Calles estrechas y canales pequeños al oeste del centro.' },
+    ],
+  },
+  {
+    slug: 'berlin',
+    name: 'Berlín',
+    country: 'Alemania',
+    region: 'Alemania',
+    lat: 52.517,
+    lng: 13.3889, // Unter den Linden
+    intro:
+      'El centro histórico de Berlín se ordena a lo largo de una avenida, Unter den Linden: en un extremo la Puerta de Brandeburgo y el Reichstag, en el otro la Isla de los Museos y la catedral. Es un paseo llano y recto, con la historia del siglo XX a la vista.',
+    highlights: [
+      { name: 'Puerta de Brandeburgo', blurb: 'El símbolo de la ciudad y de su reunificación.' },
+      { name: 'Edificio del Reichstag', blurb: 'Sede del parlamento alemán, con una cúpula de cristal visitable.' },
+      { name: 'Monumento del Holocausto', blurb: 'Campo de bloques de hormigón en memoria de los judíos asesinados en Europa.' },
+      { name: 'Isla de los Museos', blurb: 'Cinco museos reunidos en una isla del río Spree.' },
+      { name: 'Catedral de Berlín', blurb: 'La gran iglesia de cúpula verde junto a la Isla de los Museos.' },
+      { name: 'East Side Gallery', blurb: 'El tramo más largo que queda del Muro, cubierto de murales.' },
+    ],
+  },
+  {
+    slug: 'praga',
+    name: 'Praga',
+    country: 'República Checa',
+    region: 'República Checa',
+    lat: 50.0875,
+    lng: 14.4213, // Plaza de la Ciudad Vieja
+    intro:
+      'Praga se recorre siguiendo un camino muy claro: de la Plaza de la Ciudad Vieja al Puente de Carlos y, al otro lado del Moldava, cuesta arriba hasta el castillo. Calles empedradas, torres a cada lado y un centro que se conserva casi entero.',
+    highlights: [
+      { name: 'Plaza de la Ciudad Vieja', blurb: 'La plaza principal, con la iglesia de Týn y el ayuntamiento.' },
+      { name: 'Reloj Astronómico', blurb: 'Reloj medieval del ayuntamiento, con figuras que desfilan cada hora.' },
+      { name: 'Puente de Carlos', blurb: 'Puente de piedra peatonal sobre el Moldava, flanqueado de estatuas.' },
+      { name: 'Castillo de Praga', blurb: 'Recinto de palacios e iglesias en lo alto de la colina.' },
+      { name: 'Catedral de San Vito', blurb: 'La catedral dentro del castillo, visible desde toda la ciudad.' },
+      { name: 'Barrio Judío (Josefov)', blurb: 'Sinagogas históricas y el antiguo cementerio judío.' },
+    ],
+  },
+  {
+    slug: 'viena',
+    name: 'Viena',
+    country: 'Austria',
+    region: 'Austria',
+    lat: 48.2085,
+    lng: 16.3731, // Stephansplatz
+    intro:
+      'El centro de Viena cabe dentro de la Ringstrasse, el bulevar que ocupa el lugar de las antiguas murallas. Dentro, calles peatonales alrededor de la catedral y el palacio imperial; sobre el propio anillo, la ópera, el ayuntamiento y los grandes museos.',
+    highlights: [
+      { name: 'Catedral de San Esteban', blurb: 'La catedral del centro, con su tejado de azulejos de colores.' },
+      { name: 'Palacio Imperial de Hofburg', blurb: 'La residencia de los Habsburgo en el corazón de la ciudad.' },
+      { name: 'Ópera Estatal de Viena', blurb: 'Uno de los grandes teatros de ópera del mundo, sobre la Ringstrasse.' },
+      { name: 'Ayuntamiento de Viena', blurb: 'Edificio de torres frente a una plaza con mercados y eventos.' },
+      { name: 'Palacio Belvedere', blurb: 'Dos palacios unidos por jardines, con la colección de Klimt.' },
+      { name: 'Palacio de Schönbrunn', blurb: 'La residencia de verano imperial y sus jardines, fuera del centro.' },
+    ],
+  },
+  {
+    slug: 'budapest',
+    name: 'Budapest',
+    country: 'Hungría',
+    region: 'Hungría',
+    lat: 47.4988,
+    lng: 19.0468, // Pest end of the Chain Bridge
+    intro:
+      'El Danubio parte Budapest en dos: Pest, llana y de grandes avenidas, y Buda, en alto, con el castillo. Los puentes se cruzan a pie y las mejores vistas de cada orilla se tienen desde la otra, sobre todo al anochecer, cuando se ilumina el Parlamento.',
+    highlights: [
+      { name: 'Parlamento de Budapest', blurb: 'El enorme edificio de agujas y cúpula a orillas del Danubio.' },
+      { name: 'Puente de las Cadenas', blurb: 'El primer puente permanente que unió Buda y Pest.' },
+      { name: 'Bastión de los Pescadores', blurb: 'Terraza de torres blancas con vistas al río y al Parlamento.' },
+      { name: 'Castillo de Buda', blurb: 'El antiguo palacio real en lo alto de la colina, hoy museos.' },
+      { name: 'Basílica de San Esteban', blurb: 'La mayor iglesia de la ciudad, con mirador en la cúpula.' },
+      { name: 'Balneario Széchenyi', blurb: 'Baños termales con piscinas al aire libre en el parque de la ciudad.' },
     ],
   },
 ];

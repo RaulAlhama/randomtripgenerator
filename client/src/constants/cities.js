@@ -42,6 +42,22 @@ export const SEO_CITIES = [
   { slug: 'alicante', name: 'Alicante', photo: '1636319039199-4b81fe4d9552', photoBy: 'Victoria Nezh' },
   { slug: 'pamplona', name: 'Pamplona', photo: '1636217424464-e717e1849855', photoBy: 'David Vives' },
   { slug: 'valladolid', name: 'Valladolid', photo: '1595415961896-7809eea97c9e', photoBy: 'Clemente Corona' },
+  // Europe, 2026-11. `country` marks them (absent = España) and is what the
+  // home grid groups by. Each photo was looked at next to two other candidates
+  // and shows a landmark nobody could take for another city; photoBy is the
+  // author's Unsplash handle where the search page showed one.
+  { slug: 'lisboa', name: 'Lisboa', country: 'Portugal', photo: '1599069158346-684fee0e414a', photoBy: 'andrelergier' },
+  { slug: 'oporto', name: 'Oporto', country: 'Portugal', photo: '1740422610259-e61b189c0056', photoBy: 'sergiy_kmet' },
+  { slug: 'paris', name: 'París', country: 'Francia', photo: '1553455427-c38fa28dc586', photoBy: 'yovanverma' },
+  { slug: 'roma', name: 'Roma', country: 'Italia', photo: '1764947808860-f7085d2de39b', photoBy: 'marcozzolo90' },
+  { slug: 'florencia', name: 'Florencia', country: 'Italia', photo: '1776377231754-d36928e6ee4d', photoBy: 'rickpsd' },
+  { slug: 'venecia', name: 'Venecia', country: 'Italia', photo: '1648455198279-9bdfc1167445', photoBy: 'Tom Podmore' },
+  { slug: 'londres', name: 'Londres', country: 'Reino Unido', photo: '1520986606214-8b456906c813', photoBy: 'lucas_davies' },
+  { slug: 'amsterdam', name: 'Ámsterdam', country: 'Países Bajos', photo: '1605704320412-5c3255bf47a9', photoBy: 'Unsplash' },
+  { slug: 'berlin', name: 'Berlín', country: 'Alemania', photo: '1777907161660-ac46ce8aa2a3', photoBy: 'arlindphotography' },
+  { slug: 'praga', name: 'Praga', country: 'República Checa', photo: '1578602840375-3f8374b1ebef', photoBy: 'Unsplash' },
+  { slug: 'viena', name: 'Viena', country: 'Austria', photo: '1707998985112-598e213de990', photoBy: 'joshimilestoner' },
+  { slug: 'budapest', name: 'Budapest', country: 'Hungría', photo: '1733135417099-34fbec8e00ed', photoBy: 'nesir' },
 ];
 
 // Civitatis destination slugs that differ from the one our name produces,

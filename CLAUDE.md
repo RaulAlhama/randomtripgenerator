@@ -93,6 +93,14 @@ generic hero. `assertIndexPatterns()` guards the mount point at startup.
 route view). `/api/route` caches answers for 6h, so the preview and the route view after it
 cost one ORS call between them.
 
+The city pages cover Spain (28 cities) and, since 2026-11, Europe (12: Lisboa, Oporto, París,
+Roma, Florencia, Venecia, Londres, Ámsterdam, Berlín, Praga, Viena, Budapest), all in Spanish.
+A European entry in `cityData.js` / `constants/cities.js` sets `country`; without it
+everything falls back to `'España'`, and the home grid groups by it. Adding a city: both
+files (test/citiesParity.test.js enforces it), the link list in `client/index.html`, then
+`node scripts/generateSeoPages.js --city <slug> --type paseo-2h`. The European cities have
+the landing and the 2-hour page only, no gastro page.
+
 The 2-hour pages also carry practical detail built at render time from the stored stops
 (`walkLegs`, `walkFaq` in seoPages.js): the walk from the previous stop, and an FAQ that
 replaces the homepage's FAQPage JSON-LD. It is all arithmetic on coordinates — **no opening

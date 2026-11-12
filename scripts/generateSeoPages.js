@@ -30,6 +30,7 @@ const {
   parseLLMJsonSafe,
   llmCandidates,
   callLLMOnce,
+  spanishWikipediaTitle,
 } = require('../server');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -295,9 +296,35 @@ async function buildWalkContent(city) {
   // better page than fitting first and being left short.
   const selected = sortByProximity(notable, city.lat, city.lng);
 
+  // Outside Spain most stops have no `name:es` in OSM, so the pages read
+  // "Matka Boží před Týnem" and "Koninklijk Paleis". Where the stop's article
+  // has a Spanish version, its title IS the Spanish name of the place, so the
+  // stop takes it (minus a trailing disambiguation) and its tag is repointed
+  // at that article. Done before the descriptions are written, so the model
+  // is told the name the reader will see. Only for cities that declare a
+  // country: in Spain the local-language name is often the one people use
+  // ("Palau de la Música Catalana"), and those pages were tuned as they are.
+  if (city.country) {
+    for (const p of selected) {
+      const m = /^([^:]+):(.+)$/.exec(String(p.wikipedia || ''));
+      if (!m) continue;
+      // A tag that already points at the Spanish article carries the Spanish
+      // name too (Florence's stops are tagged `es:` but named in Italian).
+      let title = m[2];
+      if (m[1].toLowerCase() !== 'es') {
+        title = await spanishWikipediaTitle(m[1], m[2]);
+        await sleep(500);
+      }
+      if (!title) continue;
+      // Minus the disambiguation, and the full stop one article title ends in.
+      p.name = title.replace(/\s*\([^)]*\)\s*$/, '').replace(/[.\s]+$/, '') || p.name;
+      p.wikipedia = `es:${title}`;
+    }
+  }
+
   // cautious: even with notability ranking some stops are lesser-known —
   // better a sober description than an invented fact set in stone.
-  const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'monuments', { cautious: true });
+  const descriptions = await getDescriptionsFromLLM(selected, city.name, city.country || 'España', 'monuments', { cautious: true });
 
   // No images. This used to call fetchAllPOIImages for every stop and store the
   // result, but no page renders it — buildItemHtml prints name and description,
@@ -349,7 +376,7 @@ async function buildGastroContent(city) {
   const selected = sortByProximity(pois.slice(0, POOL_SIZE), city.lat, city.lng);
   // cautious: the model doesn't actually know most local bars — don't let it
   // invent signature dishes or awards that end up published.
-  const descriptions = await getDescriptionsFromLLM(selected, city.name, 'España', 'food', { cautious: true });
+  const descriptions = await getDescriptionsFromLLM(selected, city.name, city.country || 'España', 'food', { cautious: true });
 
   const items = selected.map((p, i) => ({
     name: p.name,
@@ -507,7 +534,7 @@ async function main() {
           const again = built.items.filter((it) => redo.some((d) => d.name === it.name));
           await sleep(SLEEP_BETWEEN_CALLS);
           const fresh = await getDescriptionsFromLLM(
-            again, city.name, 'España', pageType === 'gastro' ? 'food' : 'monuments', { cautious: true }
+            again, city.name, city.country || 'España', pageType === 'gastro' ? 'food' : 'monuments', { cautious: true }
           );
           if (Array.isArray(fresh)) {
             const redescribed = again.map((it, i) => ({ ...it, description: fresh[i] || '' }));

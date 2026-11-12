@@ -194,6 +194,17 @@ function unverifiableClaim(text, itemName = '') {
 // no Spanish homograph, so Basque/Catalan/Galician POI names stay safe.
 const ENGLISH_LEAK_RE = /\b(the|its|and|with|from|this|these|those|which|where|their|there|about|through|beautiful|beauty|stunning|located|features|offers|visitors|stalls|crafts|vibe|building|church|museum|street|city)\b/i;
 
+// A place's own name is not a leak. Outside Spain names carry these words all
+// the time: Berlin's page was rejected for citing its "Neues Museum", and
+// London has a "Royal Academy of Arts". The names are taken out before looking.
+function leaksEnglish(text, names = []) {
+  let rest = String(text || '');
+  for (const name of names) {
+    if (name) rest = rest.split(name).join(' ');
+  }
+  return ENGLISH_LEAK_RE.test(rest);
+}
+
 // Mechanical defects in the generated prose. Every one of these was found in
 // the published pages, and none of them needs any knowledge of the world:
 //   "narra laBarcelona"        two words fused, a lowercase letter then a capital
@@ -321,7 +332,7 @@ function sanitizeItems(pageType, items, cityName) {
     const desc = String(item.description || '').trim();
 
     let reason = null;
-    if (ENGLISH_LEAK_RE.test(desc)) reason = 'not_spanish';
+    if (leaksEnglish(desc, [item.name])) reason = 'not_spanish';
     if (!reason) reason = textDefect(desc, item.name);
     if (!reason) reason = unverifiableClaim(desc, item.name);
     if (!reason && strayCity(desc, item.name, cityName)) reason = 'claim_other_city';
@@ -369,7 +380,7 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
     // Backstop only. sanitizeItems should already have dropped these, so
     // reaching here means the generator skipped it — fail loudly rather than
     // publish. Same helpers, so the two can't drift apart.
-    if (ENGLISH_LEAK_RE.test(desc)) return { ok: false, reason: `not_spanish:${item.name}` };
+    if (leaksEnglish(desc, [item.name])) return { ok: false, reason: `not_spanish:${item.name}` };
     const claim = unverifiableClaim(desc, item.name);
     if (claim) return { ok: false, reason: `${claim}:${item.name}` };
     if (strayCity(desc, item.name, cityName)) return { ok: false, reason: `claim_other_city:${item.name}` };
@@ -404,7 +415,7 @@ function validatePage(pageType, { items, intro, llmOk, cityName, existingIntros 
   const introContext = [cityName, ...items.map((i) => i.name)].join(' ');
   const introClaim = unverifiableClaim(introTrimmed, introContext);
   if (introClaim) return { ok: false, reason: `intro_${introClaim}` };
-  if (ENGLISH_LEAK_RE.test(introTrimmed)) return { ok: false, reason: 'intro_not_spanish' };
+  if (leaksEnglish(introTrimmed, items.map((i) => i.name))) return { ok: false, reason: 'intro_not_spanish' };
   const introDefect = textDefect(introTrimmed, introContext);
   if (introDefect) return { ok: false, reason: `intro_${introDefect}` };
   // Order claims are false by construction: the intro never sees the order.
@@ -780,7 +791,7 @@ function injectSeoContent(html, block, city, walk = null) {
     name: city.name,
     lat: city.lat,
     lng: city.lng,
-    country: 'España',
+    country: city.country || 'España',
     ...(walk ? { walk } : {}),
   }).replace(/</g, '\\u003c'); // can't break out of the script tag
   return html

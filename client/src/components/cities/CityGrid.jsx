@@ -17,6 +17,13 @@ import { SEO_CITIES } from '../../constants/cities';
 const photo = (id, w, h) =>
   `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&h=${h}&q=70`;
 
+// Spain first, then the rest of Europe: a visitor looks for their city under
+// its heading instead of scanning forty tiles.
+const GROUPS = [
+  { title: 'España', cities: SEO_CITIES.filter((c) => !c.country) },
+  { title: 'Europa', cities: SEO_CITIES.filter((c) => c.country) },
+].filter((g) => g.cities.length);
+
 export default function CityGrid() {
   return (
     <section className="city-grid-section" id="inspiracion" aria-labelledby="city-grid-title">
@@ -29,25 +36,30 @@ export default function CityGrid() {
         </p>
       </div>
 
-      <ul className="city-grid">
-        {SEO_CITIES.map((c) => (
-          <li key={c.slug}>
-            <a className="city-tile" href={`/ciudad/${c.slug}`}>
-              <img
-                className="city-tile-photo"
-                src={photo(c.photo, 480, 320)}
-                alt={`${c.name}, España`}
-                title={c.photoBy ? `Foto de ${c.photoBy} · Unsplash` : undefined}
-                width="480"
-                height="320"
-                loading="lazy"
-                decoding="async"
-              />
-              <span className="city-tile-name">{c.name}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
+      {GROUPS.map((group) => (
+        <div className="city-grid-group" key={group.title}>
+          <h3 className="city-grid-group-title">{group.title}</h3>
+          <ul className="city-grid">
+            {group.cities.map((c) => (
+              <li key={c.slug}>
+                <a className="city-tile" href={`/ciudad/${c.slug}`}>
+                  <img
+                    className="city-tile-photo"
+                    src={photo(c.photo, 480, 320)}
+                    alt={`${c.name}, ${c.country || 'España'}`}
+                    title={c.photoBy ? `Foto de ${c.photoBy} · Unsplash` : undefined}
+                    width="480"
+                    height="320"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="city-tile-name">{c.name}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

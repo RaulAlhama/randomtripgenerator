@@ -3774,6 +3774,7 @@ module.exports = {
   googleNameMatchesPOI,
   reconcileCivicBuildings,
   canonicalRedirectTarget,
+  spanishWikipediaTitle,
   // For tests that need the real middleware stack (response headers).
   app,
 };
