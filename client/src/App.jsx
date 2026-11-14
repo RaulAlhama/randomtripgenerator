@@ -1,8 +1,6 @@
 import { useCallback, useState } from 'react';
 import { ToastProvider } from './context/ToastContext';
-import { AuthProvider } from './context/AuthContext';
 import { TripProvider } from './context/TripContext';
-import { useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SavedProvider, useSaved } from './context/SavedContext';
 import { RoutesProvider } from './context/RoutesContext';
@@ -216,17 +214,15 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>
-            {/* RoutesProvider wraps TripProvider: building a route saves it. */}
-            <RoutesProvider>
-              <TripProvider>
-                <SavedProvider>
-                  <AppShell />
-                  <Toast />
-                </SavedProvider>
-              </TripProvider>
-            </RoutesProvider>
-          </AuthProvider>
+          {/* RoutesProvider wraps TripProvider: building a route saves it. */}
+          <RoutesProvider>
+            <TripProvider>
+              <SavedProvider>
+                <AppShell />
+                <Toast />
+              </SavedProvider>
+            </TripProvider>
+          </RoutesProvider>
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>

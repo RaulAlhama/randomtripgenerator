@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useRoutes, routeSignature } from '../../context/RoutesContext';
-import { useAuth } from '../../context/AuthContext';
+import { useCallback } from 'react';
+import { useRoutes } from '../../context/RoutesContext';
 import { useToast } from '../../context/ToastContext';
-import { loadTrips, saveTrip, deleteTrip as apiDeleteTrip } from '../../services/trips';
 import { track } from '../../services/analytics';
 import { formatKm as kmLabel } from '../../lib/format';
 import Icon from '../ui/Icon';
@@ -31,119 +29,18 @@ function formatMin(s) {
   return `${min} min`;
 }
 
-// A server trip (from /api/trips) reshaped to look like a locally stored route,
-// so one list can render both. It has no geometry, so reopening recomputes it.
-function fromServerTrip(t) {
-  let places = [];
-  try {
-    places = typeof t.places === 'string' ? JSON.parse(t.places) : (t.places || []);
-  } catch (_) { places = []; }
-  return {
-    id: `srv-${t.id}`,
-    serverId: t.id,
-    city: t.city || 'la zona',
-    country: t.country || '',
-    origin_lat: t.origin_lat,
-    origin_lng: t.origin_lng,
-    transport: t.transport_mode || 'walking',
-    places,
-    distance: t.route_distance ?? null,
-    duration: t.route_duration ?? null,
-    geometry: null,
-    createdAt: t.created_at ? new Date(t.created_at).getTime() : 0,
-    remote: true,
-  };
-}
-
-// The "Rutas" tab. Local routes are the source of truth (they carry geometry and
-// work offline); when signed in, server routes from other devices are merged in.
+// The "Rutas" tab: the routes built on this device (they carry geometry and
+// reopen without any request).
 export default function SavedRoutes({ onOpenRoute, onExplore }) {
-  const { routes, removeRoute, markSynced } = useRoutes();
-  const { authEnabled, isAuthenticated, getAccessToken, user } = useAuth();
+  const { routes, removeRoute } = useRoutes();
   const { showToast } = useToast();
-  const [remote, setRemote] = useState([]);
 
-  // Pull routes saved from other devices.
-  useEffect(() => {
-    if (!isAuthenticated) { setRemote([]); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) return;
-        const data = await loadTrips(token);
-        if (!cancelled) setRemote(Array.isArray(data) ? data.map(fromServerTrip) : []);
-      } catch (_) { /* the local list still works */ }
-    })();
-    return () => { cancelled = true; };
-  }, [isAuthenticated, getAccessToken]);
-
-  // Push local routes up the first time the user signs in, so creating an account
-  // never loses what they already built.
-  //
-  // Only routes this account may claim are eligible: ones built while signed out
-  // (no ownerId) or already bound to this account. On a shared browser the earlier
-  // version uploaded whatever was on the device to whoever signed in next, handing
-  // one person's routes — and the coordinates they were standing at — to another
-  // person's account, permanently and across their devices.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const owner = user?.sub || null;
-    if (!owner) return;
-    const pending = routes.filter((r) => !r.syncedId && (!r.ownerId || r.ownerId === owner));
-    if (pending.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) return;
-        for (const r of pending) {
-          if (cancelled) return;
-          try {
-            const saved = await saveTrip({
-              city: r.city,
-              country: r.country,
-              origin_lat: r.origin_lat,
-              origin_lng: r.origin_lng,
-              theme: 'mixed',
-              transport_mode: r.transport,
-              places: r.places,
-              route_distance: r.distance,
-              route_duration: r.duration,
-            }, token);
-            // Bind it to this account so no other account can ever claim it.
-            if (!cancelled) markSynced(r.id, saved?.id ?? true, owner);
-          } catch (_) { /* retry on a later mount */ }
-        }
-      } catch (_) { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.sub, routes.length]);
-
-  const handleDelete = useCallback(async (route) => {
-    if (route.remote) {
-      try {
-        const token = await getAccessToken();
-        if (!token) return;
-        await apiDeleteTrip(route.serverId, token);
-        setRemote((prev) => prev.filter((r) => r.id !== route.id));
-        showToast('Ruta eliminada', 'success');
-      } catch (_) {
-        showToast('No se pudo eliminar la ruta', 'error');
-      }
-      return;
-    }
+  const handleDelete = useCallback((route) => {
     removeRoute(route.id);
     showToast('Ruta eliminada', 'success');
-  }, [getAccessToken, removeRoute, showToast]);
+  }, [removeRoute, showToast]);
 
-  // Merge: a local copy always wins over the same route fetched from the server.
-  const localSignatures = new Set(routes.map(routeSignature));
-  const merged = [
-    ...routes,
-    ...remote.filter((r) => r.places.length >= 2 && !localSignatures.has(routeSignature(r))),
-  ].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const merged = [...routes].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   if (merged.length === 0) {
     return (
@@ -168,7 +65,6 @@ export default function SavedRoutes({ onOpenRoute, onExplore }) {
       <h2 className="saved-view-title">Tus rutas</h2>
       <p className="saved-view-sub">
         Se guardan en este dispositivo, sin necesidad de cuenta.
-        {authEnabled && !isAuthenticated && ' Inicia sesión para tenerlas en todos tus dispositivos.'}
       </p>
 
       <ul className="rt-list">

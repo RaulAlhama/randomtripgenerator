@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import ThemeToggle from '../ui/ThemeToggle';
 import Logo from './Logo';
 
 export default function Header() {
-  const { authEnabled, isAuthenticated, isLoading, user, login, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -29,35 +27,12 @@ export default function Header() {
     };
   }, [menuOpen]);
 
-  const renderAuthAction = (sm) => {
-    if (isLoading) return null;
-    if (authEnabled && isAuthenticated) {
-      return (
-        <div className="user-info">
-          {user?.picture && (
-            <img src={user.picture} alt="" className="user-avatar" referrerPolicy="no-referrer" />
-          )}
-          <span className="user-name">{user?.name || user?.email || 'Usuario'}</span>
-          <button className={`btn ${sm ? 'btn-sm ' : ''}btn-outline`} onClick={logout}>
-            Cerrar sesión
-          </button>
-        </div>
-      );
-    }
-    if (authEnabled && !isAuthenticated) {
-      return (
-        <button className={`btn ${sm ? 'btn-sm ' : ''}btn-outline`} onClick={login}>
-          Iniciar sesión
-        </button>
-      );
-    }
-    return (
-      <span className="auth-badge">
-        <span className="auth-badge-dot" aria-hidden="true" />
-        Sin registro
-      </span>
-    );
-  };
+  const noSignupBadge = (
+    <span className="auth-badge">
+      <span className="auth-badge-dot" aria-hidden="true" />
+      Sin registro
+    </span>
+  );
 
   return (
     <header className="header">
@@ -67,10 +42,10 @@ export default function Header() {
         <a href="#inspiracion">Inspiración</a>
       </nav>
 
-      {/* Desktop: inline theme toggle + auth action */}
+      {/* Desktop: inline theme toggle + badge */}
       <div className="header-actions">
         <ThemeToggle />
-        {renderAuthAction(false)}
+        {noSignupBadge}
       </div>
 
       {/* Mobile: single button that opens a config panel */}
@@ -111,7 +86,7 @@ export default function Header() {
               )}
               {isDark ? 'Modo claro' : 'Modo oscuro'}
             </button>
-            <div className="header-menu-auth">{renderAuthAction(false)}</div>
+            <div className="header-menu-auth">{noSignupBadge}</div>
           </div>
         )}
       </div>

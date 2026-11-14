@@ -1,8 +1,6 @@
 import { createContext, useReducer, useCallback, useContext, useRef } from 'react';
 import { generateTrip as apiGenerateTrip, getRoute, fetchWeather as apiFetchWeather, fetchPlaceDescriptions, createShareLink, fetchSharedTrip } from '../services/api';
 import { track } from '../services/analytics';
-import { saveTrip } from '../services/trips';
-import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { useRoutes } from './RoutesContext';
 import { WEATHER_CODES } from '../constants/weather';
@@ -246,7 +244,6 @@ async function fetchRouteData(originLat, originLng, places, transport) {
 
 export function TripProvider({ children }) {
   const [state, dispatch] = useReducer(tripReducer, initialState);
-  const { isAuthenticated, getAccessToken } = useAuth();
   const { showToast } = useToast();
   const { saveRoute } = useRoutes();
 
@@ -269,31 +266,6 @@ export function TripProvider({ children }) {
   const toggleCandidate = useCallback((key) => {
     dispatch({ type: TOGGLE_SELECTION, payload: key });
   }, []);
-
-  // Internal: persists auto-save when user finalizes a route.
-  const persistTrip = useCallback(async (trip, theme, transport, routeData) => {
-    if (!isAuthenticated) return;
-    try {
-      const token = await getAccessToken();
-      if (!token) return;
-      await saveTrip(
-        {
-          city: trip.city,
-          country: trip.country,
-          origin_lat: trip.origin_lat,
-          origin_lng: trip.origin_lng,
-          theme,
-          transport_mode: transport,
-          places: trip.places,
-          route_distance: routeData.distance,
-          route_duration: routeData.duration,
-        },
-        token
-      );
-    } catch (e) {
-      console.error('Error al auto-guardar:', e);
-    }
-  }, [isAuthenticated, getAccessToken]);
 
   // Internal: drives the progress simulator. Returns start/stop fns.
   const makeProgressSimulator = () => {
@@ -510,8 +482,6 @@ export function TripProvider({ children }) {
     apiFetchWeather(origin.lat, origin.lng)
       .then(weatherData => dispatch({ type: SET_WEATHER, payload: parseWeather(weatherData) }))
       .catch(() => {});
-
-    await persistTrip(updatedTrip, theme, transport, routeData);
   }
 
   // Stage 2: user confirmed selection → build the route.

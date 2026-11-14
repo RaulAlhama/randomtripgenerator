@@ -53,8 +53,8 @@ React 19 + Vite. Component-based with Context API for state management.
 **Key directories** (verified against the tree — the UI is the explore deck, not the
 original planner form; there is no `components/trip/`, no theme or transport selector, and
 no `constants/themes`):
-- `context/` — TripContext (generation + route pipeline), RoutesContext (local-first saved
-  routes), SavedContext, AuthContext, ThemeContext, ToastContext
+- `context/` — TripContext (generation + route pipeline), RoutesContext (saved routes, on
+  the device only), SavedContext, ThemeContext, ToastContext
 - `components/explore/` — **the main interface**: ExploreMode (the overlay that owns the
   flow), ExploreDeck (full-screen swipeable cards), DeckPlaceCard, DeckRestaurantCard,
   ExploreMap, ExploreSheet (bottom sheet for the built route), WalkMode, RestaurantStrip,
@@ -72,7 +72,7 @@ no `constants/themes`):
 - `components/carousel/` — InspirationCarousel (auto-scrolling infinite loop)
 - `components/ui/` — Toast, Icon, ThemeToggle, ErrorBoundary
 - `constants/` — transport, weather codes, inspiration examples, POI types
-- `services/` — api.js (all fetch calls), trips.js (auth'd CRUD), analytics.js (Umami),
+- `services/` — api.js (all fetch calls), analytics.js (Umami),
   affiliates.js
 
 **Server-rendered content and `#root` (read before touching `client/index.html`):**
@@ -150,7 +150,7 @@ them inside the request**: six pages opened together drew a 429 from Wikimedia f
    Referer. **Never send `Referrer-Policy: no-referrer`** (helmet's default, overridden in
    server.js): from 2026-11 OSM answers a browser without a Referer with a 403 "Access
    blocked" image on every tile
-10. Trip auto-saved if user is authenticated
+10. The built route is saved on the device (`RoutesContext`)
 11. **"Empezar el paseo"** opens WalkMode: a companion for the walk itself, not a navigator.
     It watches position only to notice arrival and hands each individual leg to Google Maps
     (`legDirectionsUrl`, one destination, no waypoints). Deliberately absent: turn-by-turn,
@@ -160,15 +160,15 @@ them inside the request**: six pages opened together drew a 429 from Wikimedia f
     It is also the only source of funnel data past `gmaps_opened`: `walk_started`,
     `walk_stop_reached` (`how`: auto/manual/skip), `walk_completed`, `gmaps_leg_opened`
 
-### Auth0 (switched off in the client since 2026-11-14)
-- Sign-in was removed from the UI: two saved routes from two accounts in eight months, and a
-  login button that contradicted "sin registro". `context/AuthContext.jsx` is now a static
-  provider that always answers signed-out, so every consumer runs its no-account path; the
-  header shows the "Sin registro" badge. `@auth0/auth0-spa-js` is no longer a dependency
-- To bring it back: restore `AuthContext.jsx` from git history and reinstall the package
-- Backend unchanged: `express-oauth2-jwt-bearer` still validates JWTs on `/api/trips` and
-  `GET /api/auth-config` still answers, but nothing in the client calls them. The `trips`
-  table keeps the two old rows; the privacy text says they stay until their owner asks
+### No accounts (sign-in removed 2026-11-14)
+- The client has no sign-in at all: two saved routes from two accounts in eight months, and a
+  login button that contradicted "sin registro". `AuthContext`, `services/trips.js`, the
+  server sync in `SavedRoutes`/`TripContext` and `@auth0/auth0-spa-js` were deleted; routes
+  live only in localStorage (`RoutesContext`). The header shows a "Sin registro" badge
+- Backend unchanged and now unused by the client: `express-oauth2-jwt-bearer` still guards
+  `/api/trips`, `GET /api/auth-config` still answers, and the `trips` table keeps the two
+  old rows (the privacy text says they stay until their owner asks)
+- Bringing it back means restoring those files from git history (before commit 40b00c8)
 
 ### API endpoints
 | Method | Path | Auth | Purpose |

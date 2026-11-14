@@ -416,9 +416,6 @@ main {
 .header-menu-divider { height: 1px; background: var(--border); margin: 0.35rem 0.4rem; }
 
 .header-menu-auth { padding: 0.45rem 0.4rem 0.2rem; }
-.header-menu-auth .btn { width: 100%; }
-.header-menu-auth .user-info { flex-direction: column; align-items: stretch; gap: 0.5rem; }
-.header-menu-auth .user-name { display: block; text-align: center; }
 
 .auth-badge {
   display: inline-flex;
@@ -441,29 +438,6 @@ main {
   background: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
   animation: pulse-dot 1.8s ease-in-out infinite;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--primary-soft-hover);
-}
-
-.user-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ========== HERO ========== */
@@ -1381,8 +1355,6 @@ main {
   .section-header { flex-direction: column; align-items: flex-start; }
   .trips-grid { grid-template-columns: 1fr; }
 
-  .user-name { display: none; }
-
   #map { height: 360px; }
 
   .footer-links { grid-template-columns: 1fr; }
@@ -2077,7 +2049,6 @@ main {
   box-shadow: var(--shadow-sm);
 }
 .profile-account { display: flex; align-items: center; gap: 14px; }
-.profile-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
 .profile-account-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .profile-name { font-size: 1.05rem; font-weight: 750; color: var(--text); }
 .profile-email { font-size: 0.85rem; color: var(--text-muted); }

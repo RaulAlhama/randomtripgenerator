@@ -1,9 +1,7 @@
-import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSaved } from '../../context/SavedContext';
 
 export default function ProfileView() {
-  const { authEnabled, isAuthenticated, user, login, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { saved } = useSaved();
 
@@ -15,37 +13,12 @@ export default function ProfileView() {
       <h2 className="profile-title">Perfil</h2>
 
       <div className="profile-card">
-        {authEnabled && isAuthenticated ? (
-          <div className="profile-account">
-            {user?.picture && (
-              <img src={user.picture} alt="" className="profile-avatar" referrerPolicy="no-referrer" />
-            )}
-            <div className="profile-account-text">
-              <span className="profile-name">{user?.name || 'Tu cuenta'}</span>
-              {user?.email && <span className="profile-email">{user.email}</span>}
-            </div>
-            <button type="button" className="btn btn-outline btn-sm" onClick={logout}>
-              Cerrar sesión
-            </button>
+        <div className="profile-account">
+          <div className="profile-account-text">
+            <span className="profile-name">Sin registro</span>
+            <span className="profile-email">Usas la app libremente. Tus guardados se quedan en este dispositivo.</span>
           </div>
-        ) : authEnabled ? (
-          <div className="profile-account profile-account--guest">
-            <div className="profile-account-text">
-              <span className="profile-name">Estás explorando sin cuenta</span>
-              <span className="profile-email">Inicia sesión para sincronizar tus rutas guardadas.</span>
-            </div>
-            <button type="button" className="btn btn-primary btn-sm" onClick={login}>
-              Iniciar sesión
-            </button>
-          </div>
-        ) : (
-          <div className="profile-account profile-account--guest">
-            <div className="profile-account-text">
-              <span className="profile-name">Sin registro</span>
-              <span className="profile-email">Usas la app libremente. Tus guardados se quedan en este dispositivo.</span>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       <div className="profile-stats">
