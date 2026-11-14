@@ -1,8 +1,3 @@
-export async function fetchAuthConfig() {
-  const response = await fetch('/api/auth-config');
-  return response.json();
-}
-
 export async function generateTrip(lat, lng, theme, transport, radiusMeters, count, city, country, fast, signal) {
   const params = new URLSearchParams({
     lat: String(lat),

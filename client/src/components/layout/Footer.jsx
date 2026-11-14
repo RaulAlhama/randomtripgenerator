@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 // in the Privacy/Terms modals, and a review notice is shown while they're unset.
 const LEGAL_OWNER = 'Raúl García Alcaraz';
 const LEGAL_EMAIL = 'raulgar3600@gmail.com';
-const LEGAL_UPDATED = '26 de julio de 2026';
+const LEGAL_UPDATED = '14 de noviembre de 2026';
 const LEGAL_NEEDS_REVIEW = LEGAL_OWNER.startsWith('[') || LEGAL_EMAIL.startsWith('[');
 
 function LegalModal({ title, onClose, children }) {
@@ -100,21 +100,19 @@ export function PrivacyDoc() {
         <li>
           <strong>Tu ubicación:</strong> si aceptas el permiso del navegador, usamos tus coordenadas
           para buscar lugares cercanos. Se envían a nuestro servidor para generar la ruta y
-          <strong> no se guardan</strong>, salvo que guardes esa ruta teniendo cuenta.
+          <strong> no se guardan</strong> en él.
         </li>
         <li>
-          <strong>Cuenta de usuario (opcional):</strong> el registro y el inicio de sesión los
-          gestiona Auth0. Si creas una cuenta, guardamos tu identificador de usuario para asociarte
-          las rutas que guardes.
+          <strong>Sin cuentas de usuario:</strong> la aplicación no tiene registro ni inicio de
+          sesión. Hasta noviembre de 2026 existió una cuenta opcional, gestionada por Auth0; si
+          guardaste rutas con ella, conservamos tu identificador de usuario y esas rutas (ciudad,
+          país, coordenadas de origen, lugares, distancia, duración y fecha) hasta que nos pidas
+          borrarlas.
         </li>
         <li>
-          <strong>Rutas guardadas:</strong> ciudad, país, coordenadas de origen, lugares de la ruta,
-          distancia, duración y fecha. Solo si tienes cuenta.
-        </li>
-        <li>
-          <strong>Preferencias en tu dispositivo:</strong> los lugares que marcas como favoritos y el
-          tema claro/oscuro se guardan en el almacenamiento local de tu navegador, no en nuestro
-          servidor. Puedes borrarlos limpiando los datos del sitio.
+          <strong>Datos en tu dispositivo:</strong> las rutas que generas, los lugares que marcas
+          como favoritos y el tema claro/oscuro se guardan en el almacenamiento local de tu
+          navegador, no en nuestro servidor. Puedes borrarlos limpiando los datos del sitio.
         </li>
         <li>
           <strong>Estadísticas de uso:</strong> usamos Umami, una herramienta de analítica
@@ -137,7 +135,6 @@ export function PrivacyDoc() {
         <li><strong>Google Maps Platform</strong> (Places): fotos, valoraciones, horarios y búsqueda de ciudades.</li>
         <li><strong>OpenRouteService</strong> u <strong>OSRM</strong>: cálculo del trazado a pie.</li>
         <li><strong>Open-Meteo</strong>: meteorología del destino.</li>
-        <li><strong>Auth0</strong>: autenticación, solo si inicias sesión.</li>
         <li><strong>Un proveedor de IA</strong> (actualmente Google Gemini): redacta la descripción de los lugares que no tienen artículo en Wikipedia. Solo recibe el nombre público del lugar y la ciudad; nunca datos tuyos.</li>
       </ul>
       <p>
@@ -155,15 +152,15 @@ export function PrivacyDoc() {
       <h3>Dónde se alojan los datos</h3>
       <p>
         La aplicación se aloja en Render (servidores en Fráncfort, Alemania) y la base de datos en
-        Neon (Unión Europea/Reino Unido). Conservamos las rutas guardadas mientras mantengas la
-        cuenta; puedes eliminarlas en cualquier momento desde la propia aplicación.
+        Neon (Unión Europea/Reino Unido). Las rutas guardadas con las antiguas cuentas se
+        conservan hasta que su titular pida borrarlas.
       </p>
 
       <h3>Tus derechos</h3>
       <p>
         Puedes ejercer tus derechos de acceso, rectificación, supresión, portabilidad, limitación y
-        oposición escribiendo a {LEGAL_EMAIL}. También puedes borrar tus rutas directamente en la
-        aplicación y solicitar la eliminación completa de tu cuenta. Si crees que no hemos atendido
+        oposición escribiendo a {LEGAL_EMAIL}. Las rutas guardadas en tu dispositivo puedes
+        borrarlas directamente en la aplicación. Si crees que no hemos atendido
         correctamente tu solicitud, puedes reclamar ante la autoridad de protección de datos
         competente (en España, la AEPD).
       </p>
@@ -211,13 +208,6 @@ export function TermsDoc() {
         <li>No garantizamos disponibilidad continua: el servicio depende de APIs de terceros y puede interrumpirse o cambiar sin aviso.</li>
         <li>Podemos modificar o retirar funciones, y actualizar estos términos; la fecha de arriba indica la última versión.</li>
       </ul>
-
-      <h3>Cuentas y contenido</h3>
-      <p>
-        La cuenta es opcional y sirve para guardar rutas. Eres responsable del uso que se haga de tus
-        credenciales. Podemos suspender cuentas que incumplan estas condiciones o que perjudiquen el
-        servicio.
-      </p>
 
       <h3>Atribución y propiedad intelectual</h3>
       <p>

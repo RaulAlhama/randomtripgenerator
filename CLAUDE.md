@@ -160,10 +160,15 @@ them inside the request**: six pages opened together drew a 429 from Wikimedia f
     It is also the only source of funnel data past `gmaps_opened`: `walk_started`,
     `walk_stop_reached` (`how`: auto/manual/skip), `walk_completed`, `gmaps_leg_opened`
 
-### Auth0 (optional)
-- Backend: `express-oauth2-jwt-bearer` validates JWTs on `/api/trips` CRUD endpoints
-- Frontend: `@auth0/auth0-spa-js` npm package, config fetched from `GET /api/auth-config`
-- If Auth0 env vars not set, auth is disabled and my-trips section is hidden
+### Auth0 (switched off in the client since 2026-11-14)
+- Sign-in was removed from the UI: two saved routes from two accounts in eight months, and a
+  login button that contradicted "sin registro". `context/AuthContext.jsx` is now a static
+  provider that always answers signed-out, so every consumer runs its no-account path; the
+  header shows the "Sin registro" badge. `@auth0/auth0-spa-js` is no longer a dependency
+- To bring it back: restore `AuthContext.jsx` from git history and reinstall the package
+- Backend unchanged: `express-oauth2-jwt-bearer` still validates JWTs on `/api/trips` and
+  `GET /api/auth-config` still answers, but nothing in the client calls them. The `trips`
+  table keeps the two old rows; the privacy text says they stay until their owner asks
 
 ### API endpoints
 | Method | Path | Auth | Purpose |
